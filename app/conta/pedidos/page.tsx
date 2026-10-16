@@ -7,7 +7,9 @@ import { toast } from "sonner"
 import {
   CalendarIcon,
   ChevronsUpDown,
+  ClipboardList,
   Copy,
+  ExternalLink,
   MapPin,
   Package,
   PackageCheck,
@@ -68,6 +70,10 @@ import { safeHref } from "@/lib/safe-url"
 import { cn } from "@/lib/utils"
 import { Input } from "@/components/ui/input"
 import { OrderShippingAddressDialog } from "@/components/store/OrderShippingAddressDialog"
+import { OrderServiceFormDialog } from "@/components/store/ServiceOrderForm"
+import { isServiceFormEditable, serviceFormLines } from "@/lib/store-service-form"
+import { ServiceFormAnswerValue } from "@/components/store/ServiceFormAnswerValue"
+import { OrderComplementNotice } from "@/components/store/OrderComplementNotice"
 import { OrderTimeline } from "@/components/store/OrderTimeline"
 import { PendingStoreReviews, usePendingStoreReviews } from "@/components/store/PendingStoreReviews"
 import { StoreReviewForm } from "@/components/store/StoreReviewForm"
@@ -81,6 +87,7 @@ import {
   orderStatusDescription,
   orderStatusLabel,
 } from "@/lib/order-status"
+import { storeCarrierTracking } from "@/lib/store-carriers"
 
 const STATUS_STYLE: Record<UserOrder["status"], string> = {
   pending: "bg-amber-500/15 text-amber-400",
@@ -413,16 +420,29 @@ function isOrderCompleted(order: UserOrder): boolean {
   return order.status === "delivered" || (order.status === "paid" && !order.requires_shipping_address)
 }
 
+/** Pedido pago de serviço com formulário ainda em branco: está parado esperando o cliente. */
+function isMissingServiceForm(order: UserOrder): boolean {
+  return (
+    !order.service_form_answers &&
+    isServiceFormEditable(order.status) &&
+    serviceFormLines(order.items).length > 0
+  )
+}
+
 function OrderCard({
   order,
+  complementProductSlug,
   pendingReviews,
   onReview,
   onViewDetails,
   onCancelled,
   onDelivered,
   onEditShipping,
+  onEditServiceForm,
 }: {
   order: UserOrder
+  /** Anúncio "Complemento de Pagamento", para o passo a passo do que falta pagar. */
+  complementProductSlug: string | null
   /** Produtos AINDA não avaliados que a pessoa pode avaliar (todos os pedidos). */
   pendingReviews: Map<string, PendingProductReview>
   onReview: (item: PendingProductReview) => void
@@ -430,6 +450,7 @@ function OrderCard({
   onCancelled: () => void
   onDelivered: () => void
   onEditShipping: (order: UserOrder) => void
+  onEditServiceForm: (order: UserOrder) => void
 }) {
   const toReview = isOrderCompleted(order)
     ? [...new Set(order.items.map((i) => i.id).filter((id): id is string => Boolean(id)))]
@@ -439,12 +460,18 @@ function OrderCard({
   const itemCount = order.items.reduce((sum, i) => sum + (i.quantity ?? 1), 0)
   const summary = order.items.map((i) => i.name).filter(Boolean).join(", ")
   const missingAddress = isMissingShippingAddress(order)
+  const missingServiceForm = isMissingServiceForm(order)
+  const owesComplement = order.complement.pendingCents > 0 || order.complement.awaitingPaymentOrderId !== null
 
   return (
     <div
       className={cn(
         "group relative overflow-hidden rounded-xl border bg-muted/20 transition-colors",
-        missingAddress ? "border-amber-500/40" : "border-border hover:border-border/80"
+        missingAddress || missingServiceForm
+          ? "border-amber-500/40"
+          : owesComplement
+            ? "border-violet-500/40"
+            : "border-border hover:border-border/80"
       )}
     >
       {/* Faixa de status: leitura de estado antes de qualquer texto. */}
@@ -471,6 +498,11 @@ function OrderCard({
             <p className="text-xs text-muted-foreground">
               {itemCount} {itemCount === 1 ? "item" : "itens"} · {formatDate(order.created_at)}
             </p>
+            {order.complement_for && (
+              <p className="mt-0.5 text-[11px] text-violet-300">
+                Complemento do pedido #{order.complement_for.order_number}
+              </p>
+            )}
             {order.tracking_code && (
               <p className="mt-0.5 truncate text-[11px] text-violet-300">
                 <Truck className="mr-1 inline size-3" />
@@ -529,6 +561,37 @@ function OrderCard({
         </div>
       )}
 
+      {/* Formulário pós-compra de serviço: a equipe não começa sem ele. Fica
+          no card do pedido, igual ao endereço, para a pessoa saber QUAL. */}
+      {missingServiceForm && (
+        <div className="flex flex-col gap-2 border-t border-amber-500/25 bg-amber-500/10 px-4 py-2.5 pl-5 sm:flex-row sm:items-center sm:justify-between">
+          <p className="flex items-start gap-1.5 text-[11px] text-amber-300">
+            <ClipboardList className="mt-px size-3.5 shrink-0" />
+            <span>Pagamento confirmado. Preencha as informações do serviço para a equipe começar.</span>
+          </p>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => onEditServiceForm(order)}
+            className="h-7 shrink-0 gap-1.5 bg-amber-500 text-xs font-semibold text-black hover:bg-amber-400"
+          >
+            <ClipboardList className="size-3.5" />
+            Preencher informações
+          </Button>
+        </div>
+      )}
+
+      {/* Orçamento aprovado e ainda não pago: o passo a passo de pagar pelo
+          anúncio "Complemento de Pagamento", no card do pedido em questão. */}
+      {owesComplement && (
+        <OrderComplementNotice
+          orderId={order.id}
+          complement={order.complement}
+          productSlug={complementProductSlug}
+          className="border-t border-violet-500/25 bg-violet-500/10 px-4 py-2.5 pl-5"
+        />
+      )}
+
       {/* Ações de pagamento pendente */}
       {order.status === "pending" && (
         <div className="flex flex-wrap items-center gap-2 border-t border-border/60 px-4 py-2.5 pl-5">
@@ -579,7 +642,9 @@ function OrderCard({
       {/* Recompra de pedido que não foi pago. Um PIX vencido é a intenção de
           compra mais qualificada que existe — a pessoa escolheu tudo e só não
           pagou — e até aqui não havia caminho de volta. */}
-      {(order.status === "expired" || order.status === "cancelled") && (
+      {/* Complemento não se recompra pelo carrinho: o valor pendente volta
+          a aparecer no pedido original, com o botão de pagar. */}
+      {(order.status === "expired" || order.status === "cancelled") && !order.complement_for && (
         <div className="flex flex-wrap items-center gap-2 border-t border-border/60 px-4 py-2.5 pl-5">
           <ReorderButton order={order} />
         </div>
@@ -675,18 +740,65 @@ function ReorderButton({ order }: { order: UserOrder }) {
   )
 }
 
+/** O que o cliente respondeu no formulário de serviço, com a edição enquanto o pedido aceita. */
+function ServiceFormAnswersSection({ order, onEdit }: { order: UserOrder; onEdit: () => void }) {
+  const answers = order.service_form_answers
+  const editable = isServiceFormEditable(order.status)
+  const multiple = (answers?.lines.length ?? 0) > 1
+  return (
+    <div className="space-y-2 border-t border-border/60 pt-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Informações do serviço</p>
+        {editable && (
+          <Button type="button" size="sm" variant="ghost" onClick={onEdit} className="h-7 gap-1.5 text-xs">
+            <ClipboardList className="size-3.5" />
+            {answers ? "Editar" : "Preencher"}
+          </Button>
+        )}
+      </div>
+      {answers ? (
+        <div className="space-y-2">
+          {answers.lines.map((line) => (
+            <dl key={line.line} className="space-y-1">
+              {multiple && <p className="text-xs font-medium text-foreground">{line.product_name}</p>}
+              {line.answers.map((answer) => (
+                <div key={answer.field_id} className="text-xs">
+                  <dt className="text-muted-foreground">{answer.label}</dt>
+                  <dd className="whitespace-pre-wrap break-words text-foreground">
+                    <ServiceFormAnswerValue answer={answer} />
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-amber-400">
+          {editable
+            ? "Ainda não preenchidas. A equipe precisa delas para começar o seu serviço."
+            : "Não preenchidas. Fale com a equipe na conversa do pedido."}
+        </p>
+      )}
+    </div>
+  )
+}
+
 function OrderDetailsDialog({
   order,
+  complementProductSlug,
   onOpenChange,
   onCancelled,
   onDelivered,
   onEditShipping,
+  onEditServiceForm,
 }: {
   order: UserOrder | null
+  complementProductSlug: string | null
   onOpenChange: (open: boolean) => void
   onCancelled: () => void
   onDelivered: () => void
   onEditShipping: (order: UserOrder) => void
+  onEditServiceForm: (order: UserOrder) => void
 }) {
   const auraOrder = order ? isAuraOrder(order) : false
   // Comprovante vale para o pedido pago em qualquer etapa, não só em `paid`:
@@ -694,6 +806,7 @@ function OrderDetailsDialog({
   const isPaid = order ? ORDER_PAID_STATUSES.includes(order.status) : false
   const receipt = isPaid && !auraOrder ? order?.asaas_payment_id ?? null : null
   const receiptUrl = isPaid && !auraOrder ? order?.asaas_receipt_url ?? null : null
+  const carrierTracking = storeCarrierTracking(order?.carrier, order?.tracking_code)
   const statusDescription = order
     ? orderStatusDescription(order.status, order.requires_shipping_address)
     : null
@@ -790,6 +903,25 @@ function OrderDetailsDialog({
               />
             )}
 
+            {(order.complement.pendingCents > 0 || order.complement.awaitingPaymentOrderId) && (
+              <OrderComplementNotice
+                orderId={order.id}
+                complement={order.complement}
+                productSlug={complementProductSlug}
+                className="rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-2.5"
+              />
+            )}
+
+            {order.complement_for && (
+              <p className="text-xs text-muted-foreground">
+                Pagamento de complemento do pedido #{order.complement_for.order_number}. O valor entra naquele pedido.
+              </p>
+            )}
+
+            {isPaid && serviceFormLines(order.items).length > 0 && (
+              <ServiceFormAnswersSection order={order} onEdit={() => onEditServiceForm(order)} />
+            )}
+
             <div className="space-y-2 border-t border-border/60 pt-3">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Endereço de entrega
@@ -872,10 +1004,41 @@ function OrderDetailsDialog({
                     Copiar
                   </Button>
                 </div>
+                {carrierTracking && (
+                  <a
+                    href={carrierTracking.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-400 hover:underline"
+                  >
+                    <ExternalLink className="size-3.5" />
+                    Rastrear no site da {carrierTracking.carrier}
+                  </a>
+                )}
+                {carrierTracking && !carrierTracking.codeInUrl && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Copie o código acima e cole na página da transportadora.
+                  </p>
+                )}
                 {order.status === "shipped" && (
-                  <div className="space-y-1.5 text-[11px] leading-relaxed text-muted-foreground">
-                    <p>{ORDER_TRACKING_NOTICE.intro}</p>
-                    <p>
+                  <div className="space-y-2 pt-1">
+                    <div className="space-y-1.5 rounded-lg border border-violet-500/30 bg-violet-500/10 p-3 text-xs leading-relaxed text-foreground/90">
+                      <p className="font-semibold text-violet-300">{ORDER_TRACKING_NOTICE.title}</p>
+                      {ORDER_TRACKING_NOTICE.paragraphs.map((parts, i) => (
+                        <p key={i}>
+                          {parts.map((part, j) =>
+                            part.strong ? (
+                              <strong key={j} className="font-semibold text-foreground">
+                                {part.text}
+                              </strong>
+                            ) : (
+                              <span key={j}>{part.text}</span>
+                            )
+                          )}
+                        </p>
+                      ))}
+                    </div>
+                    <p className="text-[11px] leading-relaxed text-muted-foreground">
                       {ORDER_TRACKING_NOTICE.codeChange}{" "}
                       <Link href="/suporte" className="font-medium text-emerald-400 hover:underline">
                         Abrir chamado
@@ -974,7 +1137,7 @@ export default function PedidosPage() {
   const [search, setSearch] = useState("")
   const [page, setPage] = useState(1)
 
-  const { orders, total, hasMore, loading: ordersLoading, refetch } = useUserOrders({
+  const { orders, total, hasMore, loading: ordersLoading, refetch, complementProductSlug } = useUserOrders({
     page,
     pageSize: PAGE_SIZE,
     filters: {
@@ -997,6 +1160,8 @@ export default function PedidosPage() {
   }
   // Pedido cujo endereço de entrega está sendo informado/corrigido.
   const [shippingOrder, setShippingOrder] = useState<UserOrder | null>(null)
+  // Pedido de serviço cujo formulário pós-compra está sendo preenchido/corrigido.
+  const [serviceFormOrder, setServiceFormOrder] = useState<UserOrder | null>(null)
 
   // Busca por número do pedido ou nome de produto. Deliberadamente local, só
   // sobre a página atual: o servidor não indexa `items` por nome e uma busca
@@ -1205,12 +1370,14 @@ export default function PedidosPage() {
                 <OrderCard
                   key={order.id}
                   order={order}
+                  complementProductSlug={complementProductSlug}
                   pendingReviews={pendingReviewsById}
                   onReview={setReviewTarget}
                   onViewDetails={setSelectedOrder}
                   onCancelled={refetch}
                   onDelivered={handleDelivered}
                   onEditShipping={setShippingOrder}
+                  onEditServiceForm={setServiceFormOrder}
                 />
               ))}
             </div>
@@ -1250,6 +1417,7 @@ export default function PedidosPage() {
 
       <OrderDetailsDialog
         order={selectedOrder}
+        complementProductSlug={complementProductSlug}
         onOpenChange={(open) => !open && setSelectedOrder(null)}
         onCancelled={refetch}
         onDelivered={handleDelivered}
@@ -1258,6 +1426,23 @@ export default function PedidosPage() {
           // empilhados brigam pelo foco e pelo scroll lock.
           setSelectedOrder(null)
           setShippingOrder(order)
+        }}
+        onEditServiceForm={(order) => {
+          setSelectedOrder(null)
+          setServiceFormOrder(order)
+        }}
+      />
+
+      <OrderServiceFormDialog
+        orderId={serviceFormOrder?.id ?? null}
+        lines={serviceFormOrder ? serviceFormLines(serviceFormOrder.items) : []}
+        answers={serviceFormOrder?.service_form_answers ?? null}
+        open={serviceFormOrder !== null}
+        onOpenChange={(open) => !open && setServiceFormOrder(null)}
+        onSaved={() => {
+          setServiceFormOrder(null)
+          refetch()
+          toast.success("Informações enviadas", { description: "A equipe responde na conversa do pedido." })
         }}
       />
 

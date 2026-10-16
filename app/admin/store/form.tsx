@@ -12,7 +12,7 @@ import {
 import { restrictToParentElement } from "@dnd-kit/modifiers"
 import { arrayMove, rectSortingStrategy, SortableContext, useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import { Ban, BadgeCheck, Boxes, GripVertical, Loader2, Megaphone, Minus, Plus, RefreshCcw, Rocket, Sparkles, Timer, Trash2, Upload, X } from "lucide-react"
+import { Ban, BadgeCheck, Boxes, GripVertical, Loader2, Megaphone, Minus, Plus, RefreshCcw, Rocket, Sparkles, Timer, Trash2, Upload, Video, X } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -31,6 +31,12 @@ import { RichTextEditor } from "@/components/ui/rich-text-editor"
 import { cn } from "@/lib/utils"
 import { formatBRL } from "@/lib/format"
 import { isValidYoutubeUrl } from "@/lib/youtube-url"
+import { supabaseStorageClient } from "@/lib/client/supabase-storage"
+import {
+  isUploadedStoreProductVideoUrl,
+  STORE_PRODUCT_VIDEO_BUCKET,
+  STORE_PRODUCT_VIDEO_MAX_BYTES,
+} from "@/lib/store-product-video"
 import { removeBackground } from "@/lib/client/remove-background"
 import { compressImageFile } from "@/lib/client/compress-image"
 import { EmojiPicker } from "@/components/ui/emoji-picker"
@@ -59,6 +65,9 @@ import {
   type SkuDraft,
 } from "@/components/admin/store/ProductSkuMatrix"
 import { CardHighlightPicker } from "@/components/admin/store/CardHighlightPicker"
+import { ServiceFormFieldsEditor } from "@/components/admin/store/ServiceFormFieldsEditor"
+import { isSinglePriceProduct } from "@/lib/store-pricing"
+import { readServiceFormFields, type ServiceFormField } from "@/lib/store-service-form"
 
 interface StoreProductSpec {
   id?: string
@@ -144,6 +153,10 @@ export interface StoreProduct {
   video_url?: string | null
   card_badge?: string | null
   card_highlights?: string[]
+  /** Formulário pós-compra de serviço (migration 20261228000000). */
+  service_form_fields?: unknown
+  /** O anúncio "Complemento de Pagamento" (migration 20261229000000). */
+  is_payment_complement?: boolean
   /** Colunas da migration 20261213000001 (ausentes antes dela). */
   sku?: string | null
   preorder_batch_name?: string | null
@@ -471,6 +484,7 @@ export function StoreProductForm({
 }: StoreProductFormProps) {
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [uploadingVideo, setUploadingVideo] = useState(false)
   const [disableBackgroundRemoval, setDisableBackgroundRemoval] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -499,7 +513,9 @@ export function StoreProductForm({
     preorder_batch_name: product?.preorder_batch_name ?? "",
     preorder_ships_at: product?.preorder_ships_at ?? "",
     preorder_status: product?.preorder_status ?? "open",
-    is_launch: product?.is_launch ?? false,
+    // Pré-venda e Lançamento são excludentes: um produto salvo com os dois
+    // (antes eram campos separados) abre como pré-venda e o save limpa o outro.
+    is_launch: (product?.is_launch ?? false) && product?.sale_type !== "pre_order",
     sale_window_ends_at: isoToLocalInput(product?.sale_window_ends_at),
     sale_window_end_action: product?.sale_window_end_action ?? ("keep" as SaleWindowEndAction),
     sale_window_end_price_brl:
@@ -511,6 +527,9 @@ export function StoreProductForm({
   // Vazio = automático. A ordem é a do card (ver CardHighlightPicker).
   const [cardHighlights, setCardHighlights] = useState<string[]>(() =>
     sanitizeCardHighlights(product?.card_highlights ?? [])
+  )
+  const [serviceFormFields, setServiceFormFields] = useState<ServiceFormField[]>(() =>
+    readServiceFormFields(product?.service_form_fields)
   )
 
   const [hasStock, setHasStock] = useState(product ? product.stock != null : true)
@@ -854,6 +873,18 @@ export function StoreProductForm({
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
+  // "Lançamento" é opção do Tipo de Venda, não um campo à parte: assim o
+  // produto é uma coisa só (Normal, Pré-venda ou Lançamento). No banco segue
+  // sendo `sale_type = normal` + `is_launch`.
+  const saleTypeChoice = formData.sale_type === "pre_order" ? "pre_order" : formData.is_launch ? "launch" : formData.sale_type
+  function setSaleType(choice: string) {
+    setFormData((prev) => ({
+      ...prev,
+      sale_type: choice === "launch" ? "normal" : (choice as StoreProduct["sale_type"]),
+      is_launch: choice === "launch",
+    }))
+  }
+
   /**
    * Selo e características do card só vão no corpo quando mudaram. Os dois
    * moram em colunas novas (migration 20261212000000): mandando sempre, um
@@ -868,6 +899,21 @@ export function StoreProductForm({
       ...(badge !== (product?.card_badge ?? null) ? { card_badge: badge } : {}),
       ...(highlights.join("\n") !== savedHighlights.join("\n") ? { card_highlights: highlights } : {}),
     }
+  }
+
+  /**
+   * Formulário pós-compra: mesma regra do `cardPayload` (só vai quando mudou),
+   * para um deploy antes da migration 20261228000000 não travar o save.
+   */
+  function serviceFormPayload(): { service_form_fields?: ServiceFormField[] } {
+    const current = serviceFormFields.map((field) => ({
+      ...field,
+      label: field.label.trim(),
+      placeholder: field.placeholder?.trim() || null,
+      options: field.type === "choice" ? field.options.map((option) => option.trim()).filter(Boolean) : [],
+    }))
+    const saved = readServiceFormFields(product?.service_form_fields)
+    return JSON.stringify(current) !== JSON.stringify(saved) ? { service_form_fields: current } : {}
   }
 
   /**
@@ -1038,6 +1084,56 @@ export function StoreProductForm({
     }
   }
 
+  /**
+   * Vídeo do anúncio: vai do navegador direto para o Storage por signed URL
+   * (a Vercel corta o corpo em ~4.5MB). A rota gera a URL e depois confere o
+   * que chegou. Ver /api/admin/store/upload-video.
+   */
+  async function handleVideoAdd(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ""
+    if (!file) return
+
+    if (file.size > STORE_PRODUCT_VIDEO_MAX_BYTES) {
+      toast.error("Vídeo muito grande", {
+        description: `O limite é ${formatUploadLimit(STORE_PRODUCT_VIDEO_MAX_BYTES)}.`,
+      })
+      return
+    }
+
+    setUploadingVideo(true)
+    try {
+      const startRes = await fetch("/api/admin/store/upload-video", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contentType: file.type, sizeBytes: file.size }),
+      })
+      const start = (await startRes.json().catch(() => null)) as { path?: string; token?: string; error?: string } | null
+      if (!startRes.ok || !start?.path || !start.token) throw new Error(start?.error ?? "Erro ao iniciar o envio.")
+
+      // O bucket só libera `video/mp4`; o .mov do celular toca servido assim.
+      const { error: uploadError } = await supabaseStorageClient.storage
+        .from(STORE_PRODUCT_VIDEO_BUCKET)
+        .uploadToSignedUrl(start.path, start.token, file, { contentType: "video/mp4", cacheControl: "31536000" })
+      if (uploadError) throw new Error("Erro ao enviar o vídeo.")
+
+      const finishRes = await fetch("/api/admin/store/upload-video", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: start.path }),
+      })
+      const finish = (await finishRes.json().catch(() => null)) as { publicUrl?: string; error?: string } | null
+      if (!finishRes.ok || !finish?.publicUrl) throw new Error(finish?.error ?? "Erro ao confirmar o envio.")
+
+      set("video_url", finish.publicUrl)
+      toast.success("Vídeo enviado", { description: "Salve o produto para publicar." })
+    } catch (err) {
+      toast.error("Erro ao enviar vídeo", { description: err instanceof Error ? err.message : undefined })
+    } finally {
+      setUploadingVideo(false)
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
@@ -1073,8 +1169,8 @@ export function StoreProductForm({
       }
 
       const videoUrl = formData.video_url.trim()
-      if (videoUrl && !isValidYoutubeUrl(videoUrl)) {
-        throw new Error("URL de vídeo precisa ser um link do YouTube.")
+      if (videoUrl && !isValidYoutubeUrl(videoUrl) && !isUploadedStoreProductVideoUrl(videoUrl)) {
+        throw new Error("O vídeo precisa ser um link do YouTube ou um arquivo enviado aqui.")
       }
 
       if (variants.filter((v) => v.label.trim()).length > MAX_VARIANTS) {
@@ -1231,6 +1327,7 @@ export function StoreProductForm({
         video_url: videoUrl || null,
         ...cardPayload(),
         ...pageFieldsPayload(),
+        ...serviceFormPayload(),
         ...(product && startNewBatch && formData.sale_type === "pre_order" ? { start_new_batch: true } : {}),
       }
 
@@ -1581,7 +1678,7 @@ export function StoreProductForm({
               </>
             )}
             {startNewBatch
-              ? "Ao salvar, a contagem recomeça do zero. Troque o nome do lote e o status se precisar."
+              ? "Ao salvar, a contagem recomeça do zero. Troque o batch e o status se precisar."
               : "Lote novo? A contagem do limite recomeça a partir de agora."}
           </p>
           <Button
@@ -1599,8 +1696,32 @@ export function StoreProductForm({
     </div>
   )
 
+  const launchFields = saleTypeChoice === "launch" && (
+    <div className="space-y-3 rounded-xl border border-violet-500/25 bg-violet-500/[0.04] p-3">
+      <div className="flex items-center gap-2">
+        <Megaphone className="size-4 text-violet-400" />
+        <p className="text-sm font-semibold text-foreground">Lançamento</p>
+      </div>
+      <p className="text-[10px] text-violet-300">
+        Produto com estoque, vendido normalmente. Aparece em &ldquo;DROPS com SUNANO&rdquo; na Home e com o card roxo de
+        lançamento em toda a Loja.
+      </p>
+      {saleWindowFields}
+    </div>
+  )
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {product?.is_payment_complement && (
+        <Alert className="py-2">
+          <AlertDescription className="text-xs">
+            Este é o anúncio <strong>Complemento de Pagamento</strong>. O preço abaixo nunca é cobrado: o cliente digita o
+            número do pedido e paga o valor de complemento que você define no próprio pedido (Pedidos &gt; abrir o
+            pedido &gt; Complemento de pagamento). Foto, nome e descrição podem ser editados à vontade; desativar o
+            anúncio desliga o pagamento de complementos.
+          </AlertDescription>
+        </Alert>
+      )}
       {error && (
         <Alert variant="destructive" className="py-2">
           <AlertDescription className="text-xs">{error}</AlertDescription>
@@ -1795,70 +1916,84 @@ export function StoreProductForm({
         </div>
       )}
 
-      {/* Type + Condition + Sale type */}
-      {isNewStoreListing ? (
-        <div className="space-y-2 md:max-w-xs">
-          <Label>Tipo de Venda</Label>
-          <Select value={formData.sale_type} onValueChange={(v) => set("sale_type", v)}>
-            <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="normal">Normal</SelectItem>
-              <SelectItem value="pre_order">🚀 Pré-venda</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label>Condição</Label>
-            <Select value={formData.condition} onValueChange={(v) => set("condition", v)}>
-              <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="new">Novo</SelectItem>
-                <SelectItem value="opened">Embalagem aberta</SelectItem>
-                <SelectItem value="used">Usado</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Tipo de Venda</Label>
-            <Select value={formData.sale_type} onValueChange={(v) => set("sale_type", v)}>
-              <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="normal">Normal</SelectItem>
-                <SelectItem value="pre_order">🚀 Pré-venda</SelectItem>
-                {/* "Pronta entrega" saiu da vitrine; a opção só continua para
-                    o produto que já estava salvo assim, senão o campo abriria
-                    em branco. Trocar para "Normal" não muda nada na Loja. */}
-                {product?.sale_type === "ready_stock" && (
-                  <SelectItem value="ready_stock">📦 Pronta Entrega (fora da vitrine)</SelectItem>
-                )}
-              </SelectContent>
-            </Select>
-          </div>
+      {/* Vídeo do anúncio */}
+      {!isNewStoreListing && (
+        <div className="space-y-2">
+          <Label className="flex items-center gap-1.5">
+            <Video className="size-3.5" />
+            Vídeo do anúncio
+          </Label>
+          {isUploadedStoreProductVideoUrl(formData.video_url) ? (
+            <div className="flex flex-wrap items-end gap-3">
+              <video
+                src={formData.video_url}
+                controls
+                playsInline
+                preload="metadata"
+                className="aspect-video w-full max-w-sm rounded-xl border border-border bg-black"
+              />
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" className="gap-2" asChild>
+                  <label className={cn("cursor-pointer", uploadingVideo && "pointer-events-none opacity-50")}>
+                    <input type="file" accept="video/mp4,video/quicktime" className="hidden" onChange={handleVideoAdd} disabled={uploadingVideo} />
+                    {uploadingVideo ? <Loader2 className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />}
+                    {uploadingVideo ? "Enviando..." : "Trocar vídeo"}
+                  </label>
+                </Button>
+                <Button type="button" variant="ghost" size="sm" className="text-muted-foreground" onClick={() => set("video_url", "")}>
+                  Remover
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <Input
+                value={formData.video_url}
+                onChange={(e) => set("video_url", e.target.value)}
+                placeholder="Link do YouTube: https://www.youtube.com/watch?v=..."
+                className="h-9 border-border bg-muted/20 text-sm sm:max-w-md"
+              />
+              <span className="text-[10px] text-muted-foreground">ou</span>
+              <Button variant="outline" size="sm" className="gap-2" asChild>
+                <label className={cn("cursor-pointer", uploadingVideo && "pointer-events-none opacity-50")}>
+                  <input type="file" accept="video/mp4,video/quicktime" className="hidden" onChange={handleVideoAdd} disabled={uploadingVideo} />
+                  {uploadingVideo ? <Loader2 className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />}
+                  {uploadingVideo ? "Enviando..." : "Enviar arquivo"}
+                </label>
+              </Button>
+            </div>
+          )}
+          <p className="text-[10px] text-muted-foreground">
+            Opcional. Tutorial ou demonstração: aparece na galeria logo depois da primeira foto, com som e controles. Arquivo
+            MP4 ou MOV de até {formatUploadLimit(STORE_PRODUCT_VIDEO_MAX_BYTES)}.
+          </p>
         </div>
       )}
+
+      {/* Sale type. A condição (novo/usado) saiu do form: a Loja só vende
+          produto novo, e o valor salvo continua indo no payload sem mudar. */}
+      <div className="space-y-2 md:max-w-xs">
+        <Label>Tipo de Venda</Label>
+        <Select value={saleTypeChoice} onValueChange={setSaleType}>
+          <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="normal">Normal</SelectItem>
+            <SelectItem value="pre_order">🚀 Pré-venda</SelectItem>
+            <SelectItem value="launch">📣 Lançamento</SelectItem>
+            {/* "Pronta entrega" saiu da vitrine; a opção só continua para
+                o produto que já estava salvo assim, senão o campo abriria
+                em branco. Trocar para "Normal" não muda nada na Loja. */}
+            {product?.sale_type === "ready_stock" && (
+              <SelectItem value="ready_stock">📦 Pronta Entrega (fora da vitrine)</SelectItem>
+            )}
+          </SelectContent>
+        </Select>
+      </div>
 
       {preorderFields}
-
-      {!isNewStoreListing && formData.condition !== "new" && (
-        <div className="space-y-1.5">
-          <Label className="text-xs">Notas sobre a condição (visível ao comprador)</Label>
-          <Input
-            placeholder="Ex: Embalagem aberta para teste, sem uso, acompanha todos os acessórios..."
-            value={formData.condition_notes}
-            onChange={(e) => set("condition_notes", e.target.value)}
-            className="text-sm"
-          />
-        </div>
-      )}
+      {launchFields}
 
       {/* Description */}
       <div className="space-y-2">
@@ -1976,26 +2111,6 @@ export function StoreProductForm({
           </div>
         </div>
 
-        <div className="grid gap-3 border-t border-border/60 pt-4 md:grid-cols-2">
-          <label className="flex items-start gap-2.5">
-            <Checkbox
-              checked={formData.is_launch}
-              onCheckedChange={(checked) => set("is_launch", checked === true)}
-              className="mt-0.5"
-            />
-            <span className="space-y-0.5">
-              <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-                <Megaphone className="size-3.5 text-violet-400" />
-                Lançamento
-              </span>
-              <span className="block text-[10px] text-muted-foreground/70">
-                Aparece em &ldquo;DROPS com SUNANO&rdquo; na Home, no card roxo de lançamento (em toda a Loja). Pré-venda já
-                entra na seção sozinha.
-              </span>
-            </span>
-          </label>
-          {formData.is_launch && formData.sale_type !== "pre_order" && <div className="md:col-span-2">{saleWindowFields}</div>}
-        </div>
       </div>
 
       {/* Estoque & Variantes */}
@@ -2119,6 +2234,11 @@ export function StoreProductForm({
             : "Serviço ou item digital: o checkout não pede endereço e o pedido nunca aparece como “falta endereço”. Marque como físico se ainda assim precisar do endereço (visita técnica, envio de brinde)."}
         </p>
       </div>
+
+      {/* Formulário pós-compra: só serviço (mesma régua do preço único). */}
+      {isSinglePriceProduct({ category: formData.category }) && (
+        <ServiceFormFieldsEditor fields={serviceFormFields} onChange={setServiceFormFields} />
+      )}
 
       {/* Cor */}
       <div className="space-y-2 border-t border-border/60 pt-4">

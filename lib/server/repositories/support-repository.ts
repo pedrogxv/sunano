@@ -11,6 +11,7 @@ import { orderNumber } from "@/lib/order-number"
 import { orderOwnerId } from "@/lib/server/repositories/orders-repository"
 import { clampPage, clampPageSize, rangeFor } from "@/lib/server/repositories/_shared"
 import { signSupportImageUrls } from "@/lib/server/support-media"
+import { serviceFormLines } from "@/lib/store-service-form"
 
 /**
  * Repositório de tickets de suporte (`support_tickets` + `support_messages`).
@@ -303,7 +304,7 @@ export async function openServiceOrderTicket(orderId: string): Promise<void> {
     const db = createSupabaseAdminClient()
     const { data: order, error } = await db
       .from("store_orders")
-      .select("id, requires_shipping_address, metadata, items, customer_name, is_sandbox")
+      .select("id, requires_shipping_address, metadata, items, customer_name, is_sandbox, complement_for_order_id")
       .eq("id", orderId)
       .maybeSingle()
     if (error || !order) {
@@ -311,7 +312,22 @@ export async function openServiceOrderTicket(orderId: string): Promise<void> {
       return
     }
 
-    const items = (order.items ?? []) as { id?: string; name?: string; quantity?: number; is_service?: boolean }[]
+    // Complemento de Pagamento não tem atendimento próprio: a conversa é a do
+    // pedido original, e é lá que a equipe avisa que o valor entrou. Import
+    // dinâmico porque aquele repositório importa este.
+    if (order.complement_for_order_id) {
+      const { notifyComplementPaid } = await import("@/lib/server/repositories/order-complement-repository")
+      await notifyComplementPaid(order.id)
+      return
+    }
+
+    const items = (order.items ?? []) as {
+      id?: string
+      name?: string
+      quantity?: number
+      is_service?: boolean
+      service_form?: unknown
+    }[]
     if (!orderHasService(order.requires_shipping_address, items)) return
 
     const metadata = (order.metadata ?? {}) as Record<string, unknown>
@@ -335,13 +351,18 @@ export async function openServiceOrderTicket(orderId: string): Promise<void> {
     const customerName = profiles[ownerId]?.display_name || order.customer_name || "Cliente"
     const teamSenderId = siteOwnerId && siteOwnerId !== ownerId ? siteOwnerId : null
     const fromTeam = teamSenderId !== null
+    // Com formulário pós-compra, o pedido de informação já está no
+    // formulário: as respostas chegam aqui como a mensagem do cliente.
+    const hasServiceForm = serviceFormLines(items).length > 0
 
     const body = (
       fromTeam
         ? [
             `Olá, ${customerName}! Recebemos o pagamento do pedido #${number}.`,
             itemLines ? `Serviço contratado:\n${itemLines}` : null,
-            "Conte aqui o que você precisa: o que quer consultar, links, prints, horários que funcionam para você. A equipe responde por esta conversa.",
+            hasServiceForm
+              ? "Preencha as informações do pedido (na janela de confirmação ou em Meus Pedidos) e elas chegam aqui. A equipe responde por esta conversa."
+              : "Conte aqui o que você precisa: o que quer consultar, links, prints, horários que funcionam para você. A equipe responde por esta conversa.",
           ]
         : [
             `Chamado aberto automaticamente com o pagamento do pedido #${number}.`,

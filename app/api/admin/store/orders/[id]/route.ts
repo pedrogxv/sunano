@@ -13,6 +13,9 @@ import {
 } from "@/lib/server/repositories/orders-repository"
 import { registerManualPayment } from "@/lib/server/repositories/order-manual-payment-repository"
 import { approveStripeCardReview } from "@/lib/server/repositories/stripe-orders-repository"
+import { setOrderComplementDue } from "@/lib/server/repositories/order-complement-repository"
+import { COMPLEMENT_MAX_CENTS, COMPLEMENT_NOTE_MAX } from "@/lib/store-payment-complement"
+import { STORE_CARRIERS } from "@/lib/store-carriers"
 
 const patchSchema = z.discriminatedUnion("action", [
   z.object({
@@ -21,13 +24,13 @@ const patchSchema = z.discriminatedUnion("action", [
     // de um clique (ver trg_store_orders_shipping_stage).
     status: z.enum(ADMIN_ADVANCE_STATUSES),
     trackingCode: z.string().trim().max(120).optional(),
-    carrier: z.string().trim().max(80).optional(),
+    carrier: z.enum(STORE_CARRIERS).optional(),
   }),
   // O código muda em alguns casos quando a encomenda chega ao Brasil.
   z.object({
     action: z.literal("update_tracking"),
     trackingCode: z.string().trim().min(1, "Informe o código de rastreio.").max(120),
-    carrier: z.string().trim().max(80).optional(),
+    carrier: z.enum(STORE_CARRIERS).optional(),
   }),
   z.object({
     action: z.literal("refund"),
@@ -47,6 +50,13 @@ const patchSchema = z.discriminatedUnion("action", [
     method: z.enum(MANUAL_PAYMENT_METHODS),
     amountCents: z.number().int().positive().max(100_000_000),
     reference: z.string().trim().max(120).optional(),
+  }),
+  // Complemento de Pagamento: o TOTAL cobrado além do que o pedido pagou
+  // (orçamento do Xianyu/Expert Buy, diferença de outro pedido). Null limpa.
+  z.object({
+    action: z.literal("set_complement"),
+    dueCents: z.number().int().positive().max(COMPLEMENT_MAX_CENTS).nullable(),
+    note: z.string().trim().max(COMPLEMENT_NOTE_MAX).nullish(),
   }),
 ])
 
@@ -81,6 +91,18 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       totalCents: manual.totalCents,
       manualPayment: manual.manualPayment,
     })
+  }
+
+  if (parsed.data.action === "set_complement") {
+    const complement = await setOrderComplementDue(
+      id,
+      { dueCents: parsed.data.dueCents, note: parsed.data.note ?? null },
+      auth.profile.id
+    )
+    if (!complement.ok) {
+      return NextResponse.json({ error: complement.error }, { status: complement.status })
+    }
+    return NextResponse.json({ ok: true, complement: complement.summary })
   }
 
   if (parsed.data.action === "approve_card_review") {

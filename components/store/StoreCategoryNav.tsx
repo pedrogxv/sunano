@@ -487,10 +487,15 @@ export function StoreCategoryNav({ data, activeCategory }: StoreCategoryNavProps
                             {previewProduct.brand && (
                               <span className="text-[11.5px] font-medium text-[#8a8a8a]">{previewProduct.brand}</span>
                             )}
-                            <span className="flex flex-wrap items-baseline gap-x-2">
-                              {hasDiscount && <span className="text-[11.5px] text-[#6e6e6e] line-through">{formatBRL(baseCents)}</span>}
-                              <span className="font-display text-[19px] font-bold text-emerald-400">{formatBRL(effectiveCents)}</span>
-                            </span>
+                            {/* Complemento de Pagamento não tem preço: o valor é o do pedido. */}
+                            {previewProduct.is_payment_complement ? (
+                              <span className="text-[12px] font-semibold text-emerald-400">Valor do seu pedido</span>
+                            ) : (
+                              <span className="flex flex-wrap items-baseline gap-x-2">
+                                {hasDiscount && <span className="text-[11.5px] text-[#6e6e6e] line-through">{formatBRL(baseCents)}</span>}
+                                <span className="font-display text-[19px] font-bold text-emerald-400">{formatBRL(effectiveCents)}</span>
+                              </span>
+                            )}
                           </span>
                         </Link>
                         <RouteLink

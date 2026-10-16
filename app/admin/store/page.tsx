@@ -25,7 +25,6 @@ import BoxLoader from "@/components/ui/box-loader"
 import { usePageHeader } from "@/components/providers/page-header-context"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
 import {
   Dialog,
   DialogContent,
@@ -59,7 +58,6 @@ interface StoreProduct {
   images: string[]
   category: string | null
   brand: string | null
-  condition: "new" | "used" | "opened"
   sale_type: "pre_order" | "ready_stock" | "normal"
   /** Lançamento marcado e ainda no prazo (já resolvido no repositório). */
   is_launch: boolean
@@ -92,16 +90,28 @@ function parseBRLToCents(value: string): number | null {
   return Math.round(n * 100)
 }
 
-const CONDITION_LABEL: Record<string, string> = {
-  new: "Novo",
-  opened: "Emb. aberta",
-  used: "Usado",
+type ProductStatus = "active" | "sold_out" | "inactive"
+
+const STATUS_LABEL: Record<ProductStatus, string> = {
+  active: "✅ Ativo (visível)",
+  sold_out: "⚠️ Esgotado (visível, não compra)",
+  inactive: "🔒 Inativo (oculto)",
 }
 
-const CONDITION_COLOR: Record<string, string> = {
-  new: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30",
-  opened: "text-amber-400 bg-amber-500/10 border-amber-500/30",
-  used: "text-orange-400 bg-orange-500/10 border-orange-500/30",
+const STATUS_SHORT_LABEL: Record<ProductStatus, string> = {
+  active: "Ativo",
+  sold_out: "Esgotado",
+  inactive: "Inativo",
+}
+
+const STATUS_COLOR: Record<ProductStatus, string> = {
+  active: "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20",
+  sold_out: "border-red-500/30 bg-red-500/10 text-red-400 dark:bg-red-500/10 dark:hover:bg-red-500/20",
+  inactive: "border-border bg-slate-500/10 text-muted-foreground dark:bg-slate-500/10 dark:hover:bg-slate-500/20",
+}
+
+function productStatus(p: Pick<StoreProduct, "is_active" | "is_sold_out">): ProductStatus {
+  return !p.is_active ? "inactive" : p.is_sold_out ? "sold_out" : "active"
 }
 
 type SaleType = "pre_order" | "ready_stock" | "normal"
@@ -414,6 +424,16 @@ export default function AdminStorePage() {
     await patchProduct(product.id, { is_sold_out: !product.is_sold_out })
   }
 
+  /** Mesma regra do select de Status do form: inativo some, esgotado aparece sem comprar. */
+  async function setStatus(product: StoreProduct, status: ProductStatus) {
+    if (productStatus(product) === status) return
+    const ok = await patchProduct(product.id, {
+      is_active: status !== "inactive",
+      is_sold_out: status === "sold_out",
+    })
+    if (ok) toast.success(`Status: ${STATUS_SHORT_LABEL[status]}`, { description: product.name })
+  }
+
   async function setSaleType(product: StoreProduct, saleType: SaleType) {
     if (product.sale_type === saleType) return
     const ok = await patchProduct(product.id, { sale_type: saleType })
@@ -624,7 +644,6 @@ export default function AdminStorePage() {
                 <thead>
                   <tr className="border-b border-border">
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Produto</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Condição</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Preço</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Estoque</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
@@ -684,14 +703,6 @@ export default function AdminStorePage() {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={cn(
-                        "rounded-full border px-2 py-0.5 text-[10px] font-semibold",
-                        CONDITION_COLOR[p.condition]
-                      )}>
-                        {CONDITION_LABEL[p.condition]}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
                       {hasDiscount ? (
                         <div className="flex flex-col">
                           <span className="font-semibold text-emerald-400 text-sm">{formatBRL(p.promo_price_cents as number)}</span>
@@ -714,19 +725,28 @@ export default function AdminStorePage() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <Badge
-                        variant="secondary"
-                        className={cn(
-                          "text-[10px]",
-                          !p.is_active
-                            ? "bg-slate-500/10 text-muted-foreground"
-                            : p.is_sold_out
-                              ? "bg-red-500/10 text-red-400"
-                              : "bg-emerald-500/10 text-emerald-400"
-                        )}
+                      <Select
+                        value={productStatus(p)}
+                        onValueChange={(v) => setStatus(p, v as ProductStatus)}
+                        disabled={isSaving}
                       >
-                        {!p.is_active ? "Inativo" : p.is_sold_out ? "Esgotado" : "Ativo"}
-                      </Badge>
+                        <SelectTrigger
+                          size="sm"
+                          className={cn(
+                            "h-7 w-auto gap-1.5 rounded-full px-2.5 text-[11px] font-semibold",
+                            STATUS_COLOR[productStatus(p)]
+                          )}
+                        >
+                          <SelectValue>{STATUS_SHORT_LABEL[productStatus(p)]}</SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(Object.keys(STATUS_LABEL) as ProductStatus[]).map((status) => (
+                            <SelectItem key={status} value={status}>
+                              {STATUS_LABEL[status]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1 justify-end">

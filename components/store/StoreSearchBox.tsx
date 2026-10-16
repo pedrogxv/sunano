@@ -193,7 +193,9 @@ export function StoreSearchBox({ className, inputClassName, iconClassName, place
                           </span>
                         )}
                       </span>
-                      <span className="shrink-0 text-[12.5px] font-bold text-emerald-400">{formatBRL(price)}</span>
+                      <span className="shrink-0 text-[12.5px] font-bold text-emerald-400">
+                        {product.is_payment_complement ? "Valor do pedido" : formatBRL(price)}
+                      </span>
                     </Link>
                   </li>
                 )

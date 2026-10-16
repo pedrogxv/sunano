@@ -8,6 +8,8 @@ import { deployChargesInSandbox } from "@/lib/server/payments/gateway"
 import { checkRateLimit } from "@/lib/server/rate-limit"
 import { markStripeOrdersPaid } from "@/lib/server/repositories/stripe-orders-repository"
 import { stripeReceiptUrlOf } from "@/lib/stripe-receipt"
+import { readServiceFormAnswers, serviceFormLines } from "@/lib/store-service-form"
+import { orderNumber } from "@/lib/order-number"
 
 /**
  * Usada pela página de checkout PIX para fazer polling do status do
@@ -34,7 +36,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const { data: order, error } = await db
     .from("store_orders")
     .select(
-      "id, status, total_cents, pix_copy_paste, pix_qr_code_base64, metadata, items, created_at, payment_method, asaas_payment_id, asaas_receipt_url, stripe_payment_intent_id, installment_count, pix_price_cents, card_surcharge_percent, pix_expires_at, requires_shipping_address"
+      "id, status, total_cents, pix_copy_paste, pix_qr_code_base64, metadata, items, created_at, payment_method, asaas_payment_id, asaas_receipt_url, stripe_payment_intent_id, installment_count, pix_price_cents, card_surcharge_percent, pix_expires_at, requires_shipping_address, service_form_answers, complement_for_order_id"
     )
     .eq("id", id)
     // Pedido de sandbox não existe para o cliente — nem por link direto
@@ -100,6 +102,23 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   // `delivered`), e ela ficaria esperando um `paid` que nunca chega.
   const isPaid = (ORDER_PAID_STATUSES as string[]).includes(order.status)
 
+  // Complemento de Pagamento: o "e agora?" é o pedido ORIGINAL (e a conversa
+  // dele), não um atendimento novo. Mesmo dono, conferido na mesma consulta.
+  let complementFor: { orderNumber: string; ticketId: string | null } | null = null
+  if (order.complement_for_order_id) {
+    const { data: target } = await db
+      .from("store_orders")
+      .select("id, metadata")
+      .eq("id", order.complement_for_order_id)
+      .eq("metadata->>user_id", user.id)
+      .maybeSingle()
+    const ticketId = (target?.metadata as Record<string, unknown> | null)?.service_ticket_id
+    complementFor = {
+      orderNumber: orderNumber(order.complement_for_order_id),
+      ticketId: typeof ticketId === "string" ? ticketId : null,
+    }
+  }
+
   return NextResponse.json({
     id: order.id,
     status: isPaid ? "paid" : order.status,
@@ -122,9 +141,16 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // Pedido com serviço: a janela pós-compra abre a conversa do chamado. O
     // id chega alguns instantes DEPOIS do "pago" (o webhook marca o status e
     // só então abre o chamado), por isso a janela continua consultando.
-    hasService: orderHasService(order.requires_shipping_address, (order.items ?? []) as { is_service?: boolean }[]),
+    hasService:
+      !complementFor &&
+      orderHasService(order.requires_shipping_address, (order.items ?? []) as { is_service?: boolean }[]),
+    complementFor,
     serviceTicketId:
       isPaid && typeof order.metadata?.service_ticket_id === "string" ? order.metadata.service_ticket_id : null,
+    // Formulário pós-compra: a janela pede as informações do serviço antes
+    // da conversa livre. Os campos vêm do snapshot do pedido.
+    serviceFormLines: isPaid ? serviceFormLines(order.items as { id?: string; name?: string; service_form?: unknown }[]) : [],
+    serviceFormAnswered: readServiceFormAnswers(order.service_form_answers) !== null,
     // Comprovantes: só existem depois de pago. O Asaas devolve um link de
     // comprovante (transactionReceiptUrl/invoiceUrl) cacheado pelo webhook.
     receipt:

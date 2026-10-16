@@ -72,6 +72,8 @@ import {
 } from "@/lib/peripheral-expert"
 import { getTagOptionsForCategory, hasScoreRanking, sanitizeTagsForCategory, type Category, type Tag } from "@/lib/tag-options"
 import { UPLOAD_LIMITS, formatUploadLimit } from "@/lib/upload-limits"
+import { PERIPHERAL_GLIDE_VIDEO_BUCKET, PERIPHERAL_GLIDE_VIDEO_MAX_BYTES } from "@/lib/peripheral-glide-video"
+import { supabaseStorageClient } from "@/lib/client/supabase-storage"
 import { priceBandModeFor } from "@/lib/price-band"
 import { GLASSPAD_ARTIST_BIO_MAX_LENGTH, parseGlasspadArt, type GlasspadArt } from "@/lib/glasspad-art"
 
@@ -597,6 +599,17 @@ const GLASSPAD_BASE_OPTIONS = [
 
 // Mousepad e glasspad têm o card "Deslize": um clipe curto num player.
 const GLIDE_VIDEO_MIME_TYPES = ["video/mp4", "video/quicktime"]
+
+/**
+ * Tipo que vai para a rota. Alguns navegadores (Chrome no Windows) entregam o
+ * .mov com `type` vazio; aí vale a extensão. `null` = não é MP4 nem MOV.
+ */
+function glideVideoMimeType(file: File): string | null {
+  if (GLIDE_VIDEO_MIME_TYPES.includes(file.type)) return file.type
+  if (/\.mov$/i.test(file.name)) return "video/quicktime"
+  if (/\.mp4$/i.test(file.name)) return "video/mp4"
+  return null
+}
 
 function hasGlideVideo(category: string | undefined) {
   return category === "mousepad" || category === "glasspad"
@@ -1841,17 +1854,34 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
       let glideVideoUrl = glideVideoFile ? null : glideVideoPreview
       if (glideVideoFile && hasGlideVideo(data.category)) {
         setUploading(true)
-        const videoForm = new FormData()
-        videoForm.set("file", glideVideoFile)
-        const videoRes = await fetch("/api/admin/peripherals/upload-video", {
+        // Direto para o Storage por signed URL: pela rota, a Vercel corta o
+        // corpo em ~4.5MB. Ver /api/admin/peripherals/upload-video.
+        const startRes = await fetch("/api/admin/peripherals/upload-video", {
           method: "POST",
-          body: videoForm,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contentType: glideVideoMimeType(glideVideoFile), sizeBytes: glideVideoFile.size }),
         })
-        const videoData = (await videoRes.json().catch(() => null)) as { publicUrl?: string; error?: string } | null
-        if (!videoRes.ok || !videoData?.publicUrl) {
-          throw new Error(videoData?.error ?? "Falha ao enviar o vídeo de deslize")
+        const start = (await startRes.json().catch(() => null)) as { path?: string; token?: string; error?: string } | null
+        if (!startRes.ok || !start?.path || !start.token) {
+          throw new Error(start?.error ?? "Falha ao iniciar o envio do vídeo de deslize")
         }
-        glideVideoUrl = videoData.publicUrl
+
+        // O bucket só libera `video/mp4`; o .mov do celular toca servido assim.
+        const { error: uploadError } = await supabaseStorageClient.storage
+          .from(PERIPHERAL_GLIDE_VIDEO_BUCKET)
+          .uploadToSignedUrl(start.path, start.token, glideVideoFile, { contentType: "video/mp4", cacheControl: "31536000" })
+        if (uploadError) throw new Error("Falha ao enviar o vídeo de deslize")
+
+        const finishRes = await fetch("/api/admin/peripherals/upload-video", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ path: start.path }),
+        })
+        const finish = (await finishRes.json().catch(() => null)) as { publicUrl?: string; error?: string } | null
+        if (!finishRes.ok || !finish?.publicUrl) {
+          throw new Error(finish?.error ?? "Falha ao confirmar o vídeo de deslize")
+        }
+        glideVideoUrl = finish.publicUrl
       }
 
       let artistImageUrl = artistImagePreview
@@ -2077,12 +2107,12 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
     const file = e.target.files?.[0]
     e.target.value = ""
     if (!file) return
-    if (!GLIDE_VIDEO_MIME_TYPES.includes(file.type) && !/\.(mp4|mov)$/i.test(file.name)) {
+    if (!glideVideoMimeType(file)) {
       toast.error("Envie o vídeo em MP4 ou MOV.")
       return
     }
-    if (file.size > UPLOAD_LIMITS.video) {
-      toast.error(`O vídeo passa de ${formatUploadLimit(UPLOAD_LIMITS.video)}.`)
+    if (file.size > PERIPHERAL_GLIDE_VIDEO_MAX_BYTES) {
+      toast.error(`O vídeo passa de ${formatUploadLimit(PERIPHERAL_GLIDE_VIDEO_MAX_BYTES)}.`)
       return
     }
     setGlideVideoFile(file)
@@ -3805,7 +3835,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           <FormSection id="section-glide" title={"Deslize"} icon={<Video className="size-4" />} defaultOpen>
             <div className="space-y-2">
               <p className="text-[10px] text-muted-foreground/60">
-                {`Clipe curto mostrando o deslize. MP4 ou MOV, até ${formatUploadLimit(UPLOAD_LIMITS.video)}. Aparece num player na página do periférico.`}
+                {`Clipe curto mostrando o deslize. MP4 ou MOV, até ${formatUploadLimit(PERIPHERAL_GLIDE_VIDEO_MAX_BYTES)}. Aparece num player na página do periférico.`}
               </p>
               {glideVideoPreview ? (
                 <div className="relative group w-72 aspect-video rounded-lg overflow-hidden border border-border bg-black">

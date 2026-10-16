@@ -19,7 +19,7 @@ import {
   Truck,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { useCart } from "@/components/providers/cart-context"
+import { useCart, type CartItem } from "@/components/providers/cart-context"
 import { useAuthUser } from "@/components/providers/auth-context"
 import { useAuthModal } from "@/components/providers/auth-modal-context"
 import { useStoreSettings } from "@/lib/hooks/use-store-settings"
@@ -27,6 +27,12 @@ import { useDeliveryEstimate } from "@/lib/hooks/use-delivery-estimate"
 import { STORE_DELIVERY_BUSINESS_DAYS } from "@/lib/store-shipping"
 import { computeCardTotalCents } from "@/lib/store-pricing"
 import { formatBRL } from "@/lib/format"
+import { orderNumber } from "@/lib/order-number"
+import {
+  COMPLEMENT_CHECKOUT_PARAM,
+  COMPLEMENT_ORDER_QUERY_PARAM,
+  type OrderComplementSummary,
+} from "@/lib/store-payment-complement"
 import { cn } from "@/lib/utils"
 import { SALE_TYPE_ICON, SALE_TYPE_LABEL } from "@/lib/store-sale-type"
 import { CARD_SURFACE, CARD_SURFACE_INTERACTIVE } from "@/lib/ui-styles"
@@ -124,6 +130,17 @@ interface CartValidationResponse {
   cartNeedsShipping?: boolean
 }
 
+/** Resposta de `GET /api/store/complement` que o checkout usa. */
+interface ComplementLookupResponse {
+  orderId?: string
+  number?: string
+  complement?: OrderComplementSummary
+  product?: { id: string; slug: string; name: string; image: string | null }
+  error?: string
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 /** Mensagem para o cliente a partir do motivo devolvido pelo servidor. */
 const CART_ISSUE_LABEL: Record<string, string> = {
   not_found: "não está mais disponível na loja",
@@ -170,6 +187,72 @@ export default function CheckoutPage() {
   const [cartIssues, setCartIssues] = useState<ValidatedCartLine[]>([])
   const [staleLines, setStaleLines] = useState<ValidatedCartLine[]>([])
   const { cardSurchargePercent, cardEnabled } = useStoreSettings()
+
+  // Complemento de Pagamento (`?complemento=<pedido>`): paga o pendente de um
+  // pedido em vez do carrinho, que fica intocado. A linha mostrada vem do
+  // servidor, e o checkout recalcula o valor de novo ao cobrar.
+  const [paramsChecked, setParamsChecked] = useState(false)
+  const [complementOrderId, setComplementOrderId] = useState<string | null>(null)
+  const [complementItem, setComplementItem] = useState<CartItem | null>(null)
+  const [complementError, setComplementError] = useState<string | null>(null)
+  const [complementSlug, setComplementSlug] = useState<string | null>(null)
+  useEffect(() => {
+    // Lido no cliente (sem `useSearchParams`, que exigiria Suspense na página).
+    const id = new URLSearchParams(window.location.search).get(COMPLEMENT_CHECKOUT_PARAM)
+    if (id && UUID_RE.test(id)) setComplementOrderId(id.toLowerCase())
+    setParamsChecked(true)
+  }, [])
+
+  useEffect(() => {
+    if (!complementOrderId || authLoading || !user) return
+    let cancelled = false
+    fetch(`/api/store/complement?${COMPLEMENT_ORDER_QUERY_PARAM}=${orderNumber(complementOrderId)}`)
+      .then(async (res) => ({ ok: res.ok, data: (await res.json().catch(() => ({}))) as ComplementLookupResponse }))
+      .then(({ ok, data }) => {
+        if (cancelled) return
+        if (data.product) setComplementSlug(data.product.slug)
+        if (!ok || !data.complement || !data.product || data.orderId !== complementOrderId) {
+          throw new Error(data.error ?? "Não encontramos esse pedido na sua conta.")
+        }
+        if (data.complement.awaitingPaymentOrderId) {
+          throw new Error(
+            `Você já gerou o pagamento deste complemento (pedido #${orderNumber(data.complement.awaitingPaymentOrderId)}). Pague ou cancele em Meus Pedidos.`
+          )
+        }
+        if (data.complement.pendingCents <= 0) {
+          throw new Error("Este pedido não tem valor a complementar no momento.")
+        }
+        setComplementItem({
+          productId: data.product.id,
+          variantId: null,
+          variantLabel: `Pedido #${data.number}`,
+          variantColor: null,
+          variantIcon: null,
+          variantOptions: [],
+          slug: data.product.slug,
+          name: data.product.name,
+          priceCents: data.complement.pendingCents,
+          quantity: 1,
+          image: data.product.image,
+          stock: null,
+          type: "store",
+          condition: "new",
+          sale_type: "normal",
+          singlePrice: true,
+        })
+      })
+      .catch((err) => {
+        if (!cancelled) setComplementError(err instanceof Error ? err.message : "Não foi possível carregar o pedido.")
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [complementOrderId, authLoading, user])
+
+  const isComplement = complementOrderId !== null
+  // O que esta tela cobra: o carrinho, ou a linha única do complemento.
+  const checkoutItems = isComplement ? (complementItem ? [complementItem] : []) : items
+  const loginPath = isComplement ? `/checkout?${COMPLEMENT_CHECKOUT_PARAM}=${complementOrderId}` : "/checkout"
   // Cartão desligado no gateway ativo (Stripe: só PIX) — o checkout recusaria.
   // Garante PIX mesmo se o cartão estava escolhido antes da resposta chegar.
   useEffect(() => {
@@ -285,7 +368,7 @@ export default function CheckoutPage() {
   // que a tela precisa saber sobre o carrinho: se há divergência de preço/
   // estoque desde que os itens foram adicionados, e se há algo para despachar.
   useEffect(() => {
-    if (items.length === 0) return
+    if (items.length === 0 || complementOrderId) return
     let cancelled = false
     fetch("/api/store/cart/validate", {
       method: "POST",
@@ -334,7 +417,7 @@ export default function CheckoutPage() {
     // `cartProductIds` (e não `items`) porque `items` muda de identidade a
     // cada clique no "+", e a revalidação não muda de resposta por isso.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cartProductIds])
+  }, [cartProductIds, complementOrderId])
 
   // Loja fechada para novos pedidos. A recusa de verdade é do servidor
   // (proxy.ts + a própria rota de checkout); aqui é só para DIZER isso antes
@@ -379,12 +462,14 @@ export default function CheckoutPage() {
   const payerBlocking = editingPayer && !payerFormComplete
   const shippingBlocking = editingShipping && !shippingComplete
 
-  const total = items.reduce((sum, i) => sum + i.priceCents * i.quantity, 0)
+  // Complemento não vai pelo correio: sem card de entrega nem linha de frete.
+  const showShipping = cartNeedsShipping && !isComplement
+  const total = checkoutItems.reduce((sum, i) => sum + i.priceCents * i.quantity, 0)
   // Serviço tem preço único: o acréscimo do cartão (e o desconto do PIX) só
   // incide sobre o resto do carrinho. O item salvo antes do campo existir
   // aprende pela revalidação.
   const cardTotal = computeCardTotalCents(
-    items.map((i) => ({
+    checkoutItems.map((i) => ({
       priceCents: i.priceCents,
       quantity: i.quantity,
       singlePrice: i.singlePrice ?? singlePriceProductIds.has(i.productId),
@@ -393,8 +478,8 @@ export default function CheckoutPage() {
   )
   const cardSurchargeCents = cardTotal - total
   const payableTotal = paymentMethod === "credit_card" ? cardTotal : total
-  const hasPreOrderItem = items.some((i) => i.sale_type === "pre_order")
-  const onlyPreOrderItems = items.length > 0 && items.every((i) => i.sale_type === "pre_order")
+  const hasPreOrderItem = checkoutItems.some((i) => i.sale_type === "pre_order")
+  const onlyPreOrderItems = checkoutItems.length > 0 && checkoutItems.every((i) => i.sale_type === "pre_order")
   const deliveryDeadline = useDeliveryEstimate()
 
   function requestRemoval(item: (typeof items)[number], fromDecrement: boolean) {
@@ -421,7 +506,7 @@ export default function CheckoutPage() {
     setError(null)
 
     if (!user) {
-      openLogin("/checkout")
+      openLogin(loginPath)
       return
     }
 
@@ -446,7 +531,7 @@ export default function CheckoutPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          items: items.map((i) => ({
+          items: checkoutItems.map((i) => ({
             productId: i.productId,
             variantId: i.variantId,
             variantOptionIds: i.variantOptions.map((o) => o.optionId),
@@ -471,7 +556,8 @@ export default function CheckoutPage() {
           // servidor recusa um endereço pela metade (e faz bem — pedido com
           // rua e sem número parece pronto para despachar e não é).
           ...(shippingComplete && !shippingSkipped ? shippingFormToPayload(shippingForm) : {}),
-          ...(affiliateCode !== undefined ? { affiliateCode } : {}),
+          ...(affiliateCode !== undefined && !isComplement ? { affiliateCode } : {}),
+          ...(isComplement ? { complementOrderId } : {}),
         }),
       })
 
@@ -492,7 +578,8 @@ export default function CheckoutPage() {
       // estoque já foi reservado, então o carrinho cumpriu seu papel. Deixar
       // os itens ali faz a pessoa achar que a compra não foi registrada — e
       // um segundo checkout geraria um pedido duplicado.
-      clear()
+      // O complemento não passou pelo carrinho: o que estava lá continua.
+      if (!isComplement) clear()
 
       // Cartão no Stripe: o formulário é nosso (Payment Element), em
       // `/checkout/card`. O pedido e o PaymentIntent já existem.
@@ -522,7 +609,16 @@ export default function CheckoutPage() {
   // `loading` continua true depois do clear() até a navegação acontecer: sem
   // isso, esvaziar o carrinho renderizaria o estado "carrinho vazio" por uma
   // fração de segundo, como se a compra tivesse sumido.
-  if (items.length === 0 && loading) {
+  // Primeiro quadro: ainda não se sabe se é carrinho ou complemento.
+  if (!paramsChecked) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Loader2 className="size-8 animate-spin text-emerald-400" />
+      </div>
+    )
+  }
+
+  if (checkoutItems.length === 0 && loading) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 px-4 text-center">
         <Loader2 className="size-8 animate-spin text-emerald-400" />
@@ -533,7 +629,43 @@ export default function CheckoutPage() {
     )
   }
 
-  if (items.length === 0) {
+  if (isComplement && checkoutItems.length === 0) {
+    const backHref = complementSlug ? `/loja/${complementSlug}` : "/conta/pedidos"
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-4 text-center">
+        {complementError ? (
+          <>
+            <Package className="size-10 text-muted-foreground" />
+            <p className="max-w-md text-sm text-muted-foreground">{complementError}</p>
+            <div className="flex flex-wrap justify-center gap-2">
+              <Link href={backHref}>
+                <Button variant="outline">Voltar</Button>
+              </Link>
+              <Link href="/conta/pedidos">
+                <Button variant="ghost">Meus Pedidos</Button>
+              </Link>
+            </div>
+          </>
+        ) : !authLoading && !user ? (
+          <>
+            <p className="text-sm text-foreground">Entre na conta em que você fez o pedido para pagar o complemento.</p>
+            <Button
+              type="button"
+              onClick={() => openLogin(loginPath)}
+              className="gap-2 bg-emerald-600 text-white hover:bg-emerald-500"
+            >
+              <LogIn className="size-4" />
+              Entrar
+            </Button>
+          </>
+        ) : (
+          <Loader2 className="size-8 animate-spin text-emerald-400" />
+        )}
+      </div>
+    )
+  }
+
+  if (checkoutItems.length === 0) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-4 text-center">
         <ShoppingCart className="size-10 text-muted-foreground" />
@@ -545,18 +677,22 @@ export default function CheckoutPage() {
     )
   }
 
-  const itemCount = items.reduce((sum, i) => sum + i.quantity, 0)
+  const itemCount = checkoutItems.reduce((sum, i) => sum + i.quantity, 0)
   const storeBase = "/loja"
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-10">
-      <h1 className="mb-1 text-2xl font-black text-foreground">Finalizar Compra</h1>
+      <h1 className="mb-1 text-2xl font-black text-foreground">
+        {isComplement ? "Pagar complemento" : "Finalizar Compra"}
+      </h1>
       <p className="mb-6 text-sm text-muted-foreground">
-        {itemCount} {itemCount === 1 ? "item" : "itens"} no carrinho
+        {isComplement && complementOrderId
+          ? `Valor pendente do pedido #${orderNumber(complementOrderId)}`
+          : `${itemCount} ${itemCount === 1 ? "item" : "itens"} no carrinho`}
       </p>
 
       <div className="mb-4 space-y-2">
-        {items.map((item) => {
+        {checkoutItems.map((item) => {
           const optionIds = item.variantOptions.map((o) => o.optionId)
           return (
           <div
@@ -591,7 +727,7 @@ export default function CheckoutPage() {
                     .join(" · ")}
                 </p>
               )}
-              <p className="mt-1 text-xs text-muted-foreground">{formatBRL(item.priceCents)} cada</p>
+              {!isComplement && <p className="mt-1 text-xs text-muted-foreground">{formatBRL(item.priceCents)} cada</p>}
               {item.sale_type !== "normal" && (() => {
                 const SaleTypeIcon = SALE_TYPE_ICON[item.sale_type]
                 return (
@@ -617,6 +753,8 @@ export default function CheckoutPage() {
 
             {/* Qty controls + line total */}
             <div className="flex shrink-0 flex-col items-end gap-1.5">
+              {!isComplement && (
+              <>
               <button
                 onClick={() => requestRemoval(item, false)}
                 aria-label={`Remover ${item.name}`}
@@ -649,6 +787,8 @@ export default function CheckoutPage() {
                   <Plus className="size-3" />
                 </button>
               </div>
+              </>
+              )}
               <span className="text-sm font-bold text-foreground">
                 {formatBRL(item.priceCents * item.quantity)}
               </span>
@@ -783,7 +923,7 @@ export default function CheckoutPage() {
         )}
         {/* O total nunca teve frete: a linha só diz isso em voz alta. Carrinho
             só de serviço não vai pelo correio, então não fala de frete. */}
-        {cartNeedsShipping && (
+        {showShipping && (
           <div className="flex items-center justify-between text-xs">
             <span className="flex items-center gap-1.5 text-muted-foreground">
               <Truck className="size-3.5" />
@@ -811,7 +951,7 @@ export default function CheckoutPage() {
       {/* Previsão de entrega: a mesma conta da página do produto
           (lib/store-shipping.ts). Pré-venda conta da chegada do lote, então
           não tem data. */}
-      {cartNeedsShipping && (
+      {showShipping && (
         <div className="mb-6 flex items-start gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] px-4 py-3">
           <CalendarClock className="mt-0.5 size-4 shrink-0 text-emerald-400" />
           <div>
@@ -879,13 +1019,13 @@ export default function CheckoutPage() {
             <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
               <Button
                 type="button"
-                onClick={() => openLogin("/checkout")}
+                onClick={() => openLogin(loginPath)}
                 className="gap-2 bg-emerald-600 text-white transition-transform hover:-translate-y-0.5 hover:bg-emerald-500"
               >
                 <LogIn className="size-4" />
                 Entrar
               </Button>
-              <Button type="button" variant="outline" onClick={() => openRegister("/checkout")}>
+              <Button type="button" variant="outline" onClick={() => openRegister(loginPath)}>
                 Criar conta
               </Button>
             </div>
@@ -905,7 +1045,7 @@ export default function CheckoutPage() {
           />
         )}
 
-        {!authLoading && user && payerInfoChecked && cartNeedsShipping && (
+        {!authLoading && user && payerInfoChecked && showShipping && (
           <CheckoutShippingCard
             form={shippingForm}
             onChange={setShippingForm}
@@ -918,7 +1058,7 @@ export default function CheckoutPage() {
 
         {/* Logo acima do botão de pagar: é o último passo antes de finalizar,
             onde a pessoa ainda lembra de quem a trouxe até aqui. */}
-        {!authLoading && user && payerInfoChecked && (
+        {!authLoading && user && payerInfoChecked && !isComplement && (
           <CheckoutAffiliatePicker value={affiliateCode} onChange={setAffiliateCode} disabled={loading} />
         )}
 

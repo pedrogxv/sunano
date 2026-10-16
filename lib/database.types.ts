@@ -1267,6 +1267,10 @@ export type Database = {
           is_launch: boolean
           /** Fim da pré-venda/lançamento (ISO). Depois dele o cron vira o produto normal. Nulo = sem prazo. */
           sale_window_ends_at: string | null
+          /** Formulário pós-compra de serviço (lib/store-service-form.ts). */
+          service_form_fields: Record<string, unknown>[]
+          /** O anúncio "Complemento de Pagamento" (lib/store-payment-complement.ts). Só um. */
+          is_payment_complement: boolean
           /** O que acontece com o preço no fim do prazo. */
           sale_window_end_action: "keep" | "end_promo" | "set_price"
           /** Preço PIX depois do prazo, só com `set_price`. */
@@ -1309,6 +1313,8 @@ export type Database = {
           preorder_batch_started_at?: string | null
           is_launch?: boolean
           sale_window_ends_at?: string | null
+          service_form_fields?: Record<string, unknown>[]
+          is_payment_complement?: boolean
           sale_window_end_action?: "keep" | "end_promo" | "set_price"
           sale_window_end_price_cents?: number | null
           created_at?: string
@@ -1349,6 +1355,8 @@ export type Database = {
           preorder_batch_started_at?: string | null
           is_launch?: boolean
           sale_window_ends_at?: string | null
+          service_form_fields?: Record<string, unknown>[]
+          is_payment_complement?: boolean
           sale_window_end_action?: "keep" | "end_promo" | "set_price"
           sale_window_end_price_cents?: number | null
           created_at?: string
@@ -1993,6 +2001,13 @@ export type Database = {
           shipping_state: string | null
           /** Não-nulo = endereço de entrega já informado (no checkout ou depois do pagamento). */
           shipping_address_filled_at: string | null
+          /** O que o comprador preencheu no formulário de serviço. Null = ainda não. */
+          service_form_answers: Record<string, unknown> | null
+          /** Total cobrado de complemento pelo admin (acumulado). Null = nada cobrado. */
+          complement_due_cents: number | null
+          complement_note: string | null
+          /** Não-nulo = este pedido é o pagamento de complemento daquele pedido. */
+          complement_for_order_id: string | null
           requires_shipping_address: boolean
           /**
            * true = pedido criado com `ASAAS_ENV=sandbox` (pagamento de teste).
@@ -2050,6 +2065,10 @@ export type Database = {
           shipping_city?: string | null
           shipping_state?: string | null
           shipping_address_filled_at?: string | null
+          service_form_answers?: Record<string, unknown> | null
+          complement_due_cents?: number | null
+          complement_note?: string | null
+          complement_for_order_id?: string | null
           requires_shipping_address?: boolean
           is_sandbox?: boolean
           created_at?: string
@@ -2102,6 +2121,10 @@ export type Database = {
           shipping_city?: string | null
           shipping_state?: string | null
           shipping_address_filled_at?: string | null
+          service_form_answers?: Record<string, unknown> | null
+          complement_due_cents?: number | null
+          complement_note?: string | null
+          complement_for_order_id?: string | null
           requires_shipping_address?: boolean
           is_sandbox?: boolean
           created_at?: string

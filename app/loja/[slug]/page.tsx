@@ -53,6 +53,22 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   })
   const condition = CONDITION_LABEL[product.condition] ?? ""
 
+  // Complemento de Pagamento não tem preço: o valor é o do pedido do cliente.
+  if (product.is_payment_complement) {
+    return buildMetadata({
+      title: product.name,
+      titleSuffix: " | Loja Sunano",
+      description: buildDescription(product.description, product.name, {
+        context: "Pague o valor pendente de um pedido da Loja Sunano pelo número do pedido.",
+      }),
+      path: `/loja/${slug}`,
+      eyebrow: "Loja",
+      subtitle: "Pagamento de pedido",
+      image: product.images[0],
+      imageVariant: "product",
+    })
+  }
+
   return buildMetadata({
     title: product.name,
     titleSuffix: " | Loja Sunano",
@@ -234,7 +250,9 @@ export default async function ProductPage({ params }: PageProps) {
 
   return (
     <>
-      <JsonLd data={productJsonLd} />
+      {/* Sem schema de Product no complemento: a oferta diria o preço de
+          tabela (R$ 6), que nunca é o que se paga. */}
+      {!product.is_payment_complement && <JsonLd data={productJsonLd} />}
       <JsonLd data={breadcrumbJsonLd} />
       <ProductDetailContent
         {...detail}

@@ -1,10 +1,12 @@
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
 import { Star } from "lucide-react"
 
 import { AuthorAvatarLink, AuthorNameLink, authorFrom } from "@/components/profile/AuthorLink"
 import { ProfileAvatar } from "@/components/ui/ProfileAvatar"
+import { MediaViewer } from "@/components/ui/media-viewer"
 import { getCategoryIcon } from "@/lib/store-category-icons"
 import { TESTIMONIAL_SOURCE_LABEL, type StoreTestimonial } from "@/lib/store-testimonials"
 import { cn } from "@/lib/utils"
@@ -122,22 +124,7 @@ export function StoreReviewCard({ entry, clampBody = false }: { entry: StoreRevi
         {entry.body}
       </p>
 
-      {entry.images.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {entry.images.map((url, i) => (
-            <a
-              key={url}
-              href={url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block size-20 overflow-hidden rounded-[10px] border border-[#262626] bg-[#0e0e0e] transition-opacity hover:opacity-90"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt={`Foto ${i + 1} da avaliação`} loading="lazy" className="size-full object-cover" />
-            </a>
-          ))}
-        </div>
-      )}
+      {entry.images.length > 0 && <ReviewPhotos images={entry.images} />}
 
       {entry.product ? (
         <ProductChip product={entry.product} />
@@ -149,6 +136,44 @@ export function StoreReviewCard({ entry, clampBody = false }: { entry: StoreRevi
         )
       )}
     </article>
+  )
+}
+
+/**
+ * Fotos da avaliação abrem no visualizador compartilhado (setas, deslizar,
+ * zoom, miniaturas), não numa aba nova: lá não dava para passar para a
+ * próxima foto nem voltar para a avaliação sem fechar a aba.
+ */
+function ReviewPhotos({ images }: { images: string[] }) {
+  const [open, setOpen] = useState(false)
+  const [index, setIndex] = useState(0)
+
+  const items = images.map((src, i) => ({
+    src,
+    alt: images.length > 1 ? `Foto ${i + 1} de ${images.length} da avaliação` : "Foto da avaliação",
+  }))
+
+  return (
+    <>
+      <MediaViewer items={items} index={index} open={open} onOpenChange={setOpen} />
+      <div className="flex flex-wrap gap-2">
+        {images.map((url, i) => (
+          <button
+            key={url}
+            type="button"
+            onClick={() => {
+              setIndex(i)
+              setOpen(true)
+            }}
+            aria-label={`Ampliar foto ${i + 1} da avaliação`}
+            className="block size-20 cursor-zoom-in overflow-hidden rounded-[10px] border border-[#262626] bg-[#0e0e0e] transition-opacity hover:opacity-90"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={url} alt="" loading="lazy" className="size-full object-cover" />
+          </button>
+        ))}
+      </div>
+    </>
   )
 }
 

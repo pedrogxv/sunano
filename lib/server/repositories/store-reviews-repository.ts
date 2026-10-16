@@ -391,6 +391,8 @@ export async function listPendingReviewsForUser(userId: string): Promise<Pending
     .select("id, slug, name, images, category")
     .in("id", ids)
     .eq("is_active", true)
+    // Complemento de Pagamento paga OUTRO pedido: não é produto para avaliar.
+    .eq("is_payment_complement", false)
   if (error) {
     console.error("[store-reviews-repository] listPendingReviewsForUser:", error)
     return []

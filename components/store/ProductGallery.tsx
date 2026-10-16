@@ -8,14 +8,14 @@ import { MediaViewer } from "@/components/ui/media-viewer"
 import { markImageSettled } from "@/lib/image-settled"
 import { getCategoryIcon } from "@/lib/store-category-icons"
 import { cn } from "@/lib/utils"
-import { extractYoutubeVideoId } from "@/lib/youtube-url"
+import { resolveStoreProductVideo, type StoreProductVideo } from "@/lib/store-product-video"
 
-type GalleryItem = { kind: "image"; src: string } | { kind: "video"; videoId: string }
+type GalleryItem = { kind: "image"; src: string } | { kind: "video"; video: StoreProductVideo }
 
 interface ProductGalleryProps {
   /** Fotos da combinação escolhida (a da combinação primeiro, depois as da cor ou do produto). */
   images: string[]
-  /** Link do YouTube cadastrado no produto. */
+  /** Vídeo do anúncio: link do YouTube ou MP4 enviado pelo painel. */
   videoUrl: string | null
   productName: string
   category: string | null
@@ -34,9 +34,9 @@ interface ProductGalleryProps {
  * versão escolhida, em vez de ficar na 4ª foto de outra versão.
  */
 export function ProductGallery({ images, videoUrl, productName, category, soldOut = false }: ProductGalleryProps) {
-  const videoId = videoUrl ? extractYoutubeVideoId(videoUrl) : null
+  const video = resolveStoreProductVideo(videoUrl)
   const items: GalleryItem[] = images.map((src) => ({ kind: "image" as const, src }))
-  if (videoId) items.splice(Math.min(1, items.length), 0, { kind: "video", videoId })
+  if (video) items.splice(Math.min(1, items.length), 0, { kind: "video", video })
 
   const [active, setActive] = useState(0)
   const [lightboxOpen, setLightboxOpen] = useState(false)
@@ -66,14 +66,26 @@ export function ProductGallery({ images, videoUrl, productName, category, soldOu
       />
 
       <div className="group/stage relative aspect-square w-full overflow-hidden rounded-[24px] border border-border/40 bg-transparent lg:max-h-[calc(100vh-var(--sticky-header-h)-3rem)] lg:flex-1">
-        {current?.kind === "video" ? (
+        {current?.kind === "video" && current.video.kind === "youtube" ? (
           <iframe
-            key={current.videoId}
-            src={`https://www.youtube-nocookie.com/embed/${current.videoId}?autoplay=1&rel=0`}
+            key={current.video.videoId}
+            src={`https://www.youtube-nocookie.com/embed/${current.video.videoId}?autoplay=1&rel=0`}
             title={`Vídeo: ${productName}`}
             allow="autoplay; encrypted-media; picture-in-picture"
             allowFullScreen
             className="absolute inset-0 h-full w-full"
+          />
+        ) : current?.kind === "video" && current.video.kind === "file" ? (
+          // Com som e controles: é tutorial/demonstração, não enfeite em loop.
+          // Só começa a baixar quando alguém abre o item (fora dele, nem existe).
+          <video
+            key={current.video.src}
+            src={current.video.src}
+            controls
+            autoPlay
+            playsInline
+            preload="metadata"
+            className="absolute inset-0 h-full w-full bg-black object-contain"
           />
         ) : current?.kind === "image" ? (
           <button
@@ -144,7 +156,7 @@ export function ProductGallery({ images, videoUrl, productName, category, soldOu
         <div className="flex gap-2.5 overflow-x-auto pb-1 scrollbar-hide lg:max-h-[calc(100vh-var(--sticky-header-h)-3rem)] lg:w-[76px] lg:shrink-0 lg:flex-col lg:overflow-y-auto lg:overflow-x-visible lg:pb-0">
           {items.map((item, index) => (
             <button
-              key={item.kind === "image" ? item.src : `video-${item.videoId}`}
+              key={item.kind === "image" ? item.src : "video"}
               type="button"
               onClick={() => setActive(index)}
               aria-label={item.kind === "video" ? "Ver vídeo do produto" : `Ver foto ${index + 1}`}
@@ -159,14 +171,27 @@ export function ProductGallery({ images, videoUrl, productName, category, soldOu
                 <img src={item.src} alt="" className={cn("h-full w-full object-contain p-1.5", soldOut && "opacity-50 grayscale")} loading="lazy" decoding="async" />
               ) : (
                 <>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={`https://i.ytimg.com/vi/${item.videoId}/mqdefault.jpg`}
-                    alt=""
-                    className="h-full w-full object-cover"
-                    loading="lazy"
-                    decoding="async"
-                  />
+                  {item.video.kind === "youtube" ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={`https://i.ytimg.com/vi/${item.video.videoId}/mqdefault.jpg`}
+                      alt=""
+                      className="h-full w-full object-cover"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  ) : (
+                    // Sem capa gerada: a miniatura é o próprio quadro do vídeo.
+                    // `preload="metadata"` baixa só o cabeçalho, não o arquivo.
+                    <video
+                      src={`${item.video.src}#t=0.1`}
+                      muted
+                      playsInline
+                      preload="metadata"
+                      aria-hidden
+                      className="h-full w-full bg-black object-cover"
+                    />
+                  )}
                   <span className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 bg-black/45 text-white">
                     <Play className="size-5 fill-current" />
                     <span className="text-[9px] font-bold uppercase tracking-wide">Vídeo</span>

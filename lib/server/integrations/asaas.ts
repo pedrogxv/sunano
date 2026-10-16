@@ -300,7 +300,9 @@ export async function createPixPayment(params: CreatePixPaymentParams): Promise<
       billingType: "PIX",
       value: params.amountCents / 100,
       dueDate,
-      description: params.description,
+      // Mesma validação do Checkout hospedado: um `·`, `×` ou `+` no texto
+      // derruba a cobrança com 400 `parse_error` (ver `sanitizeAsaasText`).
+      ...(params.description && { description: sanitizeAsaasText(params.description, "Pedido Sunano") }),
       externalReference: params.externalReference,
     }),
   })

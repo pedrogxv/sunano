@@ -333,7 +333,7 @@ function buildAsaasCheckoutItems(
 }
 
 /**
- * "2× Mouse X (Preto), Mousepad Y +1" — resumo dos itens para a descrição da
+ * "2x Mouse X (Preto), Mousepad Y e mais 1" — resumo dos itens para a descrição da
  * cobrança. Cortado em ~200 caracteres: a Asaas aceita 500 e o painel do
  * Stripe trunca a coluna bem antes disso.
  */
@@ -342,7 +342,7 @@ function summarizeChargeItems(
 ): string {
   const MAX = 200
   const parts = items.map((item) => {
-    const qty = item.quantity > 1 ? `${item.quantity}× ` : ""
+    const qty = item.quantity > 1 ? `${item.quantity}x ` : ""
     const variant = item.variant_label ? ` (${item.variant_label})` : ""
     return `${qty}${item.name}${variant}`
   })
@@ -350,11 +350,11 @@ function summarizeChargeItems(
   for (let i = 0; i < parts.length; i++) {
     const next = out ? `${out}, ${parts[i]}` : parts[i]
     const rest = parts.length - i - 1
-    const suffix = rest > 0 ? ` +${rest}` : ""
-    if (out && (next + suffix).length > MAX) return `${out} +${parts.length - i}`
+    const suffix = rest > 0 ? ` e mais ${rest}` : ""
+    if (out && (next + suffix).length > MAX) return `${out} e mais ${parts.length - i}`
     out = next
   }
-  return out.length > MAX ? `${out.slice(0, MAX - 1)}…` : out
+  return out.length > MAX ? `${out.slice(0, MAX - 3)}...` : out
 }
 
 export async function POST(request: NextRequest) {
@@ -1246,7 +1246,7 @@ export async function POST(request: NextRequest) {
     // Texto da cobrança no painel do gateway: o que foi comprado, para quem
     // olha a transação saber do que se trata sem abrir o pedido no admin.
     const itemsSummary = summarizeChargeItems(orderItems)
-    const description = `Pedido Sunano · ${itemsSummary}`
+    const description = `Pedido Sunano - ${itemsSummary}`
 
     // -----------------------------------------------------------------
     // Stripe (gateway alternativo, `PAYMENT_GATEWAY=stripe`)

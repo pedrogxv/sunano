@@ -16,6 +16,7 @@ import {
   toShowcasePeripheral,
   type PeripheralShowcaseRow,
 } from "@/lib/server/repositories/peripheral-showcase-mapping"
+import { isUuid } from "@/lib/server/repositories/_shared"
 import { authorFrameFields, buildProfileMap, type AuthorFrameFields } from "@/lib/server/repositories/profile-enrichment"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 
@@ -560,6 +561,13 @@ export async function getPeripheralReviewsWithStats(
     seed?: string
   } = {}
 ): Promise<PeripheralReviewStats> {
+  // O id vem cru do segmento da URL em `GET /api/peripherals/[id]/reviews`
+  // (crawler, link antigo com slug). Sem esta checagem o Postgres recusa o
+  // cast para uuid (22P02) e cada acesso vira um erro no log de produção.
+  if (!isUuid(peripheralId)) {
+    return { reviews: [], average: null, totalCount: 0, hasMore: false }
+  }
+
   const db = createSupabaseAdminClient()
 
   const { data: allRows, error } = await db

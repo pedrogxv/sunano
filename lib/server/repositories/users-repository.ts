@@ -1542,13 +1542,14 @@ export async function getMiniProfileBySlug(
   const db = createSupabaseAdminClient()
   // O fundo equipado entra por join aqui e NÃO em `DIRECTORY_COLUMNS`: o
   // cartão é a única tela que desenha o tema, e /pessoas não deve pagar mais
-  // um join por linha da listagem por causa dele.
+  // um join por linha da listagem por causa dele. A moldura equipada JÁ vem
+  // em `DIRECTORY_COLUMNS`: repetir o embed aqui faz o PostgREST recusar o
+  // select inteiro (42712, "table name specified more than once").
   const { data, error } = await db
     .from("user_profiles")
     .select(
       `${DIRECTORY_COLUMNS}, bio,` +
-        ` equipped_mini_profile_bg:aura_items!user_profiles_equipped_mini_profile_bg_id_fkey ( slug ),` +
-        ` equipped_avatar_frame:aura_items!user_profiles_equipped_avatar_frame_id_fkey ( slug, frame_asset_url )`
+        ` equipped_mini_profile_bg:aura_items!user_profiles_equipped_mini_profile_bg_id_fkey ( slug )`
     )
     .eq("display_slug", normalized)
     .maybeSingle()

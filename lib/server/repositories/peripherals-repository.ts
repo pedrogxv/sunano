@@ -3,7 +3,7 @@ import "server-only"
 import { unstable_cache } from "next/cache"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { coercePeripheralId, slugToSearchPattern } from "@/lib/peripheral-slug"
-import { clampPage, clampPageSize, escapeLikePattern, rangeFor } from "@/lib/server/repositories/_shared"
+import { clampPage, clampPageSize, escapeLikePattern, rangeFor, totalFromRangeError } from "@/lib/server/repositories/_shared"
 import { slimTierlistSpecs } from "@/lib/tierlist-specs"
 import {
   PERIPHERAL_INDEX_SIGNAL_COLUMNS,
@@ -441,6 +441,8 @@ export async function listPeripheralsPaginated(
 
   const { data, error, count } = await query
   if (error) {
+    const totalPastEnd = totalFromRangeError(error)
+    if (totalPastEnd !== null) return { items: [], total: totalPastEnd }
     console.error("[peripherals-repository] listPeripheralsPaginated:", error)
     return { items: [], total: 0 }
   }

@@ -3,7 +3,7 @@ import "server-only"
 import { unstable_cache } from "next/cache"
 import { cache } from "react"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
-import { clampPage, clampPageSize, escapeLikePattern, escapeOrFilterValue, rangeFor } from "@/lib/server/repositories/_shared"
+import { clampPage, clampPageSize, escapeLikePattern, escapeOrFilterValue, rangeFor, totalFromRangeError } from "@/lib/server/repositories/_shared"
 import { getPeripheralRankById, type PeripheralRank } from "@/lib/server/repositories/peripherals-repository"
 import { getCatalogFacetCounts, getStoreCatalogIndex, matchCatalogProductIds } from "@/lib/server/repositories/store-catalog-repository"
 import {
@@ -671,6 +671,8 @@ export async function listStoreProductsPaginated(
 
   const { data, error, count } = await query
   if (error) {
+    const totalPastEnd = totalFromRangeError(error)
+    if (totalPastEnd !== null) return { items: [], total: totalPastEnd }
     console.error("[store-repository] listStoreProductsPaginated:", error)
     return { items: [], total: 0 }
   }

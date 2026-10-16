@@ -83,3 +83,19 @@ export function rangeFor(page: number, pageSize: number): [number, number] {
   const from = (page - 1) * pageSize
   return [from, from + pageSize - 1]
 }
+
+/**
+ * Total de linhas quando a página pedida passou do fim (PostgREST `PGRST103`,
+ * "An offset of 24 was requested, but there are only 3 rows"), ou `null`
+ * para qualquer outro erro.
+ *
+ * Página além do total não é falha: é link antigo, filtro que encolheu a
+ * listagem ou crawler testando `?page=N`. A listagem responde vazia com o
+ * total verdadeiro (a paginação da tela continua certa) em vez de logar erro
+ * e devolver `total: 0`.
+ */
+export function totalFromRangeError(error: { code?: string; details?: string | null } | null): number | null {
+  if (error?.code !== "PGRST103") return null
+  const match = /only (\d+) rows?/.exec(error.details ?? "")
+  return match ? Number(match[1]) : 0
+}

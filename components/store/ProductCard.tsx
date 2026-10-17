@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ArrowRight, Check, PackageX, ShoppingCart, SlidersHorizontal, Truck, Zap } from "lucide-react"
+import { ArrowRight, Check, PackageX, ShoppingCart, Truck, Zap } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getCategoryIcon, getCategoryLabel } from "@/lib/store-category-icons"
 import { formatBRL } from "@/lib/format"
@@ -20,7 +20,6 @@ import { SoldOutStamp } from "@/components/store/SoldOutStamp"
 import { RouteLink } from "@/components/ui/route-link"
 import { LaunchCard } from "@/components/store/LaunchCard"
 import { PreorderCard } from "@/components/store/PreorderCard"
-import { VariantPickerDialog } from "@/components/store/VariantPickerDialog"
 import type { StoreCardRating, StoreProductCard } from "@/lib/server/repositories/store-repository"
 
 const CONDITION_LABEL: Record<"new" | "used" | "opened", string> = {
@@ -120,7 +119,6 @@ function StandardProductCard(props: ProductCardProps) {
   // ordenação por preço (lib/store-pricing.ts).
   const activeVariant = cardActiveVariant(props)
   const [imageLoaded, setImageLoaded] = useState<string | null>(null)
-  const [pickerOpen, setPickerOpen] = useState(false)
   const [justAdded, setJustAdded] = useState(false)
 
   useEffect(() => {
@@ -146,7 +144,8 @@ function StandardProductCard(props: ProductCardProps) {
   const isPreOrder = props.sale_type === "pre_order"
   const freeShipping = hasFreeShipping(props)
   // Mais de uma cor, ou um grupo de opção (Switch, Voltagem): o card não sabe
-  // qual a pessoa quer, então o botão abre a escolha em vez de adivinhar.
+  // qual a pessoa quer, então o botão leva à página do produto ("Comprar
+  // agora"), onde mora a escolha, em vez de adivinhar.
   const requiresChoice = variants.length > 1 || props.has_option_groups
   // Complemento de Pagamento: o valor sai do pedido digitado na página, então
   // o card não tem preço para anunciar nem item para pôr no carrinho.
@@ -193,7 +192,7 @@ function StandardProductCard(props: ProductCardProps) {
   function handlePrimaryAction() {
     if (outOfStock) return
     if (requiresChoice) {
-      setPickerOpen(true)
+      router.push(href)
       return
     }
     addToCart()
@@ -228,8 +227,8 @@ function StandardProductCard(props: ProductCardProps) {
             dot: "bg-emerald-400",
           }
 
-  const PrimaryIcon = justAdded ? Check : requiresChoice ? SlidersHorizontal : isPreOrder ? Zap : ShoppingCart
-  const primaryLabel = justAdded ? "Adicionado" : requiresChoice ? "Escolher opções" : isPreOrder ? "Reservar" : "Adicionar"
+  const PrimaryIcon = justAdded ? Check : isPreOrder && !requiresChoice ? Zap : ShoppingCart
+  const primaryLabel = justAdded ? "Adicionado" : requiresChoice ? "Comprar agora" : isPreOrder ? "Reservar" : "Adicionar"
 
   // O coração e as ações rápidas ficam FORA do link (botão dentro de <a> é
   // HTML inválido), então o hover que levanta o card mora no wrapper e cada
@@ -447,7 +446,7 @@ function StandardProductCard(props: ProductCardProps) {
               </p>
             )}
             {/* "Ver detalhes" ocupa só o próprio texto: o espaço que sobra é do
-                botão principal, que tem o rótulo mais longo ("Escolher opções"). */}
+                botão principal, que tem o rótulo mais longo ("Comprar agora"). */}
             <div className={cn("grid gap-1.5", outOfStock || complement ? "grid-cols-1" : "grid-cols-[auto_minmax(0,1fr)]")}>
               <RouteLink
                 href={href}
@@ -459,7 +458,7 @@ function StandardProductCard(props: ProductCardProps) {
                 <button
                   type="button"
                   onClick={handlePrimaryAction}
-                  aria-label={requiresChoice ? "Escolher opções" : isPreOrder ? "Reservar agora" : "Adicionar ao carrinho"}
+                  aria-label={requiresChoice ? "Comprar agora" : isPreOrder ? "Reservar agora" : "Adicionar ao carrinho"}
                   className={cn(
                     "flex h-8 items-center justify-center gap-1.5 rounded-lg px-2 text-[11.5px] font-bold transition-colors",
                     justAdded ? "bg-emerald-500 text-white" : "bg-white text-black hover:bg-emerald-400"
@@ -473,17 +472,6 @@ function StandardProductCard(props: ProductCardProps) {
             </div>
           </div>
         </div>
-      )}
-
-      {requiresChoice && (
-        <VariantPickerDialog
-          slug={props.slug}
-          name={props.name}
-          category={props.category}
-          fallbackImage={image}
-          open={pickerOpen}
-          onOpenChange={setPickerOpen}
-        />
       )}
     </div>
   )

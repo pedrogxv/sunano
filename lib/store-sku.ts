@@ -5,9 +5,8 @@ import { computeEffectivePrice, type EffectivePrice, type PricingOption, type Pr
  * preço, promoção, estoque e foto próprios. Mora em `store_product_skus`
  * (migration 20261213000000).
  *
- * Módulo puro: a página do produto, o "Escolher opções" do card, a
- * revalidação do carrinho e o checkout resolvem a seleção por AQUI. Preço e
- * estoque divergindo entre a tela e a cobrança foi o bug que tirou a regra de
+ * Módulo puro: a página do produto, a revalidação do carrinho e o checkout
+ * resolvem a seleção por AQUI. Preço e estoque divergindo entre a tela e a cobrança foi o bug que tirou a regra de
  * preço de três cópias e a pôs em `store-pricing.ts`; a combinação segue o
  * mesmo caminho.
  */

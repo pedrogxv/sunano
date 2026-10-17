@@ -83,12 +83,11 @@ export type ProductSelection = {
 
 /**
  * Seleção de cor + opções de um produto, resolvida por `resolveSelection`
- * (lib/store-sku.ts): preço, estoque, SKU e foto da combinação. A página do
- * produto e o "Escolher opções" do card usam este hook, então trocar de Mini
- * para Max muda as mesmas coisas nos dois lugares, sem recarregar.
+ * (lib/store-sku.ts): preço, estoque, SKU e foto da combinação, na página do
+ * produto. Trocar de Mini para Max muda tudo junto, sem recarregar.
  *
- * `detail` pode chegar depois (o popup busca ao abrir): enquanto a pessoa não
- * escolhe nada, vale a seleção padrão calculada do que chegou.
+ * `detail` pode chegar depois: enquanto a pessoa não escolhe nada, vale a
+ * seleção padrão calculada do que chegou.
  */
 export function useProductSelection(detail: StoreProductDetailResult | null): ProductSelection | null {
   const [chosenVariantId, setChosenVariantId] = useState<string | null>(null)

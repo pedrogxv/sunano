@@ -2,11 +2,10 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { ArrowRight, Check, ShoppingCart, SlidersHorizontal, Truck } from "lucide-react"
+import { ArrowRight, Check, ShoppingCart, Truck } from "lucide-react"
 
 import { useCart } from "@/components/providers/cart-context"
 import { SaleWindowCountdown } from "@/components/store/SaleWindowCountdown"
-import { VariantPickerDialog } from "@/components/store/VariantPickerDialog"
 import { RouteLink } from "@/components/ui/route-link"
 import { formatBRL } from "@/lib/format"
 import { useStoreSettings } from "@/lib/hooks/use-store-settings"
@@ -23,13 +22,15 @@ import type { StoreProductCard } from "@/lib/server/repositories/store-repositor
  * lançamento é produto em estoque, então o botão põe no carrinho (como o card
  * comum) em vez de ir direto ao checkout como a reserva.
  *
+ * Produto com cor ou opção a escolher não compra pelo card: o botão vira
+ * "Comprar agora" e leva à página do produto, onde mora a escolha.
+ *
  * Esgotado sai de cena como na pré-venda: sem o brilho, foto cinza e o
  * carimbo no meio.
  */
 export function LaunchCard(props: StoreProductCard) {
   const { add, setOpen: setCartOpen } = useCart()
   const { cardSurchargePercent, cardMaxInstallments, cardEnabled } = useStoreSettings()
-  const [pickerOpen, setPickerOpen] = useState(false)
   const [justAdded, setJustAdded] = useState(false)
   const href = `/loja/${props.slug}`
   const soldOut = isCardSoldOut(props)
@@ -50,11 +51,7 @@ export function LaunchCard(props: StoreProductCard) {
   }, [justAdded])
 
   function handleAdd() {
-    if (soldOut) return
-    if (requiresChoice) {
-      setPickerOpen(true)
-      return
-    }
+    if (soldOut || requiresChoice) return
     add({
       productId: props.id,
       variantId: activeVariant?.id ?? null,
@@ -76,7 +73,10 @@ export function LaunchCard(props: StoreProductCard) {
     setCartOpen(true)
   }
 
-  const ActionIcon = justAdded ? Check : requiresChoice ? SlidersHorizontal : ShoppingCart
+  const ActionIcon = justAdded ? Check : ShoppingCart
+  const actionClassName =
+    "flex h-10 w-full items-center justify-center gap-2 rounded-xl text-[13.5px] font-bold text-white transition-[filter,background-color]"
+  const actionGradient = "bg-gradient-to-r from-violet-400 via-violet-500 to-fuchsia-600 hover:brightness-110"
 
   return (
     <article
@@ -191,20 +191,20 @@ export function LaunchCard(props: StoreProductCard) {
               Ver detalhes
               <ArrowRight className="size-4" />
             </RouteLink>
+          ) : requiresChoice ? (
+            <RouteLink href={href} className={cn(actionClassName, actionGradient)}>
+              <ShoppingCart className="size-4 shrink-0" />
+              Comprar agora
+            </RouteLink>
           ) : (
             <button
               type="button"
               onClick={handleAdd}
-              className={cn(
-                "flex h-10 w-full items-center justify-center gap-2 rounded-xl text-[13.5px] font-bold text-white transition-[filter,background-color]",
-                justAdded ? "bg-emerald-500" : "bg-gradient-to-r from-violet-400 via-violet-500 to-fuchsia-600 hover:brightness-110"
-              )}
+              className={cn(actionClassName, justAdded ? "bg-emerald-500" : actionGradient)}
             >
               <ActionIcon className="size-4 shrink-0" />
               {justAdded ? (
                 "Adicionado"
-              ) : requiresChoice ? (
-                "Escolher opções"
               ) : (
                 <>
                   {/* Na grade de 2 colunas do celular o card tem ~165px. */}
@@ -216,17 +216,6 @@ export function LaunchCard(props: StoreProductCard) {
           )}
         </div>
       </div>
-
-      {requiresChoice && (
-        <VariantPickerDialog
-          slug={props.slug}
-          name={props.name}
-          category={props.category}
-          fallbackImage={image}
-          open={pickerOpen}
-          onOpenChange={setPickerOpen}
-        />
-      )}
     </article>
   )
 }

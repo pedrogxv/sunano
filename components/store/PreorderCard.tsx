@@ -1,6 +1,5 @@
 "use client"
 
-import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ArrowRight, CalendarDays, Package, Rocket } from "lucide-react"
@@ -9,7 +8,6 @@ import { useCart } from "@/components/providers/cart-context"
 import { PreorderAvailability, PreorderStatusChip } from "@/components/store/PreorderLotPanel"
 import { SaleWindowCountdown } from "@/components/store/SaleWindowCountdown"
 import { SoldOutStamp } from "@/components/store/SoldOutStamp"
-import { VariantPickerDialog } from "@/components/store/VariantPickerDialog"
 import { RouteLink } from "@/components/ui/route-link"
 import { formatBRL } from "@/lib/format"
 import { getCategoryIcon } from "@/lib/store-category-icons"
@@ -31,7 +29,6 @@ import type { StoreProductCard } from "@/lib/server/repositories/store-repositor
 export function PreorderCard(props: StoreProductCard) {
   const router = useRouter()
   const { add } = useCart()
-  const [pickerOpen, setPickerOpen] = useState(false)
   const href = `/loja/${props.slug}`
   const preorder = props.preorder
   const status = preorder?.status ?? "open"
@@ -45,8 +42,9 @@ export function PreorderCard(props: StoreProductCard) {
 
   function handleReserve() {
     if (!open) return
+    // Cor ou opção a escolher: a escolha mora na página do produto.
     if (requiresChoice) {
-      setPickerOpen(true)
+      router.push(href)
       return
     }
     add({
@@ -174,17 +172,6 @@ export function PreorderCard(props: StoreProductCard) {
           )}
         </div>
       </div>
-
-      {requiresChoice && (
-        <VariantPickerDialog
-          slug={props.slug}
-          name={props.name}
-          category={props.category}
-          fallbackImage={image}
-          open={pickerOpen}
-          onOpenChange={setPickerOpen}
-        />
-      )}
     </article>
   )
 }

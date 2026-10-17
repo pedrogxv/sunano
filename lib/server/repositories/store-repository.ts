@@ -72,7 +72,7 @@ export type StoreProductCard = {
   requires_shipping: boolean
   /** Complemento de Pagamento: sem preço próprio, o valor sai do pedido. */
   is_payment_complement: boolean
-  /** Tem grupo de opção (Switch, Voltagem...): comprar exige escolher, o card oferece "Escolher opções". */
+  /** Tem grupo de opção (Switch, Voltagem...): comprar exige escolher, o card leva à página do produto ("Comprar agora"). */
   has_option_groups: boolean
   /** Nota média e quantidade de avaliações publicadas; `null` = ninguém avaliou ainda. */
   rating: StoreCardRating | null

@@ -15,6 +15,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { orderNumber } from "@/lib/order-number"
+import type { ServiceFormLine } from "@/lib/store-service-form"
+import { ServiceOrderForm } from "@/components/store/ServiceOrderForm"
 
 /** Uma vez por pedido: recarregar a tela de confirmação não reabre a janela. */
 const SEEN_KEY_PREFIX = "sunano:order-next-steps:"
@@ -77,17 +79,28 @@ const SHIPPING_STEPS: Step[] = [
  * escreve aqui mesmo o que quer consultar. Antes ela só ganhava um botão
  * "Ver meu chamado" e, lá, encontrava o chamado travado em "Aguardando o
  * suporte", sem poder escrever.
+ *
+ * Serviço com formulário pós-compra (Xianyu Express: nome, link, cor) pede
+ * as informações ANTES da conversa livre: elas chegam no chamado como a
+ * primeira mensagem do cliente, já organizadas.
  */
 export function OrderPaidNextStepsDialog({
   orderId,
   requiresShipping,
   hasService = false,
   serviceTicketId = null,
+  serviceFormLines = [],
+  serviceFormAnswered = false,
+  complementFor = null,
 }: {
   orderId: string
   requiresShipping: boolean
   hasService?: boolean
   serviceTicketId?: string | null
+  serviceFormLines?: ServiceFormLine[]
+  serviceFormAnswered?: boolean
+  /** Pagamento de Complemento: o próximo passo é o pedido original. */
+  complementFor?: { orderNumber: string; ticketId: string | null } | null
 }) {
   // Só monta depois que o pedido chegou do fetch (a tela é client e começa
   // sem pedido), então ler o storage na inicialização não diverge do SSR.
@@ -99,6 +112,8 @@ export function OrderPaidNextStepsDialog({
   }
 
   const number = orderNumber(orderId)
+  const [formSent, setFormSent] = useState(false)
+  const askForm = hasService && serviceFormLines.length > 0 && !serviceFormAnswered
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -106,13 +121,50 @@ export function OrderPaidNextStepsDialog({
         <DialogHeader>
           <DialogTitle>Pedido #{number} confirmado</DialogTitle>
           <DialogDescription>
-            {hasService
-              ? "Pagamento confirmado. Conte para o suporte o que você precisa, direto por aqui."
-              : "Acompanhe suas compras em Meus Pedidos. Veja o que acontece agora:"}
+            {complementFor
+              ? `O complemento entrou no pedido #${complementFor.orderNumber}. A equipe segue com ele a partir daqui.`
+              : askForm
+              ? "Pagamento confirmado. Preencha as informações abaixo para a equipe começar o seu serviço."
+              : hasService
+                ? "Pagamento confirmado. Conte para o suporte o que você precisa, direto por aqui."
+                : "Acompanhe suas compras em Meus Pedidos. Veja o que acontece agora:"}
           </DialogDescription>
         </DialogHeader>
 
-        {hasService ? (
+        {complementFor ? (
+          <DialogFooter className="gap-2 sm:gap-2">
+            {complementFor.ticketId && (
+              <Button asChild variant="ghost" className="gap-2" onClick={() => markSeen(orderId)}>
+                <RouteLink href={`/conta/suporte/${complementFor.ticketId}`}>
+                  <MessageCircle className="size-4" />
+                  Conversa do pedido
+                </RouteLink>
+              </Button>
+            )}
+            <Button asChild className="gap-2" onClick={() => markSeen(orderId)}>
+              <RouteLink href="/conta/pedidos">
+                <PackageSearch className="size-4" />
+                Ir para Meus Pedidos
+              </RouteLink>
+            </Button>
+          </DialogFooter>
+        ) : askForm ? (
+          formSent ? (
+            <ServiceFormSent ticketId={serviceTicketId} onLeave={() => markSeen(orderId)} />
+          ) : (
+            <ServiceOrderForm
+              orderId={orderId}
+              lines={serviceFormLines}
+              answers={null}
+              onSaved={() => setFormSent(true)}
+              secondaryAction={
+                <Button asChild variant="ghost" onClick={() => markSeen(orderId)}>
+                  <RouteLink href="/conta/pedidos">Preencher depois</RouteLink>
+                </Button>
+              }
+            />
+          )
+        ) : hasService ? (
           <ServiceSupportComposer
             orderId={orderId}
             initialTicketId={serviceTicketId}
@@ -150,6 +202,38 @@ export function OrderPaidNextStepsDialog({
         )}
       </DialogContent>
     </Dialog>
+  )
+}
+
+/** Confirmação depois do formulário: o próximo passo é a conversa do pedido. */
+function ServiceFormSent({ ticketId, onLeave }: { ticketId: string | null; onLeave: () => void }) {
+  return (
+    <>
+      <div className="flex gap-3 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.07] px-4 py-3">
+        <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-400" />
+        <div className="space-y-0.5">
+          <p className="text-sm font-semibold text-foreground">Informações enviadas</p>
+          <p className="text-xs text-muted-foreground">
+            A equipe responde na conversa do pedido, e você recebe um aviso no sino quando isso acontecer. Dá para
+            corrigir as informações em Meus Pedidos.
+          </p>
+        </div>
+      </div>
+      <DialogFooter className="gap-2 sm:gap-2">
+        <Button asChild variant="ghost" className="gap-2" onClick={onLeave}>
+          <RouteLink href="/conta/pedidos">
+            <PackageSearch className="size-4" />
+            Meus Pedidos
+          </RouteLink>
+        </Button>
+        <Button asChild className="gap-2" onClick={onLeave}>
+          <RouteLink href={ticketId ? `/conta/suporte/${ticketId}` : "/conta/suporte"}>
+            <LifeBuoy className="size-4" />
+            Abrir conversa
+          </RouteLink>
+        </Button>
+      </DialogFooter>
+    </>
   )
 }
 

@@ -26,6 +26,7 @@ import { ProductDeliveryInfo } from "@/components/store/ProductDeliveryInfo"
 import { ProductGallery } from "@/components/store/ProductGallery"
 import { ProductPurchaseBenefits } from "@/components/store/ProductPurchaseBenefits"
 import { PreorderLotPanel, PreorderStatusChip } from "@/components/store/PreorderLotPanel"
+import { PaymentComplementPanel } from "@/components/store/PaymentComplementPanel"
 import { SaleWindowCountdown } from "@/components/store/SaleWindowCountdown"
 import { useProductSelection } from "@/components/store/use-product-selection"
 import { FormattedText } from "@/components/ui/formatted-text"
@@ -97,6 +98,7 @@ export function ProductDetailContent({ filterOptions, rating, ...detail }: Produ
   const { selection, activeVariant, preorderStatus, singlePrice, canBuy } = pick
 
   const isPreOrder = product.sale_type === "pre_order"
+  const complement = product.is_payment_complement
   const preorder = product.preorder
   const { effectiveCents, baseCents, hasDiscount, discountPercent } = selection.price
   const cardPriceCents = computeItemCardPriceCents(effectiveCents, cardSurchargePercent, singlePrice)
@@ -245,6 +247,7 @@ export function ProductDetailContent({ filterOptions, rating, ...detail }: Produ
                 </p>
               )}
 
+              {!complement && (
               <a href="#avaliacoes" className="flex w-fit items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground">
                 {rating ? (
                   <>
@@ -261,6 +264,7 @@ export function ProductDetailContent({ filterOptions, rating, ...detail }: Produ
                   </>
                 )}
               </a>
+              )}
             </div>
 
             {product.condition_notes && (
@@ -269,6 +273,12 @@ export function ProductDetailContent({ filterOptions, rating, ...detail }: Produ
               </p>
             )}
 
+            {/* Complemento de Pagamento: no lugar de preço e compra, a busca do
+                pedido. O valor é o pendente do pedido, calculado no servidor. */}
+            {complement ? (
+              <PaymentComplementPanel slug={product.slug} />
+            ) : (
+            <>
             {/* Preço: o da combinação escolhida, igual ao que o checkout cobra. */}
             <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] px-5 py-4 sm:px-6 sm:py-5">
               {hasDiscount && (
@@ -502,9 +512,11 @@ export function ProductDetailContent({ filterOptions, rating, ...detail }: Produ
             />
 
             {freeShipping && canBuy && <ProductDeliveryInfo preOrder={isPreOrder} shipsAt={preorder?.shipsAt} />}
+            </>
+            )}
 
             {/* Só aparece para afiliado aprovado — para o resto, nada. */}
-            <AffiliateShareButton className="w-full justify-center" />
+            {!complement && <AffiliateShareButton className="w-full justify-center" />}
 
             {allLinkedPeripherals.length > 0 && (
               <div className="space-y-2.5">
@@ -546,15 +558,18 @@ export function ProductDetailContent({ filterOptions, rating, ...detail }: Produ
           )}
         </div>
 
-        <section id="avaliacoes" className="mt-14 scroll-mt-24">
-          <ProductReviews
-            productId={product.id}
-            productSlug={product.slug}
-            productName={product.name}
-            productImage={product.images?.[0] ?? null}
-            productType={product.type}
-          />
-        </section>
+        {/* Complemento é pagamento de outro pedido, não um produto para avaliar. */}
+        {!complement && (
+          <section id="avaliacoes" className="mt-14 scroll-mt-24">
+            <ProductReviews
+              productId={product.id}
+              productSlug={product.slug}
+              productName={product.name}
+              productImage={product.images?.[0] ?? null}
+              productType={product.type}
+            />
+          </section>
+        )}
       </div>
     </>
   )

@@ -56,6 +56,9 @@ const MAX_ZOOM = ZOOM_STEPS[ZOOM_STEPS.length - 1]
  */
 const PAN_LIMIT_PER_ZOOM = 260
 
+/** Deslocamento horizontal mínimo para o gesto contar como "passar de foto". */
+const SWIPE_MIN_PX = 50
+
 /** Acima disso a navegação vira miniatura em vez de aba de texto. */
 const MAX_TEXT_TABS = 3
 
@@ -124,6 +127,7 @@ export function MediaViewer({
     panY: number
     moved: boolean
   } | null>(null)
+  const swipeRef = useRef<{ startX: number; startY: number } | null>(null)
 
   /**
    * Quem controla de fora pode trocar o índice com o modal já aberto (clicar
@@ -132,7 +136,22 @@ export function MediaViewer({
    * a imagem antiga por um quadro antes de corrigir.
    */
   const [syncedIndex, setSyncedIndex] = useState(index)
-  if (open && index !== syncedIndex) {
+  /**
+   * No modo controlado a abertura vem de fora e não passa por
+   * `handleOpenChange`: sem isto, abrir a foto 1, andar até a 3, fechar e
+   * clicar na 1 de novo reabria na 3 (o índice pedido não mudou).
+   */
+  const [wasOpen, setWasOpen] = useState(open)
+  if (open !== wasOpen) {
+    setWasOpen(open)
+    if (open) {
+      setSyncedIndex(index)
+      setActive(index)
+      setLoaded(false)
+      setZoom(MIN_ZOOM)
+      setPan({ x: 0, y: 0 })
+    }
+  } else if (open && index !== syncedIndex) {
     setSyncedIndex(index)
     setActive(index)
     setLoaded(false)
@@ -244,7 +263,15 @@ export function MediaViewer({
   }, [open, active, hasMultiple, showItem, stepZoom, resetView])
 
   function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
-    if (!zoomed) return
+    if (!zoomed) {
+      // Sem zoom, arrastar na horizontal passa de foto, como nos apps.
+      if (hasMultiple) {
+        // Captura para o gesto contar mesmo se o dedo terminar fora da foto.
+        event.currentTarget.setPointerCapture(event.pointerId)
+        swipeRef.current = { startX: event.clientX, startY: event.clientY }
+      }
+      return
+    }
     event.currentTarget.setPointerCapture(event.pointerId)
     dragRef.current = {
       startX: event.clientX,
@@ -265,7 +292,22 @@ export function MediaViewer({
     setPan(clampPan(drag.panX + dx, drag.panY + dy, zoom))
   }
 
-  function handlePointerUp() {
+  function handlePointerUp(event: React.PointerEvent<HTMLDivElement>) {
+    const swipe = swipeRef.current
+    swipeRef.current = null
+    if (swipe) {
+      const dx = event.clientX - swipe.startX
+      const dy = event.clientY - swipe.startY
+      if (Math.abs(dx) > SWIPE_MIN_PX && Math.abs(dx) > Math.abs(dy)) {
+        // Marca como arraste para o clique que vem junto não ativar o zoom.
+        dragRef.current = { startX: 0, startY: 0, panX: 0, panY: 0, moved: true }
+        window.setTimeout(() => {
+          dragRef.current = null
+        }, 0)
+        showItem(active + (dx < 0 ? 1 : -1))
+      }
+      return
+    }
     setDragging(false)
     // Zera no próximo tique para o clique que encerra o arraste ainda enxergar
     // `moved` e não tratar o reposicionamento como toggle de zoom.
@@ -394,7 +436,11 @@ export function MediaViewer({
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerUp}
+            onPointerCancel={(event) => {
+              // Gesto interrompido pelo sistema não conta como passar de foto.
+              swipeRef.current = null
+              handlePointerUp(event)
+            }}
             style={{
               transform: `scale(${zoom}) translate(${pan.x / zoom}px, ${pan.y / zoom}px)`,
               // Sem transição durante o arraste: interpolar cada quadro do

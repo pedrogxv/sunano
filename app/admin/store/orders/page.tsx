@@ -9,6 +9,7 @@ import {
   CalendarIcon,
   CheckCircle2,
   ChevronsUpDown,
+  ClipboardList,
   Clock,
   CreditCard,
   ExternalLink,
@@ -82,8 +83,12 @@ import {
 import { formatBRL } from "@/lib/format"
 import { orderNumber } from "@/lib/order-number"
 import { ORDER_STATUS_GROUPS, orderStatusLabel, type OrderStatusGroup } from "@/lib/order-status"
+import { STORE_CARRIERS, findStoreCarrier, type StoreCarrier } from "@/lib/store-carriers"
 import { formatCpfInput } from "@/components/store/CheckoutPayerCard"
 import { SHIPPING_RESIDENCE_TYPE_LABELS, isoToBirthDateInput } from "@/components/store/ShippingAddressFields"
+import { serviceFormLines } from "@/lib/store-service-form"
+import { ServiceFormAnswerValue } from "@/components/store/ServiceFormAnswerValue"
+import { OrderComplementSection } from "@/components/admin/store/OrderComplementSection"
 // `import type` é apagado no build: não puxa `server-only` para o bundle.
 import type {
   AdminOrderRow,
@@ -113,6 +118,8 @@ type OrderItem = {
   sku?: string | null
   /** Lote da pré-venda em que a reserva entrou. */
   preorder_batch?: string | null
+  /** Campos do formulário pós-compra de serviço (snapshot do checkout). */
+  service_form?: unknown
 }
 
 type AdminOrder = {
@@ -154,8 +161,14 @@ type AdminOrder = {
   is_sandbox: boolean
   /** Chamado aberto sozinho quando o serviço foi pago. Null em pedido físico. */
   service_ticket_id: string | null
+  /** O que o cliente preencheu no formulário pós-compra de serviço. */
+  service_form_answers: AdminOrderRow["service_form_answers"]
   /** Pago por fora do site e registrado no painel. */
   manual_payment: OrderManualPayment | null
+  /** Complemento de Pagamento cobrado neste pedido. */
+  complement: AdminOrderRow["complement"]
+  /** Este pedido é o pagamento de complemento de outro. */
+  complement_for: AdminOrderRow["complement_for"]
 }
 
 /**
@@ -1102,7 +1115,23 @@ export default function AdminOrdersPage() {
                           {order.chargeback ? "DISPUTA" : "AVISO DE FRAUDE"}
                         </span>
                       )}
-                      {!order.requires_shipping_address && (
+                      {order.complement_for && (
+                        <span
+                          title={`Pagamento de complemento do pedido #${order.complement_for.order_number}`}
+                          className="inline-flex items-center gap-1 rounded-md bg-violet-500/15 px-1.5 py-0.5 text-[9.5px] font-bold text-violet-300"
+                        >
+                          COMPLEMENTO DE #{order.complement_for.order_number}
+                        </span>
+                      )}
+                      {order.complement.pendingCents > 0 && (
+                        <span
+                          title="Complemento cobrado e ainda não pago pelo cliente"
+                          className="inline-flex items-center gap-1 rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[9.5px] font-bold text-amber-400"
+                        >
+                          FALTA {formatBRL(order.complement.pendingCents)}
+                        </span>
+                      )}
+                      {!order.requires_shipping_address && !order.complement_for && (
                         <span
                           title="Serviço/item digital: sem entrega, o atendimento é combinado no chamado de suporte"
                           className="inline-flex items-center gap-1 rounded-md bg-cyan-500/15 px-1.5 py-0.5 text-[9.5px] font-bold text-cyan-400"
@@ -1209,6 +1238,31 @@ export default function AdminOrdersPage() {
   )
 }
 
+function CarrierSelect({
+  id,
+  value,
+  onChange,
+}: {
+  id: string
+  value: StoreCarrier | ""
+  onChange: (value: StoreCarrier) => void
+}) {
+  return (
+    <Select value={value} onValueChange={(next) => onChange(next as StoreCarrier)}>
+      <SelectTrigger id={id} className="w-full">
+        <SelectValue placeholder="Selecione" />
+      </SelectTrigger>
+      <SelectContent>
+        {STORE_CARRIERS.map((option) => (
+          <SelectItem key={option} value={option}>
+            {option}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+}
+
 function OrderManageDialog({
   order,
   onOpenChange,
@@ -1219,7 +1273,7 @@ function OrderManageDialog({
   onOrderPatched: (id: string, patch: Partial<AdminOrder>) => void
 }) {
   const [trackingCode, setTrackingCode] = useState("")
-  const [carrier, setCarrier] = useState("")
+  const [carrier, setCarrier] = useState<StoreCarrier | "">("")
   const [advancing, setAdvancing] = useState(false)
   const [savingTracking, setSavingTracking] = useState(false)
 
@@ -1242,7 +1296,9 @@ function OrderManageDialog({
   useEffect(() => {
     if (!order) return
     setTrackingCode(order.tracking_code ?? "")
-    setCarrier(order.carrier ?? "")
+    // Pedido antigo com texto livre que não casa com a lista: fica vazio e o
+    // salvar mantém o texto gravado (ver handleUpdateTracking).
+    setCarrier(findStoreCarrier(order.carrier) ?? "")
     setRefundOpen(false)
     setRefundValue("")
     setRefundReason("")
@@ -1278,7 +1334,7 @@ function OrderManageDialog({
           action: "advance",
           status: next,
           trackingCode: next === "shipped" ? trackingCode.trim() || undefined : undefined,
-          carrier: next === "shipped" ? carrier.trim() || undefined : undefined,
+          carrier: next === "shipped" ? carrier || undefined : undefined,
         }),
       })
       const data = (await res.json().catch(() => ({}))) as { error?: string }
@@ -1292,7 +1348,7 @@ function OrderManageDialog({
           ? {
               status: next,
               tracking_code: trackingCode.trim() || order.tracking_code,
-              carrier: carrier.trim() || order.carrier,
+              carrier: carrier || order.carrier,
             }
           : { status: next }
       )
@@ -1310,18 +1366,18 @@ function OrderManageDialog({
   async function handleUpdateTracking() {
     if (!order) return
     const code = trackingCode.trim()
-    const nextCarrier = carrier.trim()
     setSavingTracking(true)
     try {
       const res = await fetch(`/api/admin/store/orders/${order.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "update_tracking", trackingCode: code, carrier: nextCarrier }),
+        // Sem transportadora escolhida, o servidor mantém a gravada.
+        body: JSON.stringify({ action: "update_tracking", trackingCode: code, carrier: carrier || undefined }),
       })
       const data = (await res.json().catch(() => ({}))) as { error?: string }
       if (!res.ok) throw new Error(data.error ?? "Erro ao atualizar rastreio")
 
-      onOrderPatched(order.id, { tracking_code: code, carrier: nextCarrier || null })
+      onOrderPatched(order.id, { tracking_code: code, carrier: carrier || order.carrier })
       toast.success("Rastreio atualizado", {
         description:
           code !== order.tracking_code ? "O cliente foi avisado do novo código." : `#${orderNumber(order.id)}`,
@@ -1592,6 +1648,55 @@ function OrderManageDialog({
             </p>
           </div>
 
+          {/* Formulário pós-compra de serviço: o que o cliente pediu (Xianyu: produto, link, cor). */}
+          {serviceFormLines(order.items).length > 0 && (
+            <div className="space-y-2 rounded-lg border border-border/60 bg-muted/20 p-3">
+              <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <ClipboardList className="size-3.5" />
+                Informações do serviço
+              </p>
+              {order.service_form_answers ? (
+                <>
+                  {order.service_form_answers.lines.map((line) => (
+                    <dl key={line.line} className="space-y-1.5">
+                      {order.service_form_answers!.lines.length > 1 && (
+                        <p className="text-xs font-medium text-foreground">{line.product_name}</p>
+                      )}
+                      {line.answers.map((answer) => (
+                        <div key={answer.field_id} className="text-xs">
+                          <dt className="text-muted-foreground">{answer.label}</dt>
+                          <dd className="whitespace-pre-wrap break-words text-foreground">
+                            <ServiceFormAnswerValue answer={answer} />
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  ))}
+                  <p className="text-[10px] text-muted-foreground">
+                    Enviado em {formatDateTime(order.service_form_answers.submitted_at)}
+                    {order.service_form_answers.updated_at !== order.service_form_answers.submitted_at
+                      ? ` · editado em ${formatDateTime(order.service_form_answers.updated_at)}`
+                      : ""}
+                  </p>
+                </>
+              ) : (
+                <p className="text-xs text-amber-400">
+                  {order.status === "pending"
+                    ? "O cliente preenche depois do pagamento."
+                    : "O cliente ainda não preencheu."}
+                </p>
+              )}
+            </div>
+          )}
+
+          <OrderComplementSection
+            orderId={order.id}
+            status={order.status}
+            complement={order.complement}
+            complementFor={order.complement_for}
+            onSaved={(complement) => onOrderPatched(order.id, { complement })}
+          />
+
           {/* Endereço de entrega — snapshot do pedido, não o do perfil atual do cliente */}
           <div className="space-y-1.5 rounded-lg border border-border/60 bg-muted/20 p-3">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -1609,6 +1714,10 @@ function OrderManageDialog({
                       Abrir chamado do atendimento
                     </RouteLink>
                   </Button>
+                ) : order.complement_for ? (
+                  <p className="text-xs text-muted-foreground">
+                    O atendimento é o do pedido #{order.complement_for.order_number}.
+                  </p>
                 ) : (
                   REFUNDABLE_STATUSES.includes(order.status) && (
                     <p className="text-xs text-muted-foreground">
@@ -1813,12 +1922,7 @@ function OrderManageDialog({
                 </div>
                 <div className="space-y-1">
                   <Label htmlFor="edit-carrier" className="text-xs">Transportadora</Label>
-                  <Input
-                    id="edit-carrier"
-                    value={carrier}
-                    onChange={(e) => setCarrier(e.target.value)}
-                    placeholder="Ex: Correios"
-                  />
+                  <CarrierSelect id="edit-carrier" value={carrier} onChange={setCarrier} />
                 </div>
               </div>
               <Button
@@ -1828,7 +1932,7 @@ function OrderManageDialog({
                   savingTracking ||
                   !trackingCode.trim() ||
                   (trackingCode.trim() === (order.tracking_code ?? "") &&
-                    carrier.trim() === (order.carrier ?? ""))
+                    (!carrier || carrier === order.carrier))
                 }
                 className="w-full gap-2"
               >
@@ -1861,19 +1965,14 @@ function OrderManageDialog({
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor="carrier" className="text-xs">Transportadora</Label>
-                    <Input
-                      id="carrier"
-                      value={carrier}
-                      onChange={(e) => setCarrier(e.target.value)}
-                      placeholder="Ex: Correios"
-                    />
+                    <CarrierSelect id="carrier" value={carrier} onChange={setCarrier} />
                   </div>
                 </div>
               )}
               {next === "shipped" && (
                 <p className="text-[11px] text-muted-foreground">
-                  O cliente recebe o aviso de que o rastreio pode levar até uma semana para aparecer
-                  (o pedido ainda está saindo da China). Dá para trocar o código depois.
+                  O cliente recebe o link de rastreio da transportadora e o aviso de que o código pode
+                  levar cerca de 7 dias para mostrar movimentação. Dá para trocar o código depois.
                 </p>
               )}
               {next === "shipped" && order.requires_shipping_address && !order.shipping_address && (
@@ -1885,7 +1984,9 @@ function OrderManageDialog({
                 onClick={handleAdvance}
                 disabled={
                   advancing ||
-                  (next === "shipped" && order.requires_shipping_address && !order.shipping_address)
+                  (next === "shipped" && order.requires_shipping_address && !order.shipping_address) ||
+                  // Código sem transportadora: o cliente ficaria sem o link de rastreio.
+                  (next === "shipped" && Boolean(trackingCode.trim()) && !carrier)
                 }
                 className="w-full gap-2"
               >

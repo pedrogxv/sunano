@@ -54,6 +54,8 @@ import { notifyDiscordOrderEventInBackground } from "@/lib/server/repositories/d
 import { canUseStoreNow } from "@/lib/server/auth/store-access"
 import { isStoreMaintenanceEnabled } from "@/lib/store-maintenance"
 import { computeCardTotalCents, computeItemCardPriceCents, isSinglePriceProduct } from "@/lib/store-pricing"
+import { readServiceFormFields } from "@/lib/store-service-form"
+import { resolveComplementCharge, type ComplementCharge } from "@/lib/server/repositories/order-complement-repository"
 import { effectivePreorderStatus, PREORDER_STATUS_LABEL } from "@/lib/store-preorder"
 import { resolveSelection, type ResolvedSelection } from "@/lib/store-sku"
 import { SITE_URL } from "@/lib/site-url"
@@ -134,6 +136,11 @@ const checkoutBodySchema = z.object({
    * isso também desliga o cookie.
    */
   affiliateCode: z.string().max(40).nullish(),
+  /**
+   * Complemento de Pagamento: o pedido cujo valor pendente esta compra paga.
+   * Só o id; o valor sai do pedido, no servidor (`resolveComplementCharge`).
+   */
+  complementOrderId: z.uuid("Pedido do complemento inválido.").optional(),
   /** Marca explícita de "não quero informar agora" — só aceita enquanto o endereço for opcional. */
 })
 
@@ -480,7 +487,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
-    const { items, paymentMethod } = parsedBody.data
+    const { items, paymentMethod, complementOrderId } = parsedBody.data
 
     // Escolha do seletor ganha do cookie. Um código escolhido que não serve
     // mais (afiliado suspenso entre abrir a tela e pagar) é recusado em vez
@@ -602,7 +609,7 @@ export async function POST(request: NextRequest) {
       db
         .from("store_products")
         .select(
-          "id, name, price_cents, promo_price_cents, stock, images, type, condition, is_active, is_sold_out, requires_shipping, sale_type, category"
+          "id, name, price_cents, promo_price_cents, stock, images, type, condition, is_active, is_sold_out, requires_shipping, sale_type, category, service_form_fields, is_payment_complement"
         )
         .in("id", productIds),
       getVariantsForCheckout(variantIds),
@@ -631,6 +638,35 @@ export async function POST(request: NextRequest) {
         { error: "Não foi possível carregar os produtos do carrinho." },
         { status: 503 }
       )
+    }
+
+    // Complemento de Pagamento: sozinho, uma unidade, com o pedido que ele
+    // paga. O preço do anúncio não vale nada; quem diz o valor é o pedido.
+    // Sem esta trava, o anúncio entraria pelo carrinho pelo preço cadastrado.
+    let complementCharge: Extract<ComplementCharge, { ok: true }> | null = null
+    const hasComplementProduct = products.some((product) => product.is_payment_complement)
+    if (hasComplementProduct || complementOrderId) {
+      if (
+        !hasComplementProduct ||
+        !complementOrderId ||
+        mergedItems.length !== 1 ||
+        mergedItems[0].quantity !== 1 ||
+        mergedItems[0].variantId ||
+        mergedItems[0].optionIds.length > 0
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "O Complemento de Pagamento é pago sozinho, pelo número do pedido, na página do anúncio. Remova-o do carrinho.",
+          },
+          { status: 400 }
+        )
+      }
+      const charge = await resolveComplementCharge(user.id, complementOrderId, isActiveGatewaySandbox())
+      if (!charge.ok) {
+        return NextResponse.json({ error: charge.error }, { status: charge.status })
+      }
+      complementCharge = charge
     }
 
     if (variants.length !== variantIds.length) {
@@ -974,8 +1010,11 @@ export async function POST(request: NextRequest) {
       // promoção e o preço da combinação. Antes isto era uma segunda
       // implementação que esquecia `promo_price_cents`, e a loja cobrava o
       // preço cheio de um produto anunciado com desconto.
-      const effectivePriceCents = selection.price.effectiveCents
+      const effectivePriceCents = complementCharge ? complementCharge.amountCents : selection.price.effectiveCents
       const singlePrice = isSinglePriceProduct(product)
+      // Complemento não pede formulário nem abre atendimento: ele paga o
+      // serviço de OUTRO pedido, que já tem os dois.
+      const serviceForm = singlePrice && !complementCharge ? readServiceFormFields(product.service_form_fields) : []
 
       totalCents += effectivePriceCents * quantity
       orderItems.push({
@@ -989,7 +1028,9 @@ export async function POST(request: NextRequest) {
         // justamente o que explica a espera para quem comprou.
         sale_type: product.sale_type,
         variant_id: variant?.id ?? null,
-        variant_label: variant?.label ?? null,
+        // Complemento: o rótulo é o pedido pago, que aparece no e-mail, em
+        // Meus Pedidos e como descrição do item na página de cartão.
+        variant_label: complementCharge ? `Pedido #${complementCharge.targetNumber}` : (variant?.label ?? null),
         variant_options: options.map((o) => ({
           group: o.group.name,
           label: o.label,
@@ -1001,7 +1042,15 @@ export async function POST(request: NextRequest) {
         sku_stock: selection.stockSource === "sku" && product.sale_type !== "pre_order",
         // Serviço: preço único e chamado de suporte aberto no pagamento.
         single_price: singlePrice,
-        is_service: singlePrice,
+        is_service: singlePrice && !complementCharge,
+        // Qual pedido este complemento paga: o item é o que aparece no recibo,
+        // no e-mail e no painel do gateway, sem precisar abrir o pedido.
+        ...(complementCharge
+          ? { complement_for: { order_id: complementCharge.targetOrderId, order_number: complementCharge.targetNumber } }
+          : {}),
+        // Campos que o comprador preenche depois de pagar. Snapshot: mudar o
+        // produto depois não muda o que este pedido pede.
+        ...(serviceForm.length > 0 ? { service_form: serviceForm } : {}),
         preorder_batch: preorderInfo.get(product.id)?.preorder?.batchName ?? null,
         image: selection.image ?? product.images?.[0] ?? null,
       })
@@ -1077,7 +1126,9 @@ export async function POST(request: NextRequest) {
     // Auto-indicação pelo CPF: só dá para checar aqui, onde o documento do
     // pagador finalmente existe. A compra segue normalmente — apenas deixa de
     // ser atribuída, mesma decisão do bloqueio por `user_id`.
-    let affiliateForOrder = affiliateAttribution
+    // Complemento não leva afiliado: é o repasse do produto orçado, não uma
+    // venda nova que alguém trouxe.
+    let affiliateForOrder = complementCharge ? null : affiliateAttribution
     if (
       affiliateForOrder &&
       (await isSelfReferral(
@@ -1245,8 +1296,12 @@ export async function POST(request: NextRequest) {
 
     // Texto da cobrança no painel do gateway: o que foi comprado, para quem
     // olha a transação saber do que se trata sem abrir o pedido no admin.
-    const itemsSummary = summarizeChargeItems(orderItems)
+    const itemsSummary = complementCharge
+      ? `Complemento do pedido #${complementCharge.targetNumber}`
+      : summarizeChargeItems(orderItems)
     const description = `Pedido Sunano - ${itemsSummary}`
+    // Gravado em todo insert abaixo (os três ramos de gateway).
+    const complementColumns = complementCharge ? { complement_for_order_id: complementCharge.targetOrderId } : {}
 
     // -----------------------------------------------------------------
     // Stripe (gateway alternativo, `PAYMENT_GATEWAY=stripe`)
@@ -1345,6 +1400,7 @@ export async function POST(request: NextRequest) {
         .insert({
           ...stripeInsert,
           ...shippingColumns,
+          ...complementColumns,
           items: orderItems,
           status: "pending",
           customer_email: customerEmail,
@@ -1480,6 +1536,7 @@ export async function POST(request: NextRequest) {
         .insert({
           ...orderInsert,
           ...shippingColumns,
+          ...complementColumns,
           items: orderItems,
           total_cents: cardTotalCents,
           status: "pending",
@@ -1579,6 +1636,7 @@ export async function POST(request: NextRequest) {
       .insert({
         ...orderInsert,
         ...shippingColumns,
+        ...complementColumns,
         items: orderItems,
         total_cents: totalCents,
         status: "pending",

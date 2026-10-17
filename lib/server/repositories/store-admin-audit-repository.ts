@@ -21,6 +21,8 @@ export type StoreAuditAction =
   | "order.cancel"
   | "order.manual_payment"
   | "order.card_review_approve"
+  /** Valor de Complemento de Pagamento cobrado num pedido. */
+  | "order.complement_due"
   | "store_settings.update"
 
 type LogAdminActionParams = {

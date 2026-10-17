@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react"
 import { useAuthUser } from "@/components/providers/auth-context"
 // `import type` é apagado no build: não puxa `server-only` para o bundle.
 import type { OrderShippingAddress } from "@/lib/server/repositories/orders-repository"
+import type { OrderServiceFormAnswers } from "@/lib/store-service-form"
+import type { OrderComplementSummary } from "@/lib/store-payment-complement"
 
 export type UserOrderItem = {
   id?: string
@@ -15,6 +17,8 @@ export type UserOrderItem = {
   image?: string | null
   /** Snapshot de `sale_type` na hora da compra (pedidos antigos não têm). */
   sale_type?: "pre_order" | "ready_stock" | "normal" | null
+  /** Campos do formulário pós-compra de serviço (snapshot; ler com `serviceFormLines`). */
+  service_form?: unknown
 }
 
 export type UserOrder = {
@@ -43,6 +47,12 @@ export type UserOrder = {
    * ausência de endereço não é pendência nenhuma.
    */
   requires_shipping_address: boolean
+  /** Formulário pós-compra de serviço já preenchido. Null = ainda não (ou o pedido não tem). */
+  service_form_answers: OrderServiceFormAnswers | null
+  /** Complemento de Pagamento cobrado neste pedido (`dueCents` null = nada cobrado). */
+  complement: OrderComplementSummary
+  /** Este pedido é o pagamento de complemento do pedido indicado. */
+  complement_for: { order_id: string; order_number: string } | null
 }
 
 /**
@@ -79,6 +89,8 @@ export type UseUserOrdersResult = {
   hasMore: boolean
   loading: boolean
   refetch: () => void
+  /** Slug do anúncio "Complemento de Pagamento"; null se ele está desativado. */
+  complementProductSlug: string | null
 }
 
 /** Rota de continuação do pagamento de acordo com o método escolhido no pedido. */
@@ -103,6 +115,7 @@ export function useUserOrders(options?: UseUserOrdersOptions): UseUserOrdersResu
   const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(Boolean(user))
   const [reloadToken, setReloadToken] = useState(0)
+  const [complementProductSlug, setComplementProductSlug] = useState<string | null>(null)
 
   const page = options?.page ?? 1
   const pageSize = options?.pageSize ?? 20
@@ -132,9 +145,10 @@ export function useUserOrders(options?: UseUserOrdersOptions): UseUserOrdersResu
     })
     fetch(`/api/store/orders?${queryString}`)
       .then((res) => (res.ok ? res.json() : { orders: [], total: 0, hasMore: false }))
-      .then((data: { orders?: UserOrder[]; total?: number; hasMore?: boolean }) => {
+      .then((data: { orders?: UserOrder[]; total?: number; hasMore?: boolean; complementProductSlug?: string | null }) => {
         if (cancelled) return
         setOrders(data.orders ?? [])
+        setComplementProductSlug(data.complementProductSlug ?? null)
         setTotal(data.total ?? 0)
         setHasMore(data.hasMore ?? false)
       })
@@ -155,5 +169,5 @@ export function useUserOrders(options?: UseUserOrdersOptions): UseUserOrdersResu
   const pendingOrder = orders.find((o) => o.status === "pending") ?? null
   const refetch = () => setReloadToken((n) => n + 1)
 
-  return { orders, pendingOrder, total, hasMore, loading, refetch }
+  return { orders, pendingOrder, total, hasMore, loading, refetch, complementProductSlug }
 }

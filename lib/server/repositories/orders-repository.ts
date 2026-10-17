@@ -14,6 +14,11 @@ import { getSelectionRulesForCheckout } from "@/lib/server/repositories/store-re
 import { patchOrderMetadata } from "@/lib/server/repositories/order-metadata-repository"
 import { stripeReceiptUrlOf } from "@/lib/stripe-receipt"
 import { TRACKING_EDITABLE_STATUSES } from "@/lib/order-status"
+import { readServiceFormAnswers, type OrderServiceFormAnswers } from "@/lib/store-service-form"
+import { signServiceFormAnswerImages } from "@/lib/server/service-form-media"
+import { getComplementSummaries } from "@/lib/server/repositories/order-complement-repository"
+import { orderNumber } from "@/lib/order-number"
+import type { OrderComplementSummary } from "@/lib/store-payment-complement"
 import { deployChargesInSandbox } from "@/lib/server/payments/gateway"
 import type { OrderPaymentSourceFilter, PaymentGateway } from "@/lib/payment-gateways"
 import {
@@ -378,11 +383,54 @@ export type UserOrderSummary = {
   shipping_address: OrderShippingAddress | null
   /** false = pedido de serviço/digital: não pede endereço em lugar nenhum. */
   requires_shipping_address: boolean
+  /** Formulário pós-compra de serviço já preenchido. Null = ainda não (ou o pedido não tem). */
+  service_form_answers: OrderServiceFormAnswers | null
+  /** Complemento de Pagamento cobrado neste pedido. `dueCents` null = nada cobrado. */
+  complement: OrderComplementSummary
+  /** Este pedido É o pagamento de complemento do pedido indicado. */
+  complement_for: OrderComplementTarget | null
 }
 
+/** O pedido original de um pagamento de complemento. */
+export type OrderComplementTarget = { order_id: string; order_number: string }
+
 const ORDER_COLUMNS =
-  "id, status, total_cents, items, created_at, payment_method, aura_cost_paid, asaas_payment_id, asaas_receipt_url, stripe_payment_intent_id, metadata, pix_copy_paste, pix_qr_code_base64, tracking_code, carrier, " +
+  "id, status, total_cents, items, created_at, payment_method, aura_cost_paid, asaas_payment_id, asaas_receipt_url, stripe_payment_intent_id, metadata, pix_copy_paste, pix_qr_code_base64, tracking_code, carrier, service_form_answers, complement_due_cents, complement_note, complement_for_order_id, " +
   SHIPPING_COLUMNS
+
+type ComplementColumns = {
+  id: string
+  complement_due_cents: number | null
+  complement_note: string | null
+  complement_for_order_id: string | null
+}
+
+function complementTargetOf(row: Pick<ComplementColumns, "complement_for_order_id">): OrderComplementTarget | null {
+  const targetId = row.complement_for_order_id
+  return targetId ? { order_id: targetId, order_number: orderNumber(targetId) } : null
+}
+
+/**
+ * Leitura que acompanha toda listagem de pedido: o complemento de cada um (em
+ * lote, uma consulta para a página) e as fotos do formulário de serviço,
+ * re-assinadas (o bucket é privado). Obrigatório nos dois lados, cliente e
+ * admin, para nenhuma tela mostrar um pedido "quitado" que ainda deve.
+ */
+async function withComplementAndMedia<T extends { id: string; service_form_answers: OrderServiceFormAnswers | null }>(
+  orders: T[],
+  rows: ComplementColumns[]
+): Promise<(T & { complement: OrderComplementSummary; complement_for: OrderComplementTarget | null })[]> {
+  const summaries = await getComplementSummaries(rows)
+  const rowById = new Map(rows.map((row) => [row.id, row]))
+  return Promise.all(
+    orders.map(async (order) => ({
+      ...order,
+      service_form_answers: await signServiceFormAnswerImages(order.service_form_answers),
+      complement: summaries.get(order.id)!,
+      complement_for: complementTargetOf(rowById.get(order.id) ?? { complement_for_order_id: null }),
+    }))
+  )
+}
 
 /**
  * Lista os pedidos de um usuário logado, mais recentes primeiro.
@@ -437,8 +485,9 @@ export async function listOrdersByUser(
     return { orders: [], total: 0, hasMore: false }
   }
   const total = count ?? 0
+  const rows = (data ?? []) as unknown as ComplementColumns[]
   return {
-    orders: (data ?? []).map(toUserOrderSummary),
+    orders: await withComplementAndMedia(rows.map(toUserOrderSummaryBase), rows),
     total,
     hasMore: currentPage * size < total,
   }
@@ -448,12 +497,12 @@ export async function listOrdersByUser(
  * Converte a linha crua (colunas `shipping_*` achatadas) no formato que as
  * telas consomem, com o endereço já colapsado em um objeto só.
  */
-function toUserOrderSummary(row: unknown): UserOrderSummary {
+function toUserOrderSummaryBase(row: unknown): Omit<UserOrderSummary, "complement" | "complement_for"> {
   const {
     stripe_payment_intent_id: stripePaymentIntentId,
     metadata,
     ...raw
-  } = row as UserOrderSummary &
+  } = row as Omit<UserOrderSummary, "complement" | "complement_for"> &
     RawShippingColumns & { stripe_payment_intent_id: string | null; metadata: Record<string, unknown> | null }
   return {
     ...raw,
@@ -465,6 +514,7 @@ function toUserOrderSummary(row: unknown): UserOrderSummary {
     // Pedidos anteriores à coluna são físicos por definição (a loja só
     // vendia produto físico até então) — daí o `!== false`, não `=== true`.
     requires_shipping_address: raw.requires_shipping_address !== false,
+    service_form_answers: readServiceFormAnswers(raw.service_form_answers),
   }
 }
 
@@ -485,7 +535,10 @@ export async function getLatestPendingOrderByUser(userId: string): Promise<UserO
     console.error("[orders-repository] getLatestPendingOrderByUser:", error)
     return null
   }
-  return data ? toUserOrderSummary(data) : null
+  if (!data) return null
+  const row = data as unknown as ComplementColumns
+  const [order] = await withComplementAndMedia([toUserOrderSummaryBase(data)], [row])
+  return order
 }
 
 // ---------------------------------------------------------------------------
@@ -590,12 +643,18 @@ export type AdminOrderRow = {
    * pedido físico e em serviço pago antes de a abertura automática existir.
    */
   service_ticket_id: string | null
+  /** O que o cliente preencheu no formulário pós-compra de serviço. Null = ainda não. */
+  service_form_answers: OrderServiceFormAnswers | null
   /** Não-nulo = pago por fora do site e registrado no painel. */
   manual_payment: OrderManualPayment | null
+  /** Complemento de Pagamento cobrado neste pedido. `dueCents` null = nada cobrado. */
+  complement: OrderComplementSummary
+  /** Este pedido É o pagamento de complemento do pedido indicado. */
+  complement_for: OrderComplementTarget | null
 }
 
 const ADMIN_ORDER_COLUMNS =
-  "id, status, total_cents, pix_price_cents, items, created_at, updated_at, payment_method, aura_cost_paid, customer_name, customer_email, metadata, tracking_code, carrier, shipped_at, delivered_at, refunded_cents, refund_reason, refunded_at, asaas_payment_id, stripe_payment_intent_id, stripe_session_id, is_sandbox, " +
+  "id, status, total_cents, pix_price_cents, items, created_at, updated_at, payment_method, aura_cost_paid, customer_name, customer_email, metadata, tracking_code, carrier, shipped_at, delivered_at, refunded_cents, refund_reason, refunded_at, asaas_payment_id, stripe_payment_intent_id, stripe_session_id, is_sandbox, service_form_answers, complement_due_cents, complement_note, complement_for_order_id, " +
   SHIPPING_COLUMNS
 
 type AdminOrderRawRow = {
@@ -622,7 +681,9 @@ type AdminOrderRawRow = {
   stripe_payment_intent_id: string | null
   stripe_session_id: string | null
   is_sandbox: boolean
-} & RawShippingColumns
+  service_form_answers: unknown
+} & RawShippingColumns &
+  ComplementColumns
 
 export type AdminOrderListResult = {
   orders: AdminOrderRow[]
@@ -725,7 +786,7 @@ export async function listOrdersForAdmin(filters?: {
     }
   }
 
-  const orders: AdminOrderRow[] = rows.map((row) => {
+  const baseOrders = rows.map((row) => {
     const userId = (row.metadata?.user_id as string | undefined) ?? null
     return {
       id: row.id,
@@ -757,6 +818,7 @@ export async function listOrdersForAdmin(filters?: {
       requires_shipping_address: row.requires_shipping_address !== false,
       is_sandbox: row.is_sandbox === true,
       service_ticket_id: (row.metadata?.service_ticket_id as string | undefined) ?? null,
+      service_form_answers: readServiceFormAnswers(row.service_form_answers),
       manual_payment: (row.metadata?.manual_payment as OrderManualPayment | undefined) ?? null,
       card_review: (() => {
         const review = row.metadata?.card_review as OrderCardReviewFlag | undefined
@@ -766,6 +828,7 @@ export async function listOrdersForAdmin(filters?: {
       chargeback: (row.metadata?.chargeback as OrderChargebackFlag | undefined) ?? null,
     }
   })
+  const orders: AdminOrderRow[] = await withComplementAndMedia(baseOrders, rows)
 
   return { orders, total: count ?? orders.length }
 }

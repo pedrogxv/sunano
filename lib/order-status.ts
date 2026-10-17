@@ -104,8 +104,27 @@ export function orderStatusDescription(
  * (por isso o admin pode trocar o código enquanto o pedido está "Enviado").
  */
 export const ORDER_TRACKING_NOTICE = {
-  intro:
-    "Como o produto acabou de ser enviado, o pedido ainda está na China e provavelmente não vai aparecer no rastreamento por enquanto. Fique tranquilo caso não consiga ver o rastreio na primeira semana.",
+  title: "Pedido enviado!",
+  /** Cada parágrafo é uma lista de trechos; `strong` sai em negrito no site e no e-mail. */
+  paragraphs: [
+    [
+      {
+        text: "Seu pedido já foi despachado e está a caminho. Como o envio foi realizado recentemente, é normal que o código de rastreio ainda não apresente atualizações no site da transportadora.",
+      },
+    ],
+    [
+      {
+        text: "Em pedidos internacionais, o rastreamento costuma começar a exibir movimentações mais detalhadas após o pacote avançar no transporte ou chegar ao Brasil. Recomendamos aguardar ",
+      },
+      { text: "cerca de 7 dias", strong: true },
+      { text: " para consultar novamente." },
+    ],
+    [
+      {
+        text: "Não se preocupe caso o rastreio fique alguns dias sem atualização. Isso é normal nas etapas iniciais do envio.",
+      },
+    ],
+  ] as ReadonlyArray<ReadonlyArray<{ text: string; strong?: boolean }>>,
   codeChange:
     "Obs.: em alguns casos, assim que o produto chega ao Brasil, o código de rastreio muda automaticamente. Se a nossa equipe ainda não tiver atualizado o código aqui, abra um chamado pedindo mais informações sobre o seu pedido que a gente ajuda com tudo que você precisar.",
 } as const

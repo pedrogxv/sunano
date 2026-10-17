@@ -70,6 +70,8 @@ export type StoreProductCard = {
   created_at: string
   /** false = serviço/digital: não vai pelo correio, então não anuncia frete. */
   requires_shipping: boolean
+  /** Complemento de Pagamento: sem preço próprio, o valor sai do pedido. */
+  is_payment_complement: boolean
   /** Tem grupo de opção (Switch, Voltagem...): comprar exige escolher, o card oferece "Escolher opções". */
   has_option_groups: boolean
   /** Nota média e quantidade de avaliações publicadas; `null` = ninguém avaliou ainda. */
@@ -182,7 +184,7 @@ export type LinkedProduct = {
 }
 
 const CARD_COLUMNS =
-  "id, slug, name, price_cents, promo_price_cents, stock, images, category, brand, type, condition, condition_notes, sale_type, is_active, is_sold_out, is_featured, featured_position, pin_best_seller, best_seller_position, created_at, requires_shipping, variants:store_product_variants(id, label, price_cents_override, promo_price_cents, stock, color, icon, image_url, is_sold_out, position), option_groups:store_product_variant_groups(id)"
+  "id, slug, name, price_cents, promo_price_cents, stock, images, category, brand, type, condition, condition_notes, sale_type, is_active, is_sold_out, is_featured, featured_position, pin_best_seller, best_seller_position, created_at, requires_shipping, is_payment_complement, variants:store_product_variants(id, label, price_cents_override, promo_price_cents, stock, color, icon, image_url, is_sold_out, position), option_groups:store_product_variant_groups(id)"
 
 type RawCardRow = Omit<StoreProductCardBase, "has_variants" | "variants" | "has_option_groups"> & {
   variants: (StoreCardVariant & { position: number })[] | null
@@ -1455,6 +1457,8 @@ export type StoreProductDetail = {
   video_url: string | null
   /** false = serviço/digital: sem frete nem prazo de entrega. */
   requires_shipping: boolean
+  /** Complemento de Pagamento: a página troca preço e compra pela busca do pedido. */
+  is_payment_complement: boolean
   /** SKU de produto simples. Combinações têm o seu em `skus`. */
   sku: string | null
   /** Lote atual; `null` em produto que não é pré-venda. */
@@ -1530,7 +1534,7 @@ export const getStoreProductDetail = cache(async (
   const { data: product, error } = await db
     .from("store_products")
     .select(
-      "id, slug, name, description, price_cents, promo_price_cents, stock, images, category, brand, type, condition, condition_notes, sale_type, is_sold_out, peripheral_id, features, video_url, requires_shipping"
+      "id, slug, name, description, price_cents, promo_price_cents, stock, images, category, brand, type, condition, condition_notes, sale_type, is_sold_out, peripheral_id, features, video_url, requires_shipping, is_payment_complement"
     )
     .eq("slug", slug)
     .eq("type", "store")

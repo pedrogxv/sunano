@@ -148,6 +148,9 @@ function StandardProductCard(props: ProductCardProps) {
   // Mais de uma cor, ou um grupo de opção (Switch, Voltagem): o card não sabe
   // qual a pessoa quer, então o botão abre a escolha em vez de adivinhar.
   const requiresChoice = variants.length > 1 || props.has_option_groups
+  // Complemento de Pagamento: o valor sai do pedido digitado na página, então
+  // o card não tem preço para anunciar nem item para pôr no carrinho.
+  const complement = props.is_payment_complement
 
   // Mesma função usada pela página de produto e pelo checkout — o preço que
   // o card anuncia é, por construção, o preço que será cobrado.
@@ -354,6 +357,16 @@ function StandardProductCard(props: ProductCardProps) {
             <CardRating rating={props.rating} />
             {!showcase && <CardHighlights items={highlights} />}
 
+            {complement ? (
+              <div className={cn("mt-auto", showcase ? "pt-2" : "pt-1")}>
+                <p className={cn("font-display font-bold leading-tight text-white", showcase ? "text-[24px]" : "text-lg")}>
+                  Valor do seu pedido
+                </p>
+                <p className={cn("text-[#7a7a7a]", showcase ? "text-[12px]" : "text-[10px]")}>
+                  Digite o número do pedido e pague o que falta, no PIX ou no cartão
+                </p>
+              </div>
+            ) : (
             <div className={cn("mt-auto", showcase ? "pt-2" : "pt-1")}>
               {hasDiscount && (
                 <p className={cn("leading-tight text-[#6e6e6e] line-through", showcase ? "text-[12.5px]" : "text-[11px]")}>
@@ -390,6 +403,7 @@ function StandardProductCard(props: ProductCardProps) {
                 </p>
               )}
             </div>
+            )}
 
             {/* Frete grátis tem destaque próprio (o checkout não cobra frete;
                 ver lib/store-shipping.ts). A urgência de estoque fica do lado
@@ -410,7 +424,7 @@ function StandardProductCard(props: ProductCardProps) {
 
             {showcase && (
               <span className="mt-1 flex h-11 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] text-[13.5px] font-bold text-white transition-colors group-hover:border-transparent group-hover:bg-white group-hover:text-black">
-                {outOfStock ? "Ver detalhes" : "Ver serviço"}
+                {outOfStock ? "Ver detalhes" : complement ? "Pagar complemento" : "Ver serviço"}
                 <ArrowRight className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" />
               </span>
             )}
@@ -426,7 +440,7 @@ function StandardProductCard(props: ProductCardProps) {
       {!showcase && (
         <div className="pointer-events-none absolute inset-x-0 top-0 z-[3] aspect-square transition-transform duration-200 group-hover:-translate-y-1">
           <div className="@container absolute inset-x-2.5 bottom-2.5 translate-y-1.5 rounded-xl border border-white/10 bg-[#0d0d0d]/90 p-2 opacity-0 shadow-xl shadow-black/50 backdrop-blur-md transition-[opacity,transform] duration-200 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 focus-within:pointer-events-auto focus-within:translate-y-0 focus-within:opacity-100">
-            {stockLine && (
+            {stockLine && !complement && (
               <p className={cn("mb-1.5 flex items-center gap-1.5 px-0.5 text-[10.5px] font-semibold", stockLine.tone)}>
                 <span className={cn("size-1.5 shrink-0 rounded-full", stockLine.dot)} />
                 <span className="truncate">{stockLine.text}</span>
@@ -434,14 +448,14 @@ function StandardProductCard(props: ProductCardProps) {
             )}
             {/* "Ver detalhes" ocupa só o próprio texto: o espaço que sobra é do
                 botão principal, que tem o rótulo mais longo ("Escolher opções"). */}
-            <div className={cn("grid gap-1.5", outOfStock ? "grid-cols-1" : "grid-cols-[auto_minmax(0,1fr)]")}>
+            <div className={cn("grid gap-1.5", outOfStock || complement ? "grid-cols-1" : "grid-cols-[auto_minmax(0,1fr)]")}>
               <RouteLink
                 href={href}
                 className="flex h-8 cursor-pointer items-center justify-center rounded-lg border border-white/15 px-3 text-[11.5px] font-semibold text-white transition-colors hover:bg-white/10"
               >
                 Ver detalhes
               </RouteLink>
-              {!outOfStock && (
+              {!outOfStock && !complement && (
                 <button
                   type="button"
                   onClick={handlePrimaryAction}

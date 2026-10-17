@@ -9,6 +9,7 @@ import { useCart } from "@/components/providers/cart-context"
 import { formatBRL } from "@/lib/format"
 import { orderNumber } from "@/lib/order-number"
 import { OrderPaidNextStepsDialog } from "@/components/store/OrderPaidNextStepsDialog"
+import type { ServiceFormLine } from "@/lib/store-service-form"
 import { PixCountdown } from "@/components/store/PixCountdown"
 
 interface OrderItem {
@@ -41,6 +42,11 @@ interface OrderStatus {
   /** Pedido com serviço: a janela pós-compra abre a conversa do chamado. */
   hasService?: boolean
   serviceTicketId?: string | null
+  /** Formulário pós-compra de serviço (snapshot do pedido). */
+  serviceFormLines?: ServiceFormLine[]
+  serviceFormAnswered?: boolean
+  /** Pagamento de complemento: o pedido original e a conversa dele. */
+  complementFor?: { orderNumber: string; ticketId: string | null } | null
 }
 
 /**
@@ -197,6 +203,9 @@ function PixCheckoutContent() {
           requiresShipping={order.requiresShipping}
           hasService={order.hasService}
           serviceTicketId={order.serviceTicketId}
+          serviceFormLines={order.serviceFormLines}
+          serviceFormAnswered={order.serviceFormAnswered}
+          complementFor={order.complementFor ?? null}
         />
         <div className="flex size-20 items-center justify-center rounded-full bg-emerald-500/15">
           <CheckCircle className="size-10 text-emerald-400" />
@@ -204,7 +213,9 @@ function PixCheckoutContent() {
         <div className="space-y-2">
           <h1 className="text-3xl font-black text-foreground">Pagamento confirmado!</h1>
           <p className="text-muted-foreground max-w-sm">
-            {order.hasService
+            {order.complementFor
+              ? `O complemento entrou no pedido #${order.complementFor.orderNumber}. Acompanhe por ele em Meus Pedidos.`
+              : order.hasService
               ? "Seu pedido foi recebido. A conversa com o suporte já está aberta em Meus Tickets."
               : order.requiresShipping
                 ? "Seu pedido foi recebido com sucesso. Acompanhe o andamento em Meus Pedidos."

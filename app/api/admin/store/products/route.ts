@@ -12,7 +12,8 @@ import {
 } from "@/lib/server/repositories/store-repository"
 import { parseSlug } from "@/lib/format"
 import { CARD_HIGHLIGHT_MAX_CHARS, CARD_HIGHLIGHTS_MAX, sanitizeCardHighlights, STORE_CARD_BADGE_CHOICES } from "@/lib/store-card"
-import { isValidYoutubeUrl } from "@/lib/youtube-url"
+import { isAcceptedStoreProductVideoUrl, STORE_PRODUCT_VIDEO_URL_ERROR } from "@/lib/server/store-product-video"
+import { serviceFormFieldsSchema } from "@/lib/store-service-form"
 import { productPageFieldsShape, saleWindowPriceIssue, skuConflictMessage } from "@/lib/server/validation/store-product-page"
 
 const MAX_PRODUCT_IMAGES = 8
@@ -44,7 +45,7 @@ const createProductSchema = z.object({
   video_url: z
     .string()
     .trim()
-    .refine((v) => v === "" || isValidYoutubeUrl(v), "URL de vídeo precisa ser um link do YouTube.")
+    .refine((v) => v === "" || isAcceptedStoreProductVideoUrl(v), STORE_PRODUCT_VIDEO_URL_ERROR)
     .optional()
     .nullable(),
   /** Selo do card escolhido à mão; null = automático. Ver lib/store-card.ts. */
@@ -56,6 +57,8 @@ const createProductSchema = z.object({
     .transform(sanitizeCardHighlights)
     .optional(),
   ...productPageFieldsShape,
+  /** Campos que o comprador preenche depois de pagar (serviço). Ver lib/store-service-form.ts. */
+  service_form_fields: serviceFormFieldsSchema.optional(),
 })
 
 export async function GET(request: NextRequest) {
@@ -134,12 +137,17 @@ export async function POST(request: NextRequest) {
   const {
     name, description, price_cents, promo_price_cents, stock, images, category, brand, condition,
     condition_notes, sale_type, preorder_limit, is_active, is_sold_out, features, video_url,
-    requires_shipping, card_badge, card_highlights,
+    requires_shipping, card_badge, card_highlights, service_form_fields,
     sku, preorder_batch_name, preorder_ships_at, preorder_status, is_launch,
     sale_window_ends_at, sale_window_end_action, sale_window_end_price_cents,
   } = parsed.data
   // Campos da página do produto (20261213000001) só entram quando vieram,
   // como o selo do card: o form omite o que ficou no padrão.
+  // Pré-venda e Lançamento são excludentes: a pré-venda já entra em "DROPS"
+  // sozinha, e o produto com os dois mostrava o card de um e o prazo do outro.
+  if (is_launch && sale_type === "pre_order") {
+    return NextResponse.json({ error: "Escolha Pré-venda ou Lançamento, não os dois." }, { status: 400 })
+  }
   const pageFields = Object.fromEntries(
     Object.entries({
       sku, preorder_batch_name, preorder_ships_at, preorder_status, is_launch,
@@ -195,6 +203,7 @@ export async function POST(request: NextRequest) {
       // Só entram quando vieram: o form omite o que ficou no automático.
       ...(card_badge !== undefined ? { card_badge } : {}),
       ...(card_highlights !== undefined ? { card_highlights } : {}),
+      ...(service_form_fields !== undefined ? { service_form_fields } : {}),
       ...pageFields,
     })
     .select()

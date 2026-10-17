@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getRequestUser } from "@/lib/server/auth/current-user"
 import { listOrdersByUser, type OrderStatus } from "@/lib/server/repositories/orders-repository"
+import { getPaymentComplementProduct } from "@/lib/server/repositories/order-complement-repository"
 
 const VALID_STATUSES: OrderStatus[] = [
   "pending",
@@ -35,11 +36,15 @@ export async function GET(request: NextRequest) {
   // filtrando a página já paginada (senão a contagem e a paginação mentem).
   const missingShipping = url.searchParams.get("missingShipping") === "1"
 
-  const { orders, total, hasMore } = await listOrdersByUser(user.id, page, pageSize, {
-    status,
-    dateFrom,
-    dateTo,
-    missingShipping,
-  })
-  return NextResponse.json({ orders, total, hasMore })
+  const [{ orders, total, hasMore }, complementProduct] = await Promise.all([
+    listOrdersByUser(user.id, page, pageSize, {
+      status,
+      dateFrom,
+      dateTo,
+      missingShipping,
+    }),
+    // O passo a passo do complemento (Meus Pedidos) aponta para o anúncio.
+    getPaymentComplementProduct(),
+  ])
+  return NextResponse.json({ orders, total, hasMore, complementProductSlug: complementProduct?.slug ?? null })
 }

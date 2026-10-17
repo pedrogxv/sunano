@@ -130,6 +130,17 @@ const TAG_LABELS: Record<Tag, { en: string; pt: string }> = {
   artista: { en: "Artist", pt: "Artista" },
   full_silicone: { en: "Full Silicone", pt: "Full Silicone" },
   silencioso: { en: "Quiet", pt: "Silencioso" },
+  layout_tkl: { en: "TKL", pt: "TKL" },
+  layout_75: { en: "75%", pt: "75%" },
+  layout_65: { en: "65%", pt: "65%" },
+  layout_60: { en: "60%", pt: "60%" },
+  layout_full: { en: "Full Size", pt: "Full Size" },
+  barulhento: { en: "Loud", pt: "Barulhento" },
+  magnetico: { en: "Magnetic", pt: "Magnético" },
+  mecanico: { en: "Mechanical", pt: "Mecânico" },
+  membrana: { en: "Membrane", pt: "Membrana" },
+  optico: { en: "Optical", pt: "Óptico" },
+  overpriced: { en: "Overpriced", pt: "Overpriced" },
 }
 
 export interface TierItemTooltipContentProps {

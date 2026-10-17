@@ -3,6 +3,7 @@ import "server-only"
 import { formatBRL } from "@/lib/format"
 import { ORDER_TRACKING_NOTICE, orderStatusDescription, type OrderStatusValue } from "@/lib/order-status"
 import { stripeReceiptUrlOf } from "@/lib/stripe-receipt"
+import { storeCarrierTracking } from "@/lib/store-carriers"
 import { absoluteUrl } from "@/lib/site-url"
 import { getResendConfig, ResendApiError, sendEmail } from "@/lib/server/integrations/resend"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
@@ -145,10 +146,26 @@ function buildEmail(data: OrderEmailData): { subject: string; html: string; text
     ? `${data.carrier ? `${data.carrier} — ` : ""}${data.trackingCode}`
     : null
 
+  const carrierTracking = shipped ? storeCarrierTracking(data.carrier, data.trackingCode) : null
+
   // Aviso da primeira semana só no envio; na troca de código a encomenda já
   // está no Brasil e o "obs." sobre a troca é justamente o que aconteceu.
-  const notice = data.kind === "shipped" && data.requiresShipping
-    ? [ORDER_TRACKING_NOTICE.intro, ORDER_TRACKING_NOTICE.codeChange]
+  const showNotice = data.kind === "shipped" && data.requiresShipping
+  const noticeHtml = showNotice
+    ? [
+        `<strong>${escapeHtml(ORDER_TRACKING_NOTICE.title)}</strong>`,
+        ...ORDER_TRACKING_NOTICE.paragraphs.map((parts) =>
+          parts.map((part) => (part.strong ? `<strong>${escapeHtml(part.text)}</strong>` : escapeHtml(part.text))).join("")
+        ),
+        escapeHtml(ORDER_TRACKING_NOTICE.codeChange),
+      ]
+    : []
+  const noticeText = showNotice
+    ? [
+        ORDER_TRACKING_NOTICE.title,
+        ...ORDER_TRACKING_NOTICE.paragraphs.map((parts) => parts.map((part) => part.text).join("")),
+        ORDER_TRACKING_NOTICE.codeChange,
+      ]
     : []
 
   const subject = trackingUpdated
@@ -182,8 +199,8 @@ function buildEmail(data: OrderEmailData): { subject: string; html: string; text
         <tr><td style="font-size:13px;color:#777777;padding-bottom:20px;">Pedido #${shortId}</td></tr>
         <tr><td style="font-size:15px;color:#222222;line-height:1.5;padding-bottom:8px;">${escapeHtml(greeting)}</td></tr>
         <tr><td style="font-size:15px;color:#222222;line-height:1.5;padding-bottom:${tracking ? 16 : 24}px;">${escapeHtml(lead)}</td></tr>
-        ${tracking ? `<tr><td style="padding-bottom:24px;"><div style="background:#f4f4f5;border-radius:8px;padding:12px 16px;font-size:14px;color:#222222;">Código de rastreio: <strong style="font-family:Menlo,Consolas,monospace;">${escapeHtml(tracking)}</strong></div></td></tr>` : ""}
-        ${notice.map((paragraph) => `<tr><td style="font-size:13px;color:#555555;line-height:1.5;padding-bottom:16px;">${escapeHtml(paragraph)}</td></tr>`).join("")}
+        ${tracking ? `<tr><td style="padding-bottom:24px;"><div style="background:#f4f4f5;border-radius:8px;padding:12px 16px;font-size:14px;color:#222222;">Código de rastreio: <strong style="font-family:Menlo,Consolas,monospace;">${escapeHtml(tracking)}</strong>${carrierTracking ? `<br><a href="${escapeHtml(carrierTracking.url)}" style="display:inline-block;margin-top:8px;color:#111111;font-weight:600;">Rastrear no site da ${escapeHtml(carrierTracking.carrier)}</a>` : ""}</div></td></tr>` : ""}
+        ${noticeHtml.map((paragraph) => `<tr><td style="font-size:13px;color:#555555;line-height:1.5;padding-bottom:16px;">${paragraph}</td></tr>`).join("")}
         <tr><td>
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
             ${itemRows}
@@ -213,7 +230,8 @@ function buildEmail(data: OrderEmailData): { subject: string; html: string; text
     greeting,
     lead,
     ...(tracking ? ["", `Código de rastreio: ${tracking}`] : []),
-    ...notice.flatMap((paragraph) => ["", paragraph]),
+    ...(carrierTracking ? [`Rastrear no site da ${carrierTracking.carrier}: ${carrierTracking.url}`] : []),
+    ...noticeText.flatMap((paragraph) => ["", paragraph]),
     "",
     ...data.items.map((item) => {
       const price = itemPrice(item)

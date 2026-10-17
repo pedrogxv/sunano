@@ -190,7 +190,7 @@ export const CARD_TAG_STYLES = {
   macio:           { bg: "bg-pink-500/15",    text: "text-pink-300",    border: "border-pink-500/30",    dot: "bg-pink-400" },
   afetado_umidade: { bg: "bg-cyan-500/15",    text: "text-cyan-300",    border: "border-cyan-500/30",    dot: "bg-cyan-400" },
   ultrapassado:    { bg: "bg-stone-500/15",   text: "text-stone-300",   border: "border-stone-500/30",   dot: "bg-stone-400" },
-  magnetico:       { bg: "bg-violet-500/15",  text: "text-violet-300",  border: "border-violet-500/30",  dot: "bg-violet-400" },
+  magnetico:       { bg: "bg-fuchsia-500/15", text: "text-fuchsia-300", border: "border-fuchsia-500/30", dot: "bg-fuchsia-400" },
   raro:            { bg: "bg-amber-500/15",   text: "text-amber-300",   border: "border-amber-500/30",   dot: "bg-amber-400" },
   fibra_carbono:   { bg: "bg-neutral-500/15", text: "text-neutral-300", border: "border-neutral-500/30", dot: "bg-neutral-400" },
   control:         { bg: "bg-blue-500/15",    text: "text-blue-300",    border: "border-blue-500/30",    dot: "bg-blue-400" },
@@ -251,6 +251,16 @@ export const CARD_TAG_STYLES = {
   artista:           { bg: "bg-orange-500/15",  text: "text-orange-300",  border: "border-orange-500/30",  dot: "bg-orange-400" },
   full_silicone:     { bg: "bg-indigo-500/15",  text: "text-indigo-300",  border: "border-indigo-500/30",  dot: "bg-indigo-400" },
   silencioso:        { bg: "bg-slate-500/15",   text: "text-slate-300",   border: "border-slate-500/30",   dot: "bg-slate-400" },
+  layout_tkl:        { bg: "bg-sky-500/15", text: "text-sky-300", border: "border-sky-500/30", dot: "bg-sky-400" },
+  layout_75:         { bg: "bg-cyan-500/15", text: "text-cyan-300", border: "border-cyan-500/30", dot: "bg-cyan-400" },
+  layout_65:         { bg: "bg-blue-500/15", text: "text-blue-300", border: "border-blue-500/30", dot: "bg-blue-400" },
+  layout_60:         { bg: "bg-indigo-500/15", text: "text-indigo-300", border: "border-indigo-500/30", dot: "bg-indigo-400" },
+  layout_full:       { bg: "bg-zinc-500/15", text: "text-zinc-300", border: "border-zinc-500/30", dot: "bg-zinc-400" },
+  barulhento:        { bg: "bg-amber-500/15", text: "text-amber-300", border: "border-amber-500/30", dot: "bg-amber-400" },
+  mecanico:          { bg: "bg-stone-500/15", text: "text-stone-300", border: "border-stone-500/30", dot: "bg-stone-400" },
+  membrana:          { bg: "bg-neutral-500/15", text: "text-neutral-300", border: "border-neutral-500/30", dot: "bg-neutral-400" },
+  optico:            { bg: "bg-lime-500/15", text: "text-lime-300", border: "border-lime-500/30", dot: "bg-lime-400" },
+  overpriced:        { bg: "bg-pink-500/15", text: "text-pink-300", border: "border-pink-500/30", dot: "bg-pink-400" },
 } as const
 
 // Rating scale colors (0–6) — single source of truth shared by the peripheral

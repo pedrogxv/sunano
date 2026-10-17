@@ -12,7 +12,13 @@ import {
 import { logAdminAction } from "@/lib/server/repositories/store-admin-audit-repository"
 import { CARD_HIGHLIGHT_MAX_CHARS, CARD_HIGHLIGHTS_MAX, sanitizeCardHighlights, STORE_CARD_BADGE_CHOICES } from "@/lib/store-card"
 import { STORE_SHOWCASE_SLOTS } from "@/lib/store-showcase"
-import { isValidYoutubeUrl } from "@/lib/youtube-url"
+import {
+  isAcceptedStoreProductVideoUrl,
+  isStoreProductVideoObject,
+  STORE_PRODUCT_VIDEO_URL_ERROR,
+} from "@/lib/server/store-product-video"
+import { removeImageIfUnreferenced } from "@/lib/server/storage-cleanup"
+import { serviceFormFieldsSchema } from "@/lib/store-service-form"
 import { productPageFieldsShape, saleWindowPriceIssue, skuConflictMessage } from "@/lib/server/validation/store-product-page"
 import type { Database } from "@/lib/database.types"
 
@@ -49,7 +55,7 @@ const updateProductSchema = z.object({
   video_url: z
     .string()
     .trim()
-    .refine((v) => v === "" || isValidYoutubeUrl(v), "URL de vídeo precisa ser um link do YouTube.")
+    .refine((v) => v === "" || isAcceptedStoreProductVideoUrl(v), STORE_PRODUCT_VIDEO_URL_ERROR)
     .nullable()
     .optional(),
   /** Selo do card escolhido à mão; null = automático. Ver lib/store-card.ts. */
@@ -61,6 +67,8 @@ const updateProductSchema = z.object({
     .transform(sanitizeCardHighlights)
     .optional(),
   ...productPageFieldsShape,
+  /** Campos que o comprador preenche depois de pagar (serviço). Ver lib/store-service-form.ts. */
+  service_form_fields: serviceFormFieldsSchema.optional(),
   /**
    * Abre um lote novo de pré-venda: o teto passa a contar só os pedidos daqui
    * em diante (`preorder_batch_started_at`). Não é coluna: vira o carimbo de
@@ -200,6 +208,19 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
   const db = createSupabaseAdminClient()
 
+  // Pré-venda e Lançamento são excludentes (mesma regra do POST). O PATCH só
+  // manda o que mudou: virar pré-venda desliga o lançamento, e ligar o
+  // lançamento sem trocar o tipo confere o tipo salvo.
+  if (patch.is_launch === true) {
+    const saleType =
+      patch.sale_type ?? (await db.from("store_products").select("sale_type").eq("id", id).single()).data?.sale_type
+    if (saleType === "pre_order") {
+      return NextResponse.json({ error: "Escolha Pré-venda ou Lançamento, não os dois." }, { status: 400 })
+    }
+  } else if (patch.sale_type === "pre_order") {
+    patch.is_launch = false
+  }
+
   // Marcar/desmarcar destaque: entra no fim da fila manual (editável depois em
   // /admin/store, arrastar-e-soltar) e sai da fila ao desmarcar — sem isso o
   // produto reaparecia na posição antiga se voltasse a ser destaque depois.
@@ -254,6 +275,13 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     }
   }
 
+  // Vídeo enviado tem nome novo a cada troca: sem guardar o anterior, o MP4
+  // trocado ou removido ficaria pago no bucket sem ninguém que o exiba.
+  const previousVideoUrl =
+    patch.video_url !== undefined
+      ? (await db.from("store_products").select("video_url").eq("id", id).maybeSingle()).data?.video_url ?? null
+      : null
+
   const { data, error } = await db
     .from("store_products")
     .update(patch)
@@ -266,6 +294,12 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     if (conflict) return NextResponse.json({ error: conflict }, { status: 409 })
     const { body, status } = dbErrorResponse(error, "Erro ao atualizar produto.")
     return NextResponse.json(body, { status })
+  }
+
+  // Confere no banco antes de apagar: nada impede o admin de colar a URL do
+  // vídeo de outro anúncio, e aí o arquivo ainda está em uso.
+  if (previousVideoUrl && previousVideoUrl !== data.video_url) {
+    await removeImageIfUnreferenced(previousVideoUrl, "store_products", "video_url", isStoreProductVideoObject)
   }
 
   if (typeof data.price_cents === "number") {

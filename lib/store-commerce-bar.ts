@@ -163,7 +163,7 @@ const PIX_ONLY_BENEFIT_TEXT = "Pagamento instantâneo via PIX"
 /**
  * Benefícios que valem para os meios de pagamento que a Loja aceita AGORA.
  *
- * Com o cartão desligado (Stripe: só PIX, ver `storeCardPaymentsEnabled`),
+ * Com o cartão desligado (ver `storeCardPaymentsEnabled`),
  * benefício de cartão some e "PIX com desconto" vira só PIX. É automático:
  * a configuração salva no painel não muda, e volta inteira quando o cartão
  * religar. Sem isso a barra dizia "Até 6x sem juros" numa Loja que nem

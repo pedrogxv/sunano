@@ -19,7 +19,7 @@ export async function GET() {
     // juros" para uma compra que não teria parcela nenhuma. O valor salvo no
     // admin continua valendo quando a loja volta para a Asaas.
     cardMaxInstallments: activePaymentGateway() === "stripe" ? 1 : settings.cardMaxInstallments,
-    // Cartão desligado (Stripe: só PIX): as telas escondem preço e parcelas no
+    // Cartão desligado (`STORE_PAYMENT_METHODS` ou Stripe): as telas escondem preço e parcelas no
     // cartão, e o checkout só oferece PIX. Ver `storeCardPaymentsEnabled`.
     cardEnabled: storeCardPaymentsEnabled(),
   })

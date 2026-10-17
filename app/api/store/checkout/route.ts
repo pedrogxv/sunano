@@ -500,7 +500,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Cartão desligado no gateway ativo (Stripe: só PIX). A tela já não
+    // Cartão desligado (`STORE_PAYMENT_METHODS` ou Stripe). A tela já não
     // oferece o botão; isto barra o corpo montado à mão.
     if (paymentMethod === "credit_card" && !storeCardPaymentsEnabled()) {
       return NextResponse.json(

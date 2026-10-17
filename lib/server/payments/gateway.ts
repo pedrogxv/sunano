@@ -29,9 +29,41 @@ export function activePaymentGateway(): PaymentGateway {
   return "asaas"
 }
 
+const STORE_PAYMENT_METHODS = ["pix", "credit_card"] as const
+type StorePaymentMethod = (typeof STORE_PAYMENT_METHODS)[number]
+
 /**
- * A Loja aceita cartão agora? Na Asaas sim (fluxo de sempre). No Stripe, por
- * enquanto, NÃO: com `PAYMENT_GATEWAY=stripe` a loja cobra só PIX.
+ * Formas de pagamento que a Loja oferece, por `STORE_PAYMENT_METHODS`
+ * (lista separada por vírgula: `pix`, `credit_card`). Ausente = as duas, o
+ * comportamento de antes da env existir.
+ *
+ * PIX é sempre ligado: é a base do checkout (as telas não têm estado "sem
+ * PIX") e é o que o Stripe cobra. Uma lista sem `pix` só gera aviso.
+ */
+function configuredStorePaymentMethods(): ReadonlySet<StorePaymentMethod> {
+  const raw = process.env.STORE_PAYMENT_METHODS?.trim()
+  if (!raw) return new Set(STORE_PAYMENT_METHODS)
+
+  const tokens = raw.toLowerCase().split(",").map((t) => t.trim()).filter(Boolean)
+  const methods = new Set<StorePaymentMethod>(["pix"])
+  for (const value of tokens) {
+    if ((STORE_PAYMENT_METHODS as readonly string[]).includes(value)) {
+      methods.add(value as StorePaymentMethod)
+    } else {
+      console.warn(`[payments] STORE_PAYMENT_METHODS: "${value}" não reconhecido — ignorado.`)
+    }
+  }
+  if (!tokens.includes("pix")) {
+    console.warn("[payments] STORE_PAYMENT_METHODS sem \"pix\" — PIX continua ligado (é obrigatório).")
+  }
+  return methods
+}
+
+/**
+ * A Loja aceita cartão agora? Só quando `STORE_PAYMENT_METHODS` inclui
+ * `credit_card` (ou está ausente) E o gateway ativo é a Asaas. No Stripe o
+ * cartão segue desligado independente da env (ver "Religar o cartão" em
+ * STRIPE_SETUP.md).
  *
  * Fonte única da regra: o checkout recusa `credit_card` por aqui e
  * `/api/store/settings` repassa o mesmo valor (`cardEnabled`) para as telas
@@ -39,6 +71,7 @@ export function activePaymentGateway(): PaymentGateway {
  * divergissem, a vitrine prometeria um cartão que o checkout recusa.
  */
 export function storeCardPaymentsEnabled(): boolean {
+  if (!configuredStorePaymentMethods().has("credit_card")) return false
   return activePaymentGateway() !== "stripe"
 }
 

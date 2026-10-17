@@ -21,6 +21,7 @@ faz no pedido).
 | Variável | Valor |
 |---|---|
 | `PAYMENT_GATEWAY` | `stripe` liga o Stripe. Qualquer outro valor (ou ausente) mantém a Asaas. |
+| `STORE_PAYMENT_METHODS` | Formas da Loja: `pix`, `credit_card` (vírgula). Ausente = as duas; PIX sempre ligado. No Stripe o cartão fica desligado mesmo listado. |
 | `STRIPE_ENV` | **Obrigatória.** `sandbox` ou `production`. |
 | `STRIPE_SECRET_KEY` | Chave secreta ou restrita (`sk_`/`rk_`). |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Chave publicável (`pk_`), do **mesmo modo** da secreta. Só o formulário de cartão usa. |

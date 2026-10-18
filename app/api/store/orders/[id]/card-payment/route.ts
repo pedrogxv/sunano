@@ -209,6 +209,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         paymentMethodId: mpParsed.data.payment_method_id,
         installments: mpParsed.data.installments,
         identification: mpParsed.data.payer?.identification ?? null,
+        deviceId: mpParsed.data.device_id ?? null,
       })
       if (result.outcome === "declined") {
         return NextResponse.json(

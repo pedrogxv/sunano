@@ -31,6 +31,16 @@ export const mercadoPagoCardSchema = z.object({
         .nullish(),
     })
     .nullish(),
+  /**
+   * Device ID do antifraude (`MP_DEVICE_SESSION_ID`, do security.js). Vai no
+   * header `X-meli-session-id`; sem ele o Mercado Pago recusa mais por
+   * `high_risk`. Opcional: bloqueador de script não pode impedir a compra.
+   */
+  device_id: z
+    .string()
+    .regex(/^[A-Za-z0-9_:-]{8,128}$/)
+    .nullish()
+    .catch(null),
 })
 
 export type MercadoPagoCardInput = z.infer<typeof mercadoPagoCardSchema>

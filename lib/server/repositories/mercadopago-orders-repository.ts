@@ -88,6 +88,7 @@ export type MercadoPagoCardAttempt = {
   paymentMethodId: string
   installments: number
   identification: { type: string; number: string } | null
+  deviceId: string | null
 }
 
 export type MercadoPagoCardAttemptResult =
@@ -135,6 +136,7 @@ export async function payMercadoPagoCardOrder(
     // MESMA chave devolveria a recusa anterior em vez de tentar o cartão novo.
     // (A URL do webhook não vai na requisição: na Orders API ela fica só no painel.)
     idempotencyKey: `store-card-${order.id}-${randomUUID()}`,
+    deviceId: attempt.deviceId,
   })
   if ("declined" in mpOrder) return { outcome: "declined", statusDetail: mpOrder.statusDetail }
 

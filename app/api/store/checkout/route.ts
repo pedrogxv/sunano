@@ -1469,6 +1469,7 @@ export async function POST(request: NextRequest) {
             paymentMethodId: card.payment_method_id,
             installments: card.installments,
             identification: card.payer?.identification ?? null,
+            deviceId: card.device_id ?? null,
           }
         )
         if (result.outcome === "declined") {

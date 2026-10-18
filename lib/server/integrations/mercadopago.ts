@@ -156,6 +156,7 @@ async function request<T>(
     method: "GET" | "POST"
     body?: unknown
     idempotencyKey?: string
+    deviceId?: string | null
   }
 ): Promise<T> {
   // Valida ambiente × credencial antes de QUALQUER chamada, não só no
@@ -168,6 +169,7 @@ async function request<T>(
       Authorization: `Bearer ${getAccessToken()}`,
       "Content-Type": "application/json",
       ...(init.idempotencyKey ? { "X-Idempotency-Key": init.idempotencyKey } : {}),
+      ...(init.deviceId ? { "X-meli-session-id": init.deviceId } : {}),
     },
     body: init.body === undefined ? undefined : JSON.stringify(init.body),
     cache: "no-store",
@@ -319,6 +321,8 @@ export interface CreateMercadoPagoCardOrderParams {
   items: { id: string; title: string; quantity: number; unitPriceCents: number }[]
   /** Uma chave por TENTATIVA: o Mercado Pago devolve a mesma order para a mesma chave. */
   idempotencyKey: string
+  /** Device ID do navegador (security.js). Ausente = order sem o sinal, não recusada. */
+  deviceId: string | null
 }
 
 /**
@@ -352,6 +356,7 @@ async function postCardOrder(params: CreateMercadoPagoCardOrderParams): Promise<
   const raw = await request<RawOrder>("/v1/orders", {
     method: "POST",
     idempotencyKey: params.idempotencyKey,
+    deviceId: params.deviceId,
     body: {
       type: "online",
       processing_mode: "automatic",

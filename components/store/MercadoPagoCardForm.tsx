@@ -31,6 +31,26 @@ function ensureMercadoPago(publicKey: string) {
 
 const BRICK_BACKGROUND = "#121214"
 
+/**
+ * Script antifraude do Mercado Pago: cria `window.MP_DEVICE_SESSION_ID`, que a
+ * rota manda no header `X-meli-session-id`. Sem ele, o antifraude tem menos
+ * sinal e recusa mais por `high_risk`. Carregado uma vez, só na tela do cartão.
+ */
+const SECURITY_SCRIPT_SRC = "https://www.mercadopago.com/v2/security.js"
+function ensureSecurityScript() {
+  if (document.querySelector(`script[src="${SECURITY_SCRIPT_SRC}"]`)) return
+  const script = document.createElement("script")
+  script.src = SECURITY_SCRIPT_SRC
+  script.async = true
+  script.setAttribute("view", "checkout")
+  document.head.appendChild(script)
+}
+
+function readDeviceId(): string | null {
+  const value = (window as typeof window & { MP_DEVICE_SESSION_ID?: unknown }).MP_DEVICE_SESSION_ID
+  return typeof value === "string" && value ? value : null
+}
+
 /** O que as rotas de cobrança aceitam (`mercadoPagoCardSchema`, no servidor). */
 export type MercadoPagoCardPayload = {
   token: string
@@ -38,6 +58,7 @@ export type MercadoPagoCardPayload = {
   issuer_id: string | number | null | undefined
   installments: number
   payer: { identification: { type: string; number: string } | null }
+  device_id: string | null
 }
 
 /** `error` = recusado ou falhou: o Brick volta ao formulário com a mensagem. */
@@ -61,6 +82,9 @@ export function MercadoPagoCardForm({ amountCents, maxInstallments, payerEmail, 
   useEffect(() => {
     onPayRef.current = onPay
   }, [onPay])
+  useEffect(() => {
+    ensureSecurityScript()
+  }, [])
 
   const initialization = useMemo(
     () => ({ amount: amountCents / 100, ...(payerEmail ? { payer: { email: payerEmail } } : {}) }),
@@ -121,6 +145,7 @@ export function MercadoPagoCardForm({ amountCents, maxInstallments, payerEmail, 
           issuer_id: formData.issuer_id,
           installments: formData.installments,
           payer: { identification: formData.payer?.identification ?? null },
+          device_id: readDeviceId(),
         })
         .catch((): MercadoPagoPayResult => ({
           ok: false,

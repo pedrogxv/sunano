@@ -84,6 +84,23 @@ export function newServiceFormFieldId(): string {
   return crypto.randomUUID().slice(0, 8)
 }
 
+/**
+ * Modelo padrão de um serviço novo (o caso do Xianyu Express). É só o ponto
+ * de partida do editor: o admin muda, reordena ou apaga. Ids novos a cada
+ * chamada, para dois produtos não dividirem a mesma chave por acidente.
+ */
+export function defaultServiceFormFields(): ServiceFormField[] {
+  const field = (label: string, type: ServiceFormFieldType): ServiceFormField => ({
+    id: newServiceFormFieldId(),
+    label,
+    type,
+    required: true,
+    placeholder: null,
+    options: [],
+  })
+  return [field("Nome do produto", "text"), field("Link do produto", "url"), field("Cor e modelo", "text")]
+}
+
 /** Campos como o admin salva (POST/PATCH do produto). */
 export const serviceFormFieldsSchema = z
   .array(

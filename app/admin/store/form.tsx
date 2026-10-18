@@ -67,7 +67,7 @@ import {
 import { CardHighlightPicker } from "@/components/admin/store/CardHighlightPicker"
 import { ServiceFormFieldsEditor } from "@/components/admin/store/ServiceFormFieldsEditor"
 import { isSinglePriceProduct } from "@/lib/store-pricing"
-import { readServiceFormFields, type ServiceFormField } from "@/lib/store-service-form"
+import { defaultServiceFormFields, readServiceFormFields, type ServiceFormField } from "@/lib/store-service-form"
 
 interface StoreProductSpec {
   id?: string
@@ -528,8 +528,9 @@ export function StoreProductForm({
   const [cardHighlights, setCardHighlights] = useState<string[]>(() =>
     sanitizeCardHighlights(product?.card_highlights ?? [])
   )
+  // Produto novo já nasce com o modelo padrão; só é salvo se for serviço.
   const [serviceFormFields, setServiceFormFields] = useState<ServiceFormField[]>(() =>
-    readServiceFormFields(product?.service_form_fields)
+    product ? readServiceFormFields(product.service_form_fields) : defaultServiceFormFields()
   )
 
   const [hasStock, setHasStock] = useState(product ? product.stock != null : true)
@@ -906,6 +907,9 @@ export function StoreProductForm({
    * para um deploy antes da migration 20261228000000 não travar o save.
    */
   function serviceFormPayload(): { service_form_fields?: ServiceFormField[] } {
+    // Fora de serviço o editor nem aparece: o modelo padrão do produto novo
+    // não vai para o banco de um produto físico.
+    if (!isSinglePriceProduct({ category: formData.category })) return {}
     const current = serviceFormFields.map((field) => ({
       ...field,
       label: field.label.trim(),

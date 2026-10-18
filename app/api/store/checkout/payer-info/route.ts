@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { getRequestUser, isImpersonating } from "@/lib/server/auth/current-user"
-import { activePaymentGateway } from "@/lib/server/payments/gateway"
+import { storeCardFormOnSite, storeCardGateway } from "@/lib/server/payments/gateway"
 import { PAYMENT_GATEWAY_LABEL } from "@/lib/payment-gateways"
 
 /**
@@ -73,7 +73,14 @@ export async function GET(request: NextRequest) {
     state: profile?.state ?? null,
     hasCompletePayerInfo: Boolean(profile?.full_name && profile?.cpf),
     hasCompleteAddressInfo,
-    paymentGatewayLabel: PAYMENT_GATEWAY_LABEL[activePaymentGateway()],
+    // Quem cobra o CARTÃO: só ele aparece no texto do checkout (o PIX é
+    // igual em qualquer gateway). `cardFormOnSite` = o cartão é digitado no
+    // nosso site, e não numa página hospedada pelo gateway.
+    paymentGatewayLabel: PAYMENT_GATEWAY_LABEL[storeCardGateway()],
+    cardFormOnSite: storeCardFormOnSite(),
+    // Mercado Pago: o formulário do cartão abre no próprio checkout, e o pedido
+    // só nasce quando a pessoa paga (ver o ramo dele em `/api/store/checkout`).
+    cardGateway: storeCardGateway(),
     // ENTREGA: última usada, só para pré-preencher o card. O que vale para
     // despachar é sempre o snapshot no pedido.
     shipping: {

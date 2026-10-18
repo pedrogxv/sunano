@@ -46,3 +46,26 @@ export function cardDeclineMessage(code: string | null | undefined, declineCode:
   if (code && BY_CODE[code]) return BY_CODE[code]
   return GENERIC
 }
+
+/**
+ * Mesma régua para o Mercado Pago, a partir do `status_detail` da transação
+ * recusada na Orders API (que consolida os `cc_rejected_*` da Payments API).
+ * Recusa de risco (`high_risk`) e a genérica do emissor (`rejected_by_issuer`)
+ * saem GENÉRICAS, pelo mesmo motivo de `fraudulent` no Stripe.
+ */
+const MERCADOPAGO_BY_STATUS_DETAIL: Record<string, string> = {
+  insufficient_amount: BY_DECLINE_CODE.insufficient_funds,
+  card_insufficient_amount: BY_DECLINE_CODE.insufficient_funds,
+  bad_filled_card_data: "Algum dado do cartão não confere (número, validade ou CVV). Confira e tente de novo.",
+  required_call_for_authorize: "O banco pediu que você autorize esta compra. Fale com o banco e tente de novo, ou pague com PIX.",
+  card_disabled: "O cartão não está ativo. Fale com o banco ou use outro cartão.",
+  max_attempts_exceeded: "O cartão atingiu o limite de tentativas. Use outro cartão ou pague com PIX.",
+  invalid_installments: "Este cartão não aceita esse número de parcelas. Escolha outro.",
+  processing_error: BY_DECLINE_CODE.processing_error,
+  "3ds_challenge_expired": "A autenticação do banco não foi concluída a tempo. Tente de novo.",
+  cc_rejected_3ds_challenge: "A autenticação do banco não foi concluída. Tente de novo.",
+}
+
+export function mercadoPagoDeclineMessage(statusDetail: string | null | undefined): string {
+  return (statusDetail && MERCADOPAGO_BY_STATUS_DETAIL[statusDetail]) || GENERIC
+}

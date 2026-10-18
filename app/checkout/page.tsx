@@ -48,6 +48,11 @@ import { RemoveCartItemDialog, type PendingRemoval } from "@/components/store/Re
 import { CheckoutShippingCard } from "@/components/store/CheckoutShippingCard"
 import { CheckoutAffiliatePicker } from "@/components/store/CheckoutAffiliatePicker"
 import {
+  MercadoPagoCardForm,
+  type MercadoPagoCardPayload,
+  type MercadoPagoPayResult,
+} from "@/components/store/MercadoPagoCardForm"
+import {
   EMPTY_SHIPPING_FORM,
   isShippingFormComplete,
   isoToBirthDateInput,
@@ -80,8 +85,12 @@ const EMPTY_PAYER_FORM: PayerForm = {
 }
 
 interface PayerInfoResponse {
-  /** Quem hospeda a página do cartão (gateway ativo da loja). */
+  /** Quem cobra o cartão (gateway de cartão da loja). */
   paymentGatewayLabel?: string
+  /** O cartão é digitado no nosso site (Stripe, Mercado Pago), não numa página do gateway. */
+  cardFormOnSite?: boolean
+  /** Mercado Pago: o cartão é digitado aqui mesmo e o pedido nasce no "Pagar". */
+  cardGateway?: string
   fullName?: string | null
   cpf?: string | null
   email?: string | null
@@ -171,9 +180,14 @@ export default function CheckoutPage() {
   const [cartNeedsShipping, setCartNeedsShipping] = useState(true)
   const [singlePriceProductIds, setSinglePriceProductIds] = useState<Set<string>>(() => new Set())
   const [payerEmail, setPayerEmail] = useState<string | null>(null)
-  // Nome mostrado em "página segura da …": vem do servidor, que sabe qual
-  // gateway está cobrando (Asaas por padrão, Stripe quando ligado).
+  // Nome mostrado no texto do cartão: vem do servidor, que sabe qual
+  // gateway cobra o cartão (Asaas por padrão, Stripe ou Mercado Pago quando ligados).
   const [paymentGatewayLabel, setPaymentGatewayLabel] = useState("Asaas")
+  const [cardFormOnSite, setCardFormOnSite] = useState(false)
+  const [cardGateway, setCardGateway] = useState<string | null>(null)
+  // Formulário do cartão aberto (Mercado Pago). O pedido ainda NÃO existe: ele
+  // só é criado quando a pessoa clica em "Pagar" no formulário.
+  const [cardStep, setCardStep] = useState(false)
   const [editingPayer, setEditingPayer] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -186,7 +200,7 @@ export default function CheckoutPage() {
   // abertura da tela — mostradas ANTES do submit, não como erro depois dele.
   const [cartIssues, setCartIssues] = useState<ValidatedCartLine[]>([])
   const [staleLines, setStaleLines] = useState<ValidatedCartLine[]>([])
-  const { cardSurchargePercent, cardEnabled } = useStoreSettings()
+  const { cardSurchargePercent, cardEnabled, cardMaxInstallments } = useStoreSettings()
 
   // Complemento de Pagamento (`?complemento=<pedido>`): paga o pendente de um
   // pedido em vez do carrinho, que fica intocado. A linha mostrada vem do
@@ -302,6 +316,8 @@ export default function CheckoutPage() {
         setNeedsAddressInfo(!data.hasCompleteAddressInfo)
         setPayerEmail(data.email ?? null)
         if (data.paymentGatewayLabel) setPaymentGatewayLabel(data.paymentGatewayLabel)
+        setCardFormOnSite(data.cardFormOnSite === true)
+        setCardGateway(data.cardGateway ?? null)
         // Pré-preenche a entrega com a ÚLTIMA ENTREGA, não com a cobrança:
         // são endereços diferentes desde que ganharam colunas próprias no
         // perfil. Na primeira compra ainda não há entrega salva, e aí a
@@ -478,6 +494,19 @@ export default function CheckoutPage() {
   )
   const cardSurchargeCents = cardTotal - total
   const payableTotal = paymentMethod === "credit_card" ? cardTotal : total
+  // Mercado Pago: o cartão é digitado nesta tela e a cobrança cria o pedido.
+  // Stripe precisa do PaymentIntent antes do formulário, e a Asaas hospeda o
+  // cartão; os dois seguem criando o pedido no clique.
+  const cardHere = paymentMethod === "credit_card" && cardGateway === "mercadopago"
+
+  // Mudou o que está sendo pago (forma, valor, dados): o formulário fecha e a
+  // pessoa confirma de novo, para o Brick não ficar com o valor antigo.
+  useEffect(() => {
+    setCardStep(false)
+  }, [paymentMethod, payableTotal])
+  useEffect(() => {
+    if (editingPayer || editingShipping) setCardStep(false)
+  }, [editingPayer, editingShipping])
   const hasPreOrderItem = checkoutItems.some((i) => i.sale_type === "pre_order")
   const onlyPreOrderItems = checkoutItems.length > 0 && checkoutItems.every((i) => i.sale_type === "pre_order")
   const deliveryDeadline = useDeliveryEstimate()
@@ -499,6 +528,38 @@ export default function CheckoutPage() {
     if (!pendingRemoval) return
     remove(pendingRemoval.productId, pendingRemoval.variantId, pendingRemoval.optionIds)
     setPendingRemoval(null)
+  }
+
+  function buildCheckoutBody() {
+    return {
+      items: checkoutItems.map((i) => ({
+        productId: i.productId,
+        variantId: i.variantId,
+        variantOptionIds: i.variantOptions.map((o) => o.optionId),
+        quantity: i.quantity,
+      })),
+      paymentMethod,
+      guestName: payerForm.name,
+      guestDocument: payerForm.document.replace(/\D/g, ""),
+      ...(requireAddress
+        ? {
+            guestPhone: payerForm.phone.replace(/\D/g, ""),
+            guestPostalCode: payerForm.postalCode.replace(/\D/g, ""),
+            guestStreet: payerForm.street,
+            guestNumber: payerForm.number,
+            guestComplement: payerForm.complement || undefined,
+            guestNeighborhood: payerForm.neighborhood,
+            guestCity: payerForm.city,
+            guestState: payerForm.state,
+          }
+        : {}),
+      // Só manda o endereço quando está completo e não foi pulado: o
+      // servidor recusa um endereço pela metade (e faz bem — pedido com
+      // rua e sem número parece pronto para despachar e não é).
+      ...(shippingComplete && !shippingSkipped ? shippingFormToPayload(shippingForm) : {}),
+      ...(affiliateCode !== undefined && !isComplement ? { affiliateCode } : {}),
+      ...(isComplement ? { complementOrderId } : {}),
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -524,48 +585,26 @@ export default function CheckoutPage() {
     setEditingPayer(false)
     setEditingShipping(false)
 
+    // Mercado Pago: só abre o formulário. Nada é criado até o "Pagar" dele.
+    if (cardHere) {
+      setCardStep(true)
+      return
+    }
+
     setLoading(true)
 
     try {
       const res = await fetch("/api/store/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          items: checkoutItems.map((i) => ({
-            productId: i.productId,
-            variantId: i.variantId,
-            variantOptionIds: i.variantOptions.map((o) => o.optionId),
-            quantity: i.quantity,
-          })),
-          paymentMethod,
-          guestName: payerForm.name,
-          guestDocument: payerForm.document.replace(/\D/g, ""),
-          ...(requireAddress
-            ? {
-                guestPhone: payerForm.phone.replace(/\D/g, ""),
-                guestPostalCode: payerForm.postalCode.replace(/\D/g, ""),
-                guestStreet: payerForm.street,
-                guestNumber: payerForm.number,
-                guestComplement: payerForm.complement || undefined,
-                guestNeighborhood: payerForm.neighborhood,
-                guestCity: payerForm.city,
-                guestState: payerForm.state,
-              }
-            : {}),
-          // Só manda o endereço quando está completo e não foi pulado: o
-          // servidor recusa um endereço pela metade (e faz bem — pedido com
-          // rua e sem número parece pronto para despachar e não é).
-          ...(shippingComplete && !shippingSkipped ? shippingFormToPayload(shippingForm) : {}),
-          ...(affiliateCode !== undefined && !isComplement ? { affiliateCode } : {}),
-          ...(isComplement ? { complementOrderId } : {}),
-        }),
+        body: JSON.stringify(buildCheckoutBody()),
       })
 
       const data = (await res.json()) as {
         orderId?: string
         accessToken?: string | null
         checkoutUrl?: string
-        /** Stripe: o cartão é digitado no nosso site, em `/checkout/card`. */
+        /** Stripe / Mercado Pago: o cartão é digitado no nosso site, em `/checkout/card`. */
         cardPayment?: boolean
         error?: string
       }
@@ -581,8 +620,8 @@ export default function CheckoutPage() {
       // O complemento não passou pelo carrinho: o que estava lá continua.
       if (!isComplement) clear()
 
-      // Cartão no Stripe: o formulário é nosso (Payment Element), em
-      // `/checkout/card`. O pedido e o PaymentIntent já existem.
+      // Cartão no Stripe ou no Mercado Pago: o formulário é nosso (Payment
+      // Element / Card Payment Brick), em `/checkout/card`. O pedido já existe.
       if (paymentMethod === "credit_card" && data.cardPayment) {
         window.location.href = `/checkout/card?orderId=${data.orderId}`
         return
@@ -606,6 +645,30 @@ export default function CheckoutPage() {
     }
   }
 
+  /**
+   * "Pagar" do formulário do Mercado Pago: UMA chamada cria o pedido e cobra o
+   * cartão. Recusado, o servidor não deixa pedido nenhum e o Brick volta ao
+   * formulário com a mensagem.
+   */
+  async function payWithCard(card: MercadoPagoCardPayload): Promise<MercadoPagoPayResult> {
+    setError(null)
+    const res = await fetch("/api/store/checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...buildCheckoutBody(), card }),
+    }).catch(() => null)
+    const data = ((await res?.json().catch(() => ({}))) ?? {}) as { orderId?: string; error?: string }
+    if (!res || !res.ok || !data.orderId) {
+      return { ok: false, error: data.error ?? "Não foi possível processar o cartão agora. Tente de novo em instantes" }
+    }
+    // Pedido criado (pago ou em análise): o carrinho cumpriu seu papel. A tela
+    // de cartão mostra a confirmação, ou aguarda a análise.
+    setLoading(true)
+    if (!isComplement) clear()
+    window.location.href = `/checkout/card?orderId=${data.orderId}`
+    return { ok: true }
+  }
+
   // `loading` continua true depois do clear() até a navegação acontecer: sem
   // isso, esvaziar o carrinho renderizaria o estado "carrinho vazio" por uma
   // fração de segundo, como se a compra tivesse sumido.
@@ -623,7 +686,11 @@ export default function CheckoutPage() {
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 px-4 text-center">
         <Loader2 className="size-8 animate-spin text-emerald-400" />
         <p className="text-sm text-muted-foreground">
-          {paymentMethod === "pix" ? "Gerando sua cobrança PIX..." : "Redirecionando para o pagamento..."}
+          {paymentMethod === "pix"
+            ? "Gerando sua cobrança PIX..."
+            : cardHere
+              ? "Confirmando pagamento..."
+              : "Redirecionando para o pagamento..."}
         </p>
       </div>
     )
@@ -937,9 +1004,11 @@ export default function CheckoutPage() {
           <span>
             {paymentMethod === "pix"
               ? "PIX (aprovação imediata)"
-              : paymentGatewayLabel === "Stripe"
-                ? "Cartão de crédito à vista"
-                : `Cartão de crédito, via página segura da ${paymentGatewayLabel}`}
+              : !cardFormOnSite
+                ? `Cartão de crédito, via página segura da ${paymentGatewayLabel}`
+                : cardMaxInstallments > 1
+                  ? "Cartão de crédito"
+                  : "Cartão de crédito à vista"}
           </span>
         </div>
         <div className="flex items-center justify-between border-t border-border/60 pt-1.5 text-sm font-bold">
@@ -994,8 +1063,8 @@ export default function CheckoutPage() {
           <span className="text-[11px] text-muted-foreground">
             {paymentMethod === "pix"
               ? "Pagamento via PIX, sem cadastro de cartão"
-              : paymentGatewayLabel === "Stripe"
-                ? "Os dados do cartão vão direto para o Stripe, criptografados — nunca para o nosso servidor"
+              : cardFormOnSite
+                ? `Os dados do cartão vão direto para o ${paymentGatewayLabel}, criptografados — nunca para o nosso servidor`
                 : `Cartão digitado direto na página segura da ${paymentGatewayLabel}, nunca no nosso site`}
           </span>
         </div>
@@ -1080,7 +1149,7 @@ export default function CheckoutPage() {
           <p className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>
         )}
 
-        {(authLoading || user) && (
+        {(authLoading || user) && !cardStep && (
           <Button
             type="submit"
             className="w-full gap-2 bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-500 hover:shadow-emerald-500/30 disabled:hover:translate-y-0"
@@ -1101,18 +1170,42 @@ export default function CheckoutPage() {
               "Complete o endereço de entrega"
             ) : paymentMethod === "pix" ? (
               "Gerar PIX"
+            ) : cardHere ? (
+              "Continuar para o cartão"
             ) : (
               "Pagar com cartão"
             )}
           </Button>
         )}
 
-        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 pt-1 text-center text-[10px] text-muted-foreground/70">
-          <Link href="/privacidade" className="hover:text-emerald-400 hover:underline">
-            Privacidade
-          </Link>
-        </div>
       </form>
+
+      {/* Fora do <form> do checkout: o Brick tem o próprio formulário e botão
+          "Pagar", e o submit dele subiria até o `handleSubmit` daqui. */}
+      {cardStep && user && (
+        <div className="mt-4 space-y-2">
+          <MercadoPagoCardForm
+            amountCents={cardTotal}
+            maxInstallments={cardMaxInstallments}
+            payerEmail={payerEmail}
+            onPay={payWithCard}
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            className="w-full text-muted-foreground"
+            onClick={() => setCardStep(false)}
+          >
+            Voltar e revisar o pedido
+          </Button>
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 pt-5 text-center text-[10px] text-muted-foreground/70">
+        <Link href="/privacidade" className="hover:text-emerald-400 hover:underline">
+          Privacidade
+        </Link>
+      </div>
 
       <RemoveCartItemDialog
         pending={pendingRemoval}

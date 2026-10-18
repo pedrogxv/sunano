@@ -16,6 +16,7 @@ import {
   SERVICE_FORM_MAX_OPTIONS,
   SERVICE_FORM_OPTION_MAX,
   SERVICE_FORM_PLACEHOLDER_MAX,
+  defaultServiceFormFields,
   newServiceFormFieldId,
   type ServiceFormField,
   type ServiceFormFieldType,
@@ -197,12 +198,19 @@ export function ServiceFormFieldsEditor({
         ))}
       </div>
 
-      {fields.length < SERVICE_FORM_MAX_FIELDS && (
-        <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={add}>
-          <Plus className="size-3.5" />
-          Adicionar campo
-        </Button>
-      )}
+      <div className="flex flex-wrap gap-2">
+        {fields.length < SERVICE_FORM_MAX_FIELDS && (
+          <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={add}>
+            <Plus className="size-3.5" />
+            Adicionar campo
+          </Button>
+        )}
+        {fields.length === 0 && (
+          <Button type="button" variant="ghost" size="sm" onClick={() => onChange(defaultServiceFormFields())}>
+            Usar modelo padrão
+          </Button>
+        )}
+      </div>
     </div>
   )
 }

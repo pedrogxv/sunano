@@ -1945,6 +1945,8 @@ export type Database = {
           id: string
           stripe_session_id: string | null
           stripe_payment_intent_id: string | null
+          payment_gateway: string | null
+          mercadopago_payment_id: string | null
           asaas_payment_id: string | null
           asaas_customer_id: string | null
           asaas_receipt_url: string | null
@@ -2022,6 +2024,8 @@ export type Database = {
           id?: string
           stripe_session_id?: string | null
           stripe_payment_intent_id?: string | null
+          payment_gateway?: string | null
+          mercadopago_payment_id?: string | null
           asaas_payment_id?: string | null
           asaas_customer_id?: string | null
           asaas_receipt_url?: string | null
@@ -2078,6 +2082,8 @@ export type Database = {
           id?: string
           stripe_session_id?: string | null
           stripe_payment_intent_id?: string | null
+          payment_gateway?: string | null
+          mercadopago_payment_id?: string | null
           asaas_payment_id?: string | null
           asaas_customer_id?: string | null
           asaas_receipt_url?: string | null

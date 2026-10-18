@@ -13,7 +13,17 @@ import {
   createStripeCardPayment,
   createStripePixPayment,
 } from "@/lib/server/integrations/stripe"
-import { activePaymentGateway, isActiveGatewaySandbox, storeCardPaymentsEnabled } from "@/lib/server/payments/gateway"
+import {
+  isActiveGatewaySandbox,
+  storeCardGateway,
+  storeCardMaxInstallments,
+  storeCardPaymentsEnabled,
+  storePixGateway,
+} from "@/lib/server/payments/gateway"
+import { MercadoPagoError } from "@/lib/server/integrations/mercadopago"
+import { payMercadoPagoCardOrder } from "@/lib/server/repositories/mercadopago-orders-repository"
+import { mercadoPagoCardSchema } from "@/lib/server/validation/mercadopago-card"
+import { mercadoPagoDeclineMessage } from "@/lib/card-decline-messages"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { getRequestUser, isImpersonating } from "@/lib/server/auth/current-user"
 import {
@@ -64,7 +74,9 @@ import type { Database } from "@/lib/database.types"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 export const runtime = "nodejs"
-export const maxDuration = 20
+// O cartão do Mercado Pago é cobrado dentro desta requisição (ver o ramo
+// dele): 20 s cobriam só o banco e a emissão do PIX.
+export const maxDuration = 30
 
 type DecrementedLine = StockMovement
 
@@ -141,6 +153,12 @@ const checkoutBodySchema = z.object({
    * Só o id; o valor sai do pedido, no servidor (`resolveComplementCharge`).
    */
   complementOrderId: z.uuid("Pedido do complemento inválido.").optional(),
+  /**
+   * Cartão do Mercado Pago: o token do Card Payment Brick. O pedido só nasce
+   * junto com a cobrança (ver o ramo do Mercado Pago), então ele vem aqui, e
+   * não numa segunda chamada depois de o pedido existir.
+   */
+  card: mercadoPagoCardSchema.optional(),
   /** Marca explícita de "não quero informar agora" — só aceita enquanto o endereço for opcional. */
 })
 
@@ -507,7 +525,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Cartão desligado (`STORE_PAYMENT_METHODS` ou Stripe). A tela já não
+    // Cartão desligado (`STORE_PAYMENT_METHODS`, Stripe implícito ou config
+    // do gateway inválida — ver `storeCardPaymentsEnabled`). A tela já não
     // oferece o botão; isto barra o corpo montado à mão.
     if (paymentMethod === "credit_card" && !storeCardPaymentsEnabled()) {
       return NextResponse.json(
@@ -521,7 +540,8 @@ export async function POST(request: NextRequest) {
     // checkout mesmo sem receber dados de cartão de verdade (o link gerado
     // custa uma chamada na Asaas a cada tentativa). Ação separada do limite
     // geral pra não derrubar quem só está comprando PIX no mesmo IP.
-    if (paymentMethod === "credit_card") {
+    const chargesCardNow = paymentMethod === "credit_card" && storeCardGateway() === "mercadopago"
+    if (paymentMethod === "credit_card" && !chargesCardNow) {
       const cardRateLimit = await checkRateLimit({
         action: "store_checkout_card_attempt",
         identifier: user.id,
@@ -537,6 +557,38 @@ export async function POST(request: NextRequest) {
           },
           { status: 429 }
         )
+      }
+    }
+
+    // Mercado Pago: cada chamada aqui é uma tentativa de cartão de verdade, então
+    // valem os MESMOS tetos da rota de nova tentativa
+    // (`/api/store/orders/[id]/card-payment`), com as mesmas chaves — o robô
+    // testando cartão roubado não escapa alternando entre as duas rotas. O
+    // teto de 3 em 10 min acima é do link hospedado da Asaas e barraria quem
+    // só errou o CVV.
+    if (chargesCardNow) {
+      if (!parsedBody.data.card) {
+        return NextResponse.json(
+          { error: "Digite os dados do cartão para pagar. Recarregue a página se o formulário não aparecer." },
+          { status: 400 }
+        )
+      }
+      const cardLimits = [
+        { action: "store_card_confirm_ip", identifier: getClientIpIdentifier(request), maxAttempts: 20 },
+        { action: "store_card_confirm_user", identifier: user.id, maxAttempts: 10 },
+      ]
+      for (const limit of cardLimits) {
+        const result = await checkRateLimit({ ...limit, windowSeconds: 60 * 60, onError: "closed" })
+        if (!result.allowed) {
+          return NextResponse.json(
+            { error: "Muitas tentativas com cartão. Aguarde um pouco ou pague com PIX." },
+            { status: 429 }
+          )
+        }
+      }
+      const settings = await getStoreSettings()
+      if (parsedBody.data.card.installments > Math.max(1, storeCardMaxInstallments(settings.cardMaxInstallments))) {
+        return NextResponse.json({ error: "Número de parcelas indisponível. Escolha outro." }, { status: 400 })
       }
     }
 
@@ -1303,13 +1355,158 @@ export async function POST(request: NextRequest) {
     // Gravado em todo insert abaixo (os três ramos de gateway).
     const complementColumns = complementCharge ? { complement_for_order_id: complementCharge.targetOrderId } : {}
 
+    // Quem cobra ESTE pedido: o gateway é escolhido por forma de pagamento
+    // (`STORE_PIX_GATEWAY` / `STORE_CARD_GATEWAY`, em lib/server/payments/gateway.ts).
+    // Tudo acima (preço, estoque, afiliado, endereço) é o mesmo para todos;
+    // daqui pra baixo só muda quem emite a cobrança.
+    const chargeGateway = paymentMethod === "credit_card" ? storeCardGateway() : storePixGateway()
+
     // -----------------------------------------------------------------
-    // Stripe (gateway alternativo, `PAYMENT_GATEWAY=stripe`)
+    // Mercado Pago (cartão, `STORE_CARD_GATEWAY=mercadopago`)
     // -----------------------------------------------------------------
-    // Tudo acima (preço, estoque, afiliado, endereço) é o mesmo para os dois
-    // gateways; daqui pra baixo só muda quem emite a cobrança. A Asaas segue
-    // sendo o padrão e o fluxo dela, logo abaixo, não passa por este bloco.
-    if (activePaymentGateway() === "stripe") {
+    // O pedido nasce JUNTO com a cobrança: a tela só chama esta rota depois
+    // que a pessoa digitou o cartão, com o token do Card Payment Brick. Antes
+    // o pedido era criado ao escolher "cartão" e só então o formulário
+    // aparecia, e quem desistia na tela do cartão deixava um pedido pendente
+    // segurando estoque, um aviso em Meus Pedidos e uma thread no Discord.
+    //
+    // A linha é gravada ANTES de chamar o Mercado Pago (e não depois de
+    // aprovado) porque o webhook acha o pedido pelo `external_reference`:
+    // aprovado com a Function morrendo antes do insert seria dinheiro
+    // cobrado sem pedido. Recusado, a linha é apagada — ninguém foi avisado
+    // dela e nenhuma tabela aponta para ela ainda.
+    if (chargeGateway === "mercadopago") {
+      const card = parsedBody.data.card!
+      const settings = await getStoreSettings()
+      // Mesmo helper do carrinho e da tela: o valor cobrado tem que bater
+      // centavo a centavo com o que o cliente viu. Serviço entra sem acréscimo.
+      const cardTotalCents = computeCardTotalCents(
+        orderItems.map((item) => ({
+          priceCents: item.price_cents,
+          quantity: item.quantity,
+          singlePrice: item.single_price,
+        })),
+        settings.cardSurchargePercent
+      )
+
+      const { data: order, error: insertError } = await db
+        .from("store_orders")
+        .insert({
+          ...shippingColumns,
+          ...complementColumns,
+          payment_gateway: "mercadopago",
+          items: orderItems,
+          total_cents: cardTotalCents,
+          pix_price_cents: totalCents,
+          card_surcharge_percent: settings.cardSurchargePercent,
+          status: "pending",
+          payment_method: "credit_card",
+          customer_email: customerEmail,
+          customer_name: payerName,
+          // Prazo da LOJA, lido pelo cron de expiração (ver o ramo de cartão
+          // da Asaas abaixo para o porquê do nome). Só conta quando o cartão
+          // fica em análise ou a resposta não chega: aí o pedido segue
+          // pendente e a nova tentativa vai por `/checkout/card`.
+          pix_expires_at: new Date(Date.now() + expirationMinutes * 60_000).toISOString(),
+          is_sandbox: isActiveGatewaySandbox(),
+          metadata: { user_id: user.id },
+          affiliate_id: affiliateForOrder?.affiliateId ?? null,
+          affiliate_code: affiliateForOrder?.affiliateCode ?? null,
+        })
+        .select("id")
+        .single()
+
+      if (insertError || !order) {
+        await revertDecrements(db, decrementedLines, reservationGroup)
+        const { body, status } = dbErrorResponse(insertError, "Não foi possível registrar o pedido.")
+        return NextResponse.json(body, { status })
+      }
+
+      // O pedido passa a segurar o estoque. Baixar o diário só depois da
+      // cobrança faria o cron (15 min) e a expiração do pedido devolverem a
+      // mesma unidade duas vezes se a Function morresse no meio da chamada.
+      await confirmReservations(db, reservationGroup)
+
+      // Recusado: o pedido some e o estoque volta. O DELETE é condicional
+      // (pendente, sem pagamento gravado), e só quem apagou devolve — se a
+      // linha mudou no meio, ela é de outro fluxo agora.
+      const discardOrder = async () => {
+        const { data: deleted, error: deleteError } = await db
+          .from("store_orders")
+          .delete()
+          .eq("id", order.id)
+          .eq("status", "pending")
+          .is("mercadopago_payment_id", null)
+          .select("id")
+        if (deleteError || !deleted?.length) {
+          console.error("[checkout] pedido de cartão recusado não pôde ser descartado:", order.id, deleteError)
+          return
+        }
+        await revertDecrements(db, decrementedLines)
+      }
+
+      // Em análise ou sem resposta: o pedido fica, pendente, e passa a ser
+      // um pedido como os outros (aviso ao cliente e thread no Discord).
+      const keepPending = async () => {
+        await notifyOrderStatusChange({ userId: user.id, orderId: order.id, status: "pending" })
+        notifyDiscordOrderEventInBackground({ orderId: order.id, status: "pending", actor: "checkout" })
+        return NextResponse.json({ orderId: order.id, cardPayment: true })
+      }
+
+      try {
+        const result = await payMercadoPagoCardOrder(
+          {
+            id: order.id,
+            status: "pending",
+            totalCents: cardTotalCents,
+            customerEmail,
+            customerName: payerName,
+            items: orderItems,
+            cardSurchargePercent: settings.cardSurchargePercent,
+          },
+          {
+            token: card.token,
+            paymentMethodId: card.payment_method_id,
+            installments: card.installments,
+            identification: card.payer?.identification ?? null,
+          }
+        )
+        if (result.outcome === "declined") {
+          await discardOrder()
+          return NextResponse.json(
+            { error: mercadoPagoDeclineMessage(result.statusDetail), declined: true },
+            { status: 402 }
+          )
+        }
+        if (result.outcome === "processing") return keepPending()
+        // Aprovado: `applyMercadoPagoOrder` já marcou pago e avisou cliente,
+        // e-mail e Discord. (`closed` não acontece num pedido de segundos
+        // atrás; se acontecer, a tela de cartão mostra o estado real.)
+        return NextResponse.json({ orderId: order.id, cardPayment: true })
+      } catch (err) {
+        console.error("[checkout] mercadopago:", err)
+        // 4xx do Mercado Pago: o token expirou/foi usado ou algum dado não
+        // bateu — nada foi cobrado, e a pessoa digita o cartão de novo.
+        if (err instanceof MercadoPagoError && err.status >= 400 && err.status < 500) {
+          await discardOrder()
+          return NextResponse.json(
+            { error: "Não foi possível validar os dados do cartão. Confira e tente de novo.", declined: true },
+            { status: 402 }
+          )
+        }
+        // Timeout/5xx: não dá para saber se cobrou. O pedido fica para o
+        // webhook aplicar uma aprovação tardia; apagá-lo deixaria um
+        // pagamento aprovado sem pedido.
+        return keepPending()
+      }
+    }
+
+    // -----------------------------------------------------------------
+    // Stripe (`STORE_PIX_GATEWAY=stripe` / `STORE_CARD_GATEWAY=stripe`)
+    // -----------------------------------------------------------------
+    // A Asaas segue sendo o padrão e o fluxo dela, logo abaixo, não passa
+    // por este bloco.
+    if (chargeGateway === "stripe") {
       // Id do pedido antes da cobrança: ele vai no metadata do Stripe e é por
       // ele (e pelo id da cobrança) que o webhook acha o pedido.
       const orderId = randomUUID()

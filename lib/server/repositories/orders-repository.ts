@@ -120,12 +120,17 @@ type OrderFilterQuery<T> = {
 
 const GATEWAY_ORDER_FILTER: Record<PaymentGateway, <T extends OrderFilterQuery<T>>(query: T) => T> = {
   stripe: (query) => query.or("stripe_payment_intent_id.not.is.null,stripe_session_id.not.is.null"),
+  mercadopago: (query) => query.eq("payment_gateway", "mercadopago"),
   asaas: (query) =>
     query
       .is("stripe_payment_intent_id", null)
       .is("stripe_session_id", null)
-      // `payment_method` aceita null; `neq` sozinho descartaria essas linhas.
-      .or("payment_method.is.null,payment_method.neq.aura"),
+      // `payment_method` e `payment_gateway` aceitam null; `neq` sozinho
+      // descartaria essas linhas. Um `.or()` só: dois no mesmo request não
+      // se combinam como se espera.
+      .or(
+        "payment_method.is.null,and(payment_method.neq.aura,or(payment_gateway.is.null,payment_gateway.neq.mercadopago))"
+      ),
 }
 
 /** Recorte por gateway (ou Aura) numa query de `store_orders`. */
@@ -618,6 +623,10 @@ export type AdminOrderRow = {
   stripe_payment_intent_id: string | null
   /** Sessão do Stripe Checkout hospedado — legado, o cartão hoje é no nosso site. */
   stripe_session_id: string | null
+  /** `mercadopago` = cartão cobrado pelo Mercado Pago. Null = deduz pelas referências (`orderPaymentGateway`). */
+  payment_gateway: string | null
+  /** Pagamento APROVADO do Mercado Pago. Null enquanto o cartão não passou. */
+  mercadopago_payment_id: string | null
   /** Cartão do Stripe autorizado e SEGURADO para revisão (nada cobrado ainda). */
   card_review: OrderCardReviewFlag | null
   /** Aviso precoce de fraude do emissor (Stripe Radar). */
@@ -654,7 +663,7 @@ export type AdminOrderRow = {
 }
 
 const ADMIN_ORDER_COLUMNS =
-  "id, status, total_cents, pix_price_cents, items, created_at, updated_at, payment_method, aura_cost_paid, customer_name, customer_email, metadata, tracking_code, carrier, shipped_at, delivered_at, refunded_cents, refund_reason, refunded_at, asaas_payment_id, stripe_payment_intent_id, stripe_session_id, is_sandbox, service_form_answers, complement_due_cents, complement_note, complement_for_order_id, " +
+  "id, status, total_cents, pix_price_cents, items, created_at, updated_at, payment_method, aura_cost_paid, customer_name, customer_email, metadata, tracking_code, carrier, shipped_at, delivered_at, refunded_cents, refund_reason, refunded_at, asaas_payment_id, stripe_payment_intent_id, stripe_session_id, payment_gateway, mercadopago_payment_id, is_sandbox, service_form_answers, complement_due_cents, complement_note, complement_for_order_id, " +
   SHIPPING_COLUMNS
 
 type AdminOrderRawRow = {
@@ -680,6 +689,8 @@ type AdminOrderRawRow = {
   asaas_payment_id: string | null
   stripe_payment_intent_id: string | null
   stripe_session_id: string | null
+  payment_gateway: string | null
+  mercadopago_payment_id: string | null
   is_sandbox: boolean
   service_form_answers: unknown
 } & RawShippingColumns &
@@ -810,6 +821,8 @@ export async function listOrdersForAdmin(filters?: {
       asaas_payment_id: row.asaas_payment_id,
       stripe_payment_intent_id: row.stripe_payment_intent_id ?? null,
       stripe_session_id: row.stripe_session_id ?? null,
+      payment_gateway: row.payment_gateway ?? null,
+      mercadopago_payment_id: row.mercadopago_payment_id ?? null,
       user_id: userId,
       user_display_name: userId ? profiles[userId]?.display_name ?? null : null,
       customer_cpf: userId ? cpfByUser[userId] ?? null : null,
@@ -1278,7 +1291,7 @@ export async function refundOrder(
 
   const { data: existing } = await db
     .from("store_orders")
-    .select("id, status, total_cents, pix_price_cents, refunded_cents, asaas_payment_id, stripe_payment_intent_id, metadata, affiliate_id")
+    .select("id, status, total_cents, pix_price_cents, refunded_cents, asaas_payment_id, stripe_payment_intent_id, mercadopago_payment_id, metadata, affiliate_id")
     .eq("id", id)
     .maybeSingle()
 
@@ -1288,10 +1301,10 @@ export async function refundOrder(
   if (!["paid", "awaiting_shipping_info", "shipped", "delivered"].includes(existing.status)) {
     return { ok: false, error: "Só é possível estornar um pedido pago.", status: 400 }
   }
-  if (!existing.asaas_payment_id && !existing.stripe_payment_intent_id) {
+  if (!existing.asaas_payment_id && !existing.stripe_payment_intent_id && !existing.mercadopago_payment_id) {
     return {
       ok: false,
-      error: "Este pedido não tem cobrança Asaas associada; estorne manualmente e atualize o status.",
+      error: "Este pedido não tem cobrança de gateway associada; estorne manualmente e atualize o status.",
       status: 400,
     }
   }
@@ -1302,9 +1315,36 @@ export async function refundOrder(
     return { ok: false, error: "Valor de estorno inválido para o saldo restante do pedido.", status: 400 }
   }
 
-  // Pedido do Stripe (gateway alternativo): mesma regra — o gateway estorna
-  // primeiro, o banco só grava se ele aceitar.
-  if (!existing.asaas_payment_id && existing.stripe_payment_intent_id) {
+  // Pedido do Mercado Pago (cartão): mesma regra — o gateway estorna
+  // primeiro, o banco só grava se ele aceitar. A chave de idempotência segue
+  // a do Stripe: clique duplo colapsa, nova tentativa depois de falha não.
+  if (existing.mercadopago_payment_id) {
+    const { refundMercadoPagoOrder, MercadoPagoError } = await import("@/lib/server/integrations/mercadopago")
+    const failedAttempts = refundAttemptsOf(existing.metadata)
+    try {
+      await refundMercadoPagoOrder(existing.mercadopago_payment_id, {
+        // Estorno total vai sem valor: o Mercado Pago devolve também os juros
+        // de parcelamento que o comprador pagou, o que um valor fixo não faria.
+        amountCents: refundCents === remainingCents && existing.refunded_cents === 0 ? undefined : refundCents,
+        idempotencyKey: `store-refund-${existing.id}-${existing.refunded_cents + refundCents}-${failedAttempts}`,
+      })
+    } catch (err) {
+      console.error("[orders-repository] refundOrder — Mercado Pago:", err)
+      try {
+        await patchOrderMetadata(existing.id, { refund_attempt: failedAttempts + 1 })
+      } catch (patchErr) {
+        console.error("[orders-repository] refundOrder — contador de tentativas:", patchErr)
+      }
+      const message = err instanceof MercadoPagoError ? err.apiMessage : null
+      return {
+        ok: false,
+        error: message ? `Mercado Pago recusou o estorno: ${message}` : "Não foi possível estornar no Mercado Pago. Tente novamente.",
+        status: 502,
+      }
+    }
+  } else if (!existing.asaas_payment_id && existing.stripe_payment_intent_id) {
+    // Pedido do Stripe: mesma regra — o gateway estorna primeiro, o banco só
+    // grava se ele aceitar.
     const { refundStripePayment, stripeErrorMessage } = await import("@/lib/server/integrations/stripe")
     // O Stripe guarda a FALHA junto com a chave de idempotência e a repete por
     // 24 h (saldo insuficiente que o admin acabou de resolver, por exemplo).

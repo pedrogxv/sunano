@@ -16,7 +16,9 @@ const csp = [
 	"default-src 'self'",
 	// js.stripe.com: formulário de cartão da Loja (Payment Element, /checkout/card).
 	// Lista oficial em https://docs.stripe.com/security/guide#content-security-policy
-	`script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://js.stripe.com https://*.js.stripe.com${isDev ? " 'unsafe-eval'" : ""}`,
+	// sdk.mercadopago.com + *.mlstatic.com: Card Payment Brick do Mercado Pago
+	// (mesma tela), e o script antifraude dele (www.mercadopago.com/v2/security.js).
+	`script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://js.stripe.com https://*.js.stripe.com https://sdk.mercadopago.com https://*.mercadopago.com https://*.mlstatic.com${isDev ? " 'unsafe-eval'" : ""}`,
 	"style-src 'self' 'unsafe-inline'",
 	"img-src 'self' data: blob: https:",
 	"font-src 'self' data:",
@@ -26,10 +28,15 @@ const csp = [
 	// api.klipy.com: o seletor de GIF chama o KLIPY direto do browser (exigência
 	// deles — sem proxy). static*.klipy.com serve as miniaturas via <img> (já
 	// coberto por img-src https:), mas o share trigger é um POST → connect-src.
-	`connect-src 'self' https://*.supabase.co wss://*.supabase.co https://challenges.cloudflare.com https://api.klipy.com https://api.stripe.com${isDev ? " ws://localhost:* ws://127.0.0.1:*" : ""}`,
+	// *.mlstatic.com: o Brick do Mercado Pago baixa as traduções/config por
+	// fetch (http2.mlstatic.com/…/i18n). Bloqueado, ele falha com "Bricks
+	// component initialization failed" e o formulário do cartão fica em branco.
+	`connect-src 'self' https://*.supabase.co wss://*.supabase.co https://challenges.cloudflare.com https://api.klipy.com https://api.stripe.com https://*.mercadopago.com https://*.mercadolibre.com https://*.mercadolivre.com https://*.mlstatic.com${isDev ? " ws://localhost:* ws://127.0.0.1:*" : ""}`,
 	// Stripe: os campos do cartão são iframes de js.stripe.com, e o desafio do
 	// banco (3D Secure) abre em hooks.stripe.com — sem ele o 3DS não aparece.
-	"frame-src https://www.youtube.com https://www.youtube-nocookie.com https://challenges.cloudflare.com https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com",
+	// Mercado Pago: os campos seguros do cartão são iframes de *.mercadopago.com
+	// (e o desafio do banco, quando houver, de *.mercadolibre.com).
+	"frame-src https://www.youtube.com https://www.youtube-nocookie.com https://challenges.cloudflare.com https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com https://*.mercadopago.com https://*.mercadolibre.com",
 	"object-src 'none'",
 	"base-uri 'self'",
 	"form-action 'self'",

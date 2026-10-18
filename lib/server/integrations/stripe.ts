@@ -7,7 +7,8 @@ import { orderNumber } from "@/lib/order-number"
  * Cliente Stripe — SERVIDOR APENAS. Gateway ALTERNATIVO da Loja.
  *
  * A Asaas continua sendo o gateway padrão; o Stripe só entra quando
- * `PAYMENT_GATEWAY=stripe` (ver `lib/server/payments/gateway.ts`). Existe para
+ * `STORE_PIX_GATEWAY`/`STORE_CARD_GATEWAY` (ou o legado `PAYMENT_GATEWAY`)
+ * pedem `stripe` (ver `lib/server/payments/gateway.ts`). Existe para
  * a loja não ficar sem cobrar quando a conta da Asaas estiver indisponível.
  *
  * Mesmo desenho do fluxo da Asaas, para as telas não mudarem:

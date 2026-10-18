@@ -11,6 +11,7 @@ import { orderNumber } from "@/lib/order-number"
 import { OrderPaidNextStepsDialog } from "@/components/store/OrderPaidNextStepsDialog"
 import type { ServiceFormLine } from "@/lib/store-service-form"
 import { StripeCardForm } from "@/components/store/StripeCardForm"
+import { MercadoPagoCardForm } from "@/components/store/MercadoPagoCardForm"
 import type { CardPaymentState } from "@/lib/store-card-payment"
 
 interface OrderItem {
@@ -47,11 +48,23 @@ interface OrderStatus {
 const POLL_INTERVAL_MS = 3000
 
 /**
- * Pagamento com cartão do Stripe (formulário no nosso site). `null` = ainda
- * não consultado; `"hosted"` = pedido da Asaas, cujo cartão é pago na página
- * dela e que volta aqui só para aguardar a confirmação.
+ * Pagamento com cartão no nosso site (Stripe ou Mercado Pago, pelo `gateway`
+ * do pedido). `null` = ainda não consultado; `"hosted"` = pedido da Asaas,
+ * cujo cartão é pago na página dela e que volta aqui só para aguardar a
+ * confirmação.
  */
-type CardInfo = { state: CardPaymentState; amountCents: number; lastError?: string | null } | "hosted" | null
+type CardInfo =
+  | {
+      gateway?: "stripe" | "mercadopago"
+      state: CardPaymentState
+      amountCents: number
+      lastError?: string | null
+      /** Mercado Pago: parcelas que o Brick pode oferecer. */
+      maxInstallments?: number
+      payerEmail?: string | null
+    }
+  | "hosted"
+  | null
 
 function CardCheckoutContent() {
   const searchParams = useSearchParams()
@@ -73,7 +86,7 @@ function CardCheckoutContent() {
     if (!orderId) return
     try {
       const res = await fetch(`/api/store/orders/${orderId}/card-payment`)
-      // 404: não é pedido de cartão do Stripe (Asaas hospeda o cartão).
+      // 404: não é pedido de cartão no nosso site (Asaas hospeda o cartão).
       if (res.status === 404) {
         setCard("hosted")
         return
@@ -326,32 +339,102 @@ function CardCheckoutContent() {
   }
 
   if (card !== "hosted" && card.state === "ready") {
+    const lines = order.items.filter((item) => item.name)
+    const itemsCents = lines.reduce((sum, item) => sum + (item.price_cents ?? 0) * (item.quantity ?? 1), 0)
+    // O valor do cartão já vem com o acréscimo, fixado no servidor: a linha só
+    // explica a diferença para a soma dos itens, nunca recalcula o total.
+    const surchargeCents = order.cardSurchargePercent ? card.amountCents - itemsCents : 0
+
     return (
-      <div className="mx-auto flex min-h-[60vh] max-w-md flex-col gap-6 px-4 py-10">
-        <div className="space-y-1 text-center">
-          <div className="mx-auto mb-3 flex size-14 items-center justify-center rounded-full bg-emerald-500/15">
-            <CreditCard className="size-7 text-emerald-400" />
+      <div className="mx-auto grid min-h-[60vh] w-full max-w-5xl gap-8 px-4 py-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-12 lg:py-14">
+        <aside className="space-y-6 lg:sticky lg:top-24 lg:self-start">
+          <div className="space-y-1 text-center lg:text-left">
+            <div className="mx-auto mb-3 flex size-14 items-center justify-center rounded-full bg-emerald-500/15 lg:mx-0">
+              <CreditCard className="size-7 text-emerald-400" />
+            </div>
+            <h1 className="text-2xl font-black text-foreground lg:text-3xl">Pagamento com cartão</h1>
+            <p className="text-sm text-muted-foreground">
+              Pedido <span className="font-mono font-semibold text-foreground">#{orderNumber(order.id)}</span>
+            </p>
           </div>
-          <h1 className="text-2xl font-black text-foreground">Pagamento com cartão</h1>
-          <p className="text-sm text-muted-foreground">
-            Pedido <span className="font-mono font-semibold text-foreground">#{orderNumber(order.id)}</span> ·{" "}
-            {formatBRL(card.amountCents)} à vista
+
+          <div className="rounded-xl border border-border bg-muted/20 p-5">
+            {lines.length > 0 && (
+              <ul className="space-y-3 border-b border-border pb-4">
+                {lines.map((item, i) => (
+                  <li key={item.id ?? i} className="flex items-start justify-between gap-4 text-sm">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-foreground">{item.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {(item.quantity ?? 1) > 1 ? `${item.quantity}× · ` : ""}
+                        {item.variant_label ?? item.variant_options?.map((o) => o.label).join(" · ") ?? ""}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-muted-foreground">
+                      {formatBRL((item.price_cents ?? 0) * (item.quantity ?? 1))}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {surchargeCents > 0 && (
+              <div className="flex justify-between pt-4 text-sm text-muted-foreground">
+                <span>Acréscimo do cartão ({order.cardSurchargePercent}%)</span>
+                <span>{formatBRL(surchargeCents)}</span>
+              </div>
+            )}
+            <div className={`flex items-baseline justify-between ${lines.length > 0 || surchargeCents > 0 ? "pt-4" : ""}`}>
+              <span className="font-semibold text-foreground">Total</span>
+              <span className="text-xl font-black text-emerald-400">{formatBRL(card.amountCents)}</span>
+            </div>
+            <p className="mt-1 text-right text-xs text-muted-foreground">
+              {card.gateway === "mercadopago" && (card.maxInstallments ?? 1) > 1
+                ? `Em até ${card.maxInstallments}x no crédito`
+                : "À vista no crédito"}
+            </p>
+          </div>
+
+          <p className="hidden text-xs text-muted-foreground lg:block">
+            Prefere PIX? <Link href="/conta/pedidos" className="underline">Cancele este pedido em Meus Pedidos</Link> e
+            finalize de novo escolhendo PIX.
           </p>
+        </aside>
+
+        <div className={card.gateway === "mercadopago" ? "" : "rounded-xl border border-border bg-muted/20 p-4 lg:p-6"}>
+          {card.gateway === "mercadopago" ? (
+            <MercadoPagoCardForm
+              amountCents={card.amountCents}
+              maxInstallments={card.maxInstallments ?? 1}
+              payerEmail={card.payerEmail ?? null}
+              onPay={async (payload) => {
+                const res = await fetch(`/api/store/orders/${order.id}/card-payment`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(payload),
+                }).catch(() => null)
+                const data = ((await res?.json().catch(() => ({}))) ?? {}) as { state?: string; error?: string }
+                if (!res || !res.ok || data.state !== "processing") {
+                  return { ok: false, error: data.error ?? "Não foi possível processar o cartão agora. Tente de novo em instantes" }
+                }
+                setCard({ ...card, state: "processing" })
+                fetchOrder()
+                return { ok: true }
+              }}
+            />
+          ) : (
+            <StripeCardForm
+              orderId={order.id}
+              amountCents={card.amountCents}
+              initialError={card.lastError}
+              onAuthorized={() => {
+                setCard({ state: "processing", amountCents: card.amountCents })
+                fetchOrder()
+              }}
+            />
+          )}
         </div>
 
-        <div className="rounded-xl border border-border bg-muted/20 p-4">
-          <StripeCardForm
-            orderId={order.id}
-            amountCents={card.amountCents}
-            initialError={card.lastError}
-            onAuthorized={() => {
-              setCard({ state: "processing", amountCents: card.amountCents })
-              fetchOrder()
-            }}
-          />
-        </div>
-
-        <p className="text-center text-xs text-muted-foreground">
+        <p className="text-center text-xs text-muted-foreground lg:hidden">
           Prefere PIX? <Link href="/conta/pedidos" className="underline">Cancele este pedido em Meus Pedidos</Link> e
           finalize de novo escolhendo PIX.
         </p>

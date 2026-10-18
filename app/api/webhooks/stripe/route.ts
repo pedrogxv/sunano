@@ -25,7 +25,8 @@ export const runtime = "nodejs"
 export const maxDuration = 20
 
 /**
- * Webhook do Stripe — gateway ALTERNATIVO da Loja (`PAYMENT_GATEWAY=stripe`).
+ * Webhook do Stripe — gateway ALTERNATIVO da Loja (`STORE_PIX_GATEWAY` /
+ * `STORE_CARD_GATEWAY` = `stripe`).
  *
  * Cadastrar no painel do Stripe (Desenvolvedores → Webhooks) apontando para
  * `/api/webhooks/stripe` com os eventos de `STRIPE_WEBHOOK_EVENTS`

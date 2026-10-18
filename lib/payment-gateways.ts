@@ -8,25 +8,32 @@
  * `orders-repository`, por exemplo) deixa de compilar até ganhar o ramo do
  * novo gateway. É isso que impede o filtro de esquecer um gateway em silêncio.
  */
-export const PAYMENT_GATEWAYS = ["asaas", "stripe"] as const
+export const PAYMENT_GATEWAYS = ["asaas", "stripe", "mercadopago"] as const
 
 export type PaymentGateway = (typeof PAYMENT_GATEWAYS)[number]
 
 export const PAYMENT_GATEWAY_LABEL: Record<PaymentGateway, string> = {
   asaas: "Asaas",
   stripe: "Stripe",
+  mercadopago: "Mercado Pago",
 }
 
 /**
- * Gateway de um pedido JÁ criado, pelas colunas de referência que o checkout
- * gravou. Pedido sem referência de Stripe é da Asaas (inclusive os legados de
- * gateways que já saíram). Pedido pago com Aura não passa por gateway nenhum —
- * quem chama confere `payment_method` antes.
+ * Gateway de um pedido JÁ criado, pelo que o checkout gravou.
+ *
+ * Mercado Pago é reconhecido por `payment_gateway`, não por uma referência de
+ * cobrança: o pedido nasce ANTES do pagamento (o cartão é digitado depois, em
+ * `/checkout/card`) e um cartão recusado não deixa referência nenhuma. Os
+ * demais seguem pela coluna de referência: sem Stripe é Asaas (inclusive os
+ * legados de gateways que já saíram). Pedido pago com Aura não passa por
+ * gateway nenhum — quem chama confere `payment_method` antes.
  */
 export function orderPaymentGateway(order: {
+  payment_gateway?: string | null
   stripe_payment_intent_id?: string | null
   stripe_session_id?: string | null
 }): PaymentGateway {
+  if (order.payment_gateway === "mercadopago") return "mercadopago"
   return order.stripe_payment_intent_id || order.stripe_session_id ? "stripe" : "asaas"
 }
 

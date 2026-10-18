@@ -147,6 +147,8 @@ type AdminOrder = {
   asaas_payment_id: string | null
   stripe_payment_intent_id: string | null
   stripe_session_id: string | null
+  payment_gateway: AdminOrderRow["payment_gateway"]
+  mercadopago_payment_id: AdminOrderRow["mercadopago_payment_id"]
   card_review: AdminOrderRow["card_review"]
   fraud_warning: AdminOrderRow["fraud_warning"]
   chargeback: AdminOrderRow["chargeback"]
@@ -1319,8 +1321,8 @@ function OrderManageDialog({
   const remainingCents = order.total_cents - order.refunded_cents
   // Pedido de Aura não tem cobrança em dinheiro — não há o que estornar pelo gateway.
   const canRefund = !isAuraOrder && REFUNDABLE_STATUSES.includes(order.status) && remainingCents > 0
-  // Cobrança no gateway que o painel sabe estornar: Asaas ou Stripe.
-  const hasGatewayCharge = Boolean(order.asaas_payment_id || order.stripe_payment_intent_id)
+  // Cobrança no gateway que o painel sabe estornar: Asaas, Stripe ou Mercado Pago.
+  const hasGatewayCharge = Boolean(order.asaas_payment_id || order.stripe_payment_intent_id || order.mercadopago_payment_id)
   const canRegisterManual = !isAuraOrder && MANUAL_PAYABLE_STATUSES.includes(order.status)
 
   async function handleAdvance() {
@@ -1852,11 +1854,9 @@ function OrderManageDialog({
                   </>
                 ) : (
                   <p className="text-foreground">
-                    {order.asaas_payment_id
-                      ? "Asaas"
-                      : order.stripe_payment_intent_id || order.stripe_session_id
-                        ? "Stripe"
-                        : "—"}{" "}
+                    {order.asaas_payment_id || order.stripe_payment_intent_id || order.stripe_session_id || order.payment_gateway
+                      ? PAYMENT_GATEWAY_LABEL[orderPaymentGateway(order)]
+                      : "—"}{" "}
                     ·{" "}
                     {order.payment_method === "credit_card" ? "Cartão" : "PIX"}
                   </p>
@@ -1866,6 +1866,9 @@ function OrderManageDialog({
                 )}
                 {order.stripe_payment_intent_id && (
                   <p className="break-all text-muted-foreground">ID Stripe: {order.stripe_payment_intent_id}</p>
+                )}
+                {order.mercadopago_payment_id && (
+                  <p className="break-all text-muted-foreground">ID Mercado Pago: {order.mercadopago_payment_id}</p>
                 )}
               </>
             )}

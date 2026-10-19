@@ -9,7 +9,7 @@ import {
   PERIPHERAL_INDEX_SIGNAL_COLUMNS,
   isPeripheralIndexable,
 } from "@/lib/indexability"
-import type { Category } from "@/lib/tag-options"
+import { rankingGroupMembers, rankingGroupOf, type Category } from "@/lib/tag-options"
 
 /**
  * Repositório de Periféricos — única porta de acesso à tabela `peripherals`
@@ -265,7 +265,8 @@ export async function getRankedPeripherals(): Promise<RankedPeripheral[]> {
 export type PeripheralRank = { position: number; total: number }
 
 /**
- * Posição de um periférico no ranking da própria categoria (mesma lógica de
+ * Posição de um periférico no ranking da própria categoria, PCB contando como
+ * teclado (`rankingGroupOf`; mesma lógica de
  * `/perifericos/[slug]`, reaproveitada para exibir o ranking em outras
  * seções do site, como a Loja, quando um produto tem um periférico vinculado).
  */
@@ -274,8 +275,9 @@ export async function getPeripheralRankById(peripheralId: string): Promise<Perip
   const target = all.find((p) => p.id === peripheralId)
   if (!target) return null
 
+  const group = rankingGroupOf(target.category)
   const rankedInCategory = all
-    .filter((p) => p.category === target.category)
+    .filter((p) => rankingGroupOf(p.category) === group)
     .map((p) => {
       const details = ((p.specs as Record<string, unknown>)?.details ?? {}) as Record<string, unknown>
       const score = details.score != null ? Number(details.score) : null
@@ -572,7 +574,8 @@ export async function getTopRankedPeripherals(category: Category, limit = 3): Pr
   const { data, error } = await db
     .from("peripherals")
     .select("id, name, category, image_url, specs")
-    .eq("category", category)
+    // O top 3 de Teclados inclui as PCBs, igual à aba da página /ranking.
+    .in("category", rankingGroupMembers(category))
     // Defesa contra categoria com catálogo muito grande — o corte por score
     // acontece em memória (score vive em `specs.details`, não é coluna), mas
     // não precisamos de mais que umas poucas centenas de linhas pra achar o

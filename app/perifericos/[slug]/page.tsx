@@ -15,7 +15,7 @@ import {
 } from "@/lib/server/repositories/peripheral-reviews-repository"
 import { isPeripheralRecordIndexable } from "@/lib/indexability"
 import { BreadcrumbJsonLd, JsonLd } from "@/components/seo/JsonLd"
-import { CATEGORY_PLURAL_LABELS, isCategory } from "@/lib/tag-options"
+import { CATEGORY_PLURAL_LABELS, isCategory, rankingGroupOf } from "@/lib/tag-options"
 import { BackButton } from "@/components/ui/back-button"
 import { PeripheralDetailView } from "@/components/peripherals/PeripheralDetailView"
 
@@ -135,8 +135,10 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
   // destaque e no JSON-LD; a lista inteira vai para o bloco "Onde comprar".
   const linkedStores = linkedProducts.filter((p) => p.type === "store")
   const linkedStore = linkedStores[0] ?? null
+  // PCB disputa o ranking de Teclados (`rankingGroupOf`), igual à página /ranking.
+  const rankingGroup = rankingGroupOf(data.category)
   const rankedInCategory = allPeripherals
-    .filter((p) => p.category === data.category)
+    .filter((p) => rankingGroupOf(p.category) === rankingGroup)
     .map((p) => {
       const pDetails = ((p.specs as Record<string, unknown>)?.details ?? {}) as Record<string, unknown>
       const pScore = pDetails.score != null ? Number(pDetails.score) : null

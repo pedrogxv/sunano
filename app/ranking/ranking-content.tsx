@@ -10,6 +10,7 @@ import { usePageHeader } from "@/components/providers/page-header-context"
 import { AnimatedCounter } from "@/components/animated-counter"
 import { RankingInfo } from "@/components/ranking/RankingInfo"
 import { cn } from "@/lib/utils"
+import { rankingGroupOf } from "@/lib/tag-options"
 
 export type RankedPeripheral = {
   id: string
@@ -144,15 +145,16 @@ export function RankingContent({ peripherals }: { peripherals: RankedPeripheral[
   usePageHeader("Ranking", "Pontuação (Performance e Estabilidade)")
   const isAdmin = usePathname()?.startsWith("/admin") ?? false
 
+  // A aba é o grupo de ranking, não a categoria crua: PCB entra em "Teclados".
   const categoriesWithData = CATEGORIES.filter((cat) =>
-    peripherals.some((p) => p.category === cat.key)
+    peripherals.some((p) => rankingGroupOf(p.category) === cat.key)
   )
 
   const [selected, setSelected] = useState(
     categoriesWithData[0]?.key ?? "keyboard"
   )
 
-  const filtered = peripherals.filter((p) => p.category === selected)
+  const filtered = peripherals.filter((p) => rankingGroupOf(p.category) === selected)
 
   return (
     <div className="mx-auto max-w-4xl px-2 py-6 sm:px-4 md:px-6 md:py-8">

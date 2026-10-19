@@ -311,9 +311,33 @@ export const CATEGORY_PLURAL_LABELS: Record<Category, string> = {
  */
 export const SCORE_CATEGORIES: Category[] = ["keyboard", "mouse"]
 
-/** `true` quando a categoria participa do ranking por pontuação — ver `SCORE_CATEGORIES`. */
+/** `true` quando a categoria tem ranking por pontuação próprio — ver `SCORE_CATEGORIES`. */
 export function hasScoreRanking(category: string | null | undefined): boolean {
   return !!category && (SCORE_CATEGORIES as string[]).includes(category)
+}
+
+/**
+ * Categorias que disputam o ranking de OUTRA. PCB avulsa usa a mesma régua de
+ * pontuação do teclado, então concorre na aba "Teclados" em vez de ter ranking
+ * à parte. Toda posição exibida (página /ranking, selo da ficha, Loja, top 3
+ * da listagem) passa por `rankingGroupOf`: calcular por `category` crua faz a
+ * ficha dizer "#4" para o item que o ranking mostra em 5º.
+ */
+const RANKING_GROUP: Partial<Record<Category, Category>> = { pcb: "keyboard" }
+
+/** Categoria cujo ranking a categoria disputa (ela mesma, se não for agregada a outra). */
+export function rankingGroupOf(category: string): string {
+  return RANKING_GROUP[category as Category] ?? category
+}
+
+/** Categorias que entram no ranking de `group`, incluindo ela mesma. */
+export function rankingGroupMembers(group: Category): Category[] {
+  return ALL_CATEGORIES.filter((c) => c === group || RANKING_GROUP[c] === group)
+}
+
+/** `true` quando a categoria tem campo de Pontuação: as do ranking e as agregadas a ele. */
+export function hasScoreField(category: string | null | undefined): boolean {
+  return !!category && hasScoreRanking(rankingGroupOf(category))
 }
 
 /** `true` quando a string é uma categoria conhecida — filtra `?category=` inválido. */

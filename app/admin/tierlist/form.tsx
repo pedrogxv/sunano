@@ -70,7 +70,7 @@ import {
   PERIPHERAL_EXPERT_COMMENT_MAX_LENGTH,
   PERIPHERAL_EXPERT_COMMENT_TOO_LONG,
 } from "@/lib/peripheral-expert"
-import { getTagOptionsForCategory, hasScoreRanking, sanitizeTagsForCategory, type Category, type Tag } from "@/lib/tag-options"
+import { getTagOptionsForCategory, hasScoreField, sanitizeTagsForCategory, type Category, type Tag } from "@/lib/tag-options"
 import { UPLOAD_LIMITS, formatUploadLimit } from "@/lib/upload-limits"
 import { PERIPHERAL_GLIDE_VIDEO_BUCKET, PERIPHERAL_GLIDE_VIDEO_MAX_BYTES } from "@/lib/peripheral-glide-video"
 import { supabaseStorageClient } from "@/lib/client/supabase-storage"
@@ -478,7 +478,7 @@ function buildSpecsPayload(
     reviewCategory: data.reviewCategory ?? null,
     reviewApproved: data.reviewApproved ?? false,
     details: {
-      rankLabel: data.rankLabel || undefined, ranking: data.ranking || undefined, score: hasScoreRanking(data.category) ? data.score ?? undefined : undefined,
+      rankLabel: data.rankLabel || undefined, ranking: data.ranking || undefined, score: hasScoreField(data.category) ? data.score ?? undefined : undefined,
       reviewUrl: data.reviewUrl || undefined,
       soundUrl: data.soundUrl || undefined,
       guideUrl: data.guideUrl || undefined, wikiUrl: data.wikiUrl || undefined,
@@ -2659,9 +2659,9 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         <FormSection id="section-technical-specs" forceOpen={forceOpenIds.has("section-technical-specs")} title={t.admin.tierlistForm.sectionTechnicalSpecs} icon={<FileText className="size-4" />} defaultOpen>
           <div className="grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2">
             {/* Pontuação alimenta o ranking numérico (/ranking e a seção "top" da
-                listagem), que hoje só existe pra teclado e mouse — nas demais
-                categorias o campo ficava sempre vazio e só ocupava espaço. */}
-            {hasScoreRanking(watchedCategory) && (
+                listagem), que hoje só existe pra teclado (PCB inclusa) e mouse — nas
+                demais categorias o campo ficava sempre vazio e só ocupava espaço. */}
+            {hasScoreField(watchedCategory) && (
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Pontuação"}</label>
                 <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" type="number" min={0} step={0.25} placeholder="788.5" {...form.register("score", { valueAsNumber: true })} />

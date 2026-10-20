@@ -1,7 +1,7 @@
 "use client"
 
 import { RouteLink } from "@/components/ui/route-link"
-import { usePathname } from "next/navigation"
+import { usePathname } from "@/lib/hooks/use-pathname"
 import { ChevronLeft, ChevronRight, Eye, Gift, Home, LogOut, Menu, Mouse, NotebookPen, Package, Settings, Users, X } from "lucide-react"
 import { useEffect, useState } from "react"
 

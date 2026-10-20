@@ -1,7 +1,7 @@
 "use client"
 
 import { PanelLeft } from "lucide-react"
-import { usePathname } from "next/navigation"
+import { usePathname } from "@/lib/hooks/use-pathname"
 import dynamic from "next/dynamic"
 import { Skeleton } from "@/components/ui/skeleton"
 

@@ -1,7 +1,8 @@
 "use client"
 
 import { RouteLink } from "@/components/ui/route-link"
-import { usePathname, useRouter } from "next/navigation"
+import { useRouter } from "next/navigation"
+import { usePathname } from "@/lib/hooks/use-pathname"
 import {
   AppWindow,
   BarChart2,

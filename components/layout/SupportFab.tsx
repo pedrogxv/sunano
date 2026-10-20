@@ -1,7 +1,7 @@
 "use client"
 
 import { RouteLink } from "@/components/ui/route-link"
-import { usePathname } from "next/navigation"
+import { usePathname } from "@/lib/hooks/use-pathname"
 import { LifeBuoy } from "lucide-react"
 import { useAuthUser } from "@/components/providers/auth-context"
 import { useT } from "@/lib/use-t"

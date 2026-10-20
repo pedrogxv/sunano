@@ -1,7 +1,8 @@
 "use client"
 
 import { useDeferredValue, useMemo, useState } from "react"
-import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
+import { usePathname } from "@/lib/hooks/use-pathname"
 import { FilterBar } from "./FilterBar"
 import { TierlistGrid } from "./TierlistGrid"
 import { tierlistCategoryPath } from "@/lib/tierlist-categories"

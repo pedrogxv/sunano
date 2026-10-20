@@ -377,7 +377,7 @@ export default function BannerCarousel({
             {/* Véu sutil para os controles não sumirem sobre banners claros. */}
             <div className="h-16 bg-gradient-to-t from-black/45 to-transparent" />
 
-            <div className="pointer-events-auto absolute inset-x-0 bottom-3 flex items-center justify-center gap-2">
+            <div className="pointer-events-auto absolute inset-x-0 bottom-1 flex items-center justify-center">
               {dots.map(({ id, index }) => {
                 const isCurrent = index === currentIndex
                 return (
@@ -387,26 +387,33 @@ export default function BannerCarousel({
                     onClick={() => goTo(index)}
                     aria-label={`Ir para o banner ${index + 1}`}
                     aria-current={isCurrent}
-                    className={cn(
-                      "relative h-2 overflow-hidden rounded-full transition-[width,background-color] duration-300 motion-reduce:transition-none",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-black/40",
-                      isCurrent ? "w-6 bg-white/25" : "w-2 bg-white/50 hover:bg-white/80"
-                    )}
+                    // O botão é a área de toque (24×24, mínimo do WCAG 2.5.8 que
+                    // o Lighthouse cobra); o ponto de 8px é o <span> de dentro.
+                    // Com o botão do tamanho do ponto, os alvos tinham 8px.
+                    className="group flex h-6 min-w-6 items-center justify-center px-1 focus-visible:outline-none"
                   >
-                    {/* No dot ativo, a barra some do zero e enche até trocar de
-                        slide — parada (sem animação) enquanto o autoplay está
-                        pausado, já que aí não há contagem correndo pra mostrar.
-                        `key` reinicia a animação do zero a cada slide novo. */}
-                    {isCurrent && shouldAutoRotate && (
-                      <span
-                        key={currentIndex}
-                        style={{ "--carousel-interval": `${intervalMs}ms` } as React.CSSProperties}
-                        className="animate-carousel-progress absolute inset-0 rounded-full bg-white"
-                      />
-                    )}
-                    {isCurrent && !shouldAutoRotate && (
-                      <span className="absolute inset-0 rounded-full bg-white" />
-                    )}
+                    <span
+                      className={cn(
+                        "relative block h-2 overflow-hidden rounded-full transition-[width,background-color] duration-300 motion-reduce:transition-none",
+                        "group-focus-visible:ring-2 group-focus-visible:ring-white/80 group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-black/40",
+                        isCurrent ? "w-6 bg-white/25" : "w-2 bg-white/50 group-hover:bg-white/80"
+                      )}
+                    >
+                      {/* No dot ativo, a barra some do zero e enche até trocar de
+                          slide — parada (sem animação) enquanto o autoplay está
+                          pausado, já que aí não há contagem correndo pra mostrar.
+                          `key` reinicia a animação do zero a cada slide novo. */}
+                      {isCurrent && shouldAutoRotate && (
+                        <span
+                          key={currentIndex}
+                          style={{ "--carousel-interval": `${intervalMs}ms` } as React.CSSProperties}
+                          className="animate-carousel-progress absolute inset-0 rounded-full bg-white"
+                        />
+                      )}
+                      {isCurrent && !shouldAutoRotate && (
+                        <span className="absolute inset-0 rounded-full bg-white" />
+                      )}
+                    </span>
                   </button>
                 )
               })}

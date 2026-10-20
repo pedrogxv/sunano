@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic"
 import { useState } from "react"
-import { usePathname } from "next/navigation"
+import { usePathname } from "@/lib/hooks/use-pathname"
 import { TopBar } from "@/components/layout/TopBar"
 import { ChangelogBanner } from "@/components/layout/ChangelogBanner"
 import { PublicSidebar } from "@/components/layout/PublicSidebar"

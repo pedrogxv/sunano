@@ -2,7 +2,7 @@
 
 import { RouteLink } from "@/components/ui/route-link"
 import dynamic from "next/dynamic"
-import { usePathname } from "next/navigation"
+import { usePathname } from "@/lib/hooks/use-pathname"
 import {
   AppWindow,
   BadgePercent,
@@ -367,7 +367,9 @@ export function PublicSidebar() {
             <Sparkles className="size-3.5 shrink-0" />
             <span className={cn(isCollapsed && "hidden")}>{t.nav.patchNotes}</span>
             {latestVersion && (
-              <span className={cn("ml-auto tabular-nums opacity-70", isCollapsed && "hidden")}>
+              // Sem `opacity-70`: em cima do `text-muted-foreground` ela
+              // derrubava o contraste abaixo de 4,5:1 (Lighthouse).
+              <span className={cn("ml-auto tabular-nums", isCollapsed && "hidden")}>
                 {latestVersion}
               </span>
             )}

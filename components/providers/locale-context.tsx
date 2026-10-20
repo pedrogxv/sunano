@@ -62,28 +62,8 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
     applyLocale(matchBrowserLocale(navigator.languages) ?? DEFAULT_LOCALE)
   }, [])
 
-  // Sincroniza o idioma salvo no perfil (cross-device). Best-effort: deslogado,
-  // /api/profile responde 401 e mantemos o que foi resolvido acima. `locale`
-  // nulo significa "nunca configurou" — nesse caso não sobrescreve a detecção.
-  useEffect(() => {
-    let mounted = true
-    fetch("/api/profile")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        const remote = data?.profile?.locale as string | null | undefined
-        if (!mounted || !remote || !isLocaleCode(remote)) return
-        applyLocale(remote)
-        try {
-          window.localStorage.setItem(LANGUAGE_STORAGE_KEY, remote)
-        } catch {
-          // idem: preferência segue valendo só nesta sessão.
-        }
-      })
-      .catch(() => {})
-    return () => {
-      mounted = false
-    }
-  }, [])
+  // O idioma salvo no PERFIL (passo 1) é aplicado por `ProfileLocaleSync`,
+  // que mora dentro do AuthProvider para só consultar com sessão.
 
   // `useCallback` para o valor do contexto não trocar de identidade a cada
   // render — sem isso o `useMemo` abaixo recriaria o objeto sempre, e todo

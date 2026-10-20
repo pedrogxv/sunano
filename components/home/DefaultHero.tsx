@@ -121,19 +121,24 @@ export default function DefaultHero({
         {/* Mascot */}
         <div className="relative mx-auto hidden w-48 shrink-0 md:block lg:w-56">
           <div className="absolute inset-4 -z-10 rounded-full bg-amber-400/25 blur-2xl" />
-          {/* `lazy`: no celular o bloco é `hidden`, e imagem lazy em
-              display:none nunca é baixada. Sem ele o React ainda gerava um
-              <link rel="preload"> no <head>, na frente do CSS. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/images/mascot/mascot-448.webp"
-            alt="Mascote do Sunano"
-            width={448}
-            height={448}
-            loading="lazy"
-            decoding="async"
-            className="w-full rotate-[-6deg] drop-shadow-2xl transition-transform duration-300 hover:rotate-0"
-          />
+          {/* No desktop o mascote é o LCP da Home; no celular o bloco é
+              `hidden`. O `<source>` com o mesmo corte do `md` faz só a tela
+              larga baixar o arquivo (o `src` é um GIF vazio inline), e com
+              prioridade alta. `lazy` aqui atrasava o LCP do desktop, e um
+              <img> solto sem `lazy` ganhava do React um <link rel="preload">
+              no <head> que o celular também baixava, na frente do CSS. Dentro
+              de <picture> o React não gera esse preload. */}
+          <picture>
+            <source media="(min-width: 768px)" srcSet="/images/mascot/mascot-448.webp" type="image/webp" />
+            <img
+              src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+              alt="Mascote do Sunano"
+              width={448}
+              height={448}
+              fetchPriority="high"
+              className="w-full rotate-[-6deg] drop-shadow-2xl transition-transform duration-300 hover:rotate-0"
+            />
+          </picture>
         </div>
       </div>
     </section>

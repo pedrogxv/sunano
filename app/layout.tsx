@@ -9,6 +9,7 @@ import { SidebarProvider } from "@/components/providers/sidebar-context"
 import { CartProvider } from "@/components/providers/cart-context"
 import { PageHeaderProvider } from "@/components/providers/page-header-context"
 import { AuthProvider } from "@/components/providers/auth-context"
+import { ProfileLocaleSync } from "@/components/providers/profile-locale-sync"
 import { AuthModalProvider } from "@/components/providers/auth-modal-context"
 import { SavedPostsProvider } from "@/components/providers/saved-posts-context"
 import { AuraReactionsProvider } from "@/components/providers/aura-reactions-context"
@@ -123,6 +124,7 @@ export default function RootLayout({
       <body className={`${manrope.variable} ${spaceGrotesk.variable} ${caveat.variable} font-sans`}>
         <LocaleProvider>
           <AuthProvider>
+            <ProfileLocaleSync />
             <AuthModalProvider>
               <SavedPostsProvider>
                 <AuraReactionsProvider>

@@ -2,7 +2,8 @@
 
 import Image from "next/image"
 import { RouteLink } from "@/components/ui/route-link"
-import { usePathname, useRouter } from "next/navigation"
+import { useRouter } from "next/navigation"
+import { usePathname } from "@/lib/hooks/use-pathname"
 import { ArrowLeft, MessageSquare, Mouse, Newspaper, Trophy } from "lucide-react"
 
 import { Button } from "@/components/ui/button"

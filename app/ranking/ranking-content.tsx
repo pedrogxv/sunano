@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname } from "@/lib/hooks/use-pathname"
 import { ChevronRight } from "lucide-react"
 import { useEffect, useState } from "react"
 

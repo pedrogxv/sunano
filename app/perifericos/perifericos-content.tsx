@@ -3,7 +3,8 @@
 import Link from "next/link"
 import { RouteLink } from "@/components/ui/route-link"
 import Image from "next/image"
-import { useRouter, useSearchParams, usePathname } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
+import { usePathname } from "@/lib/hooks/use-pathname"
 import {
   ArrowLeftRight,
   Check,

@@ -1,7 +1,7 @@
 "use client"
 
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
-import { usePathname } from "next/navigation"
+import { usePathname } from "@/lib/hooks/use-pathname"
 
 import { supabaseAuth } from "@/lib/client/supabase-auth"
 import { readAuthSnapshot, writeAuthSnapshot } from "@/lib/client/auth-snapshot"

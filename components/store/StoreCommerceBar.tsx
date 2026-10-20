@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react"
-import { usePathname } from "next/navigation"
+import { usePathname } from "@/lib/hooks/use-pathname"
 import { RouteLink } from "@/components/ui/route-link"
 import {
   ArrowRight,

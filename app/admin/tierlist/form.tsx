@@ -1,7 +1,8 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { useRouter, usePathname } from "next/navigation"
+import { useRouter } from "next/navigation"
+import { usePathname } from "@/lib/hooks/use-pathname"
 import Link from "next/link"
 import {
   closestCenter,

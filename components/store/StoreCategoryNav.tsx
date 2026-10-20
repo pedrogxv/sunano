@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname } from "@/lib/hooks/use-pathname"
 import { ArrowRight, ChevronLeft, ChevronRight, Home, LifeBuoy, Package, ShoppingCart, Star, type LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getCategoryIcon, getCategoryLabel, classifyStoreNavGroup, type StoreNavGroup } from "@/lib/store-category-icons"

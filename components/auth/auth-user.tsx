@@ -107,7 +107,9 @@ export function AuthUser({ isCollapsed = false, variant = "admin", layout = "sid
       const content = (
         <>
           <LogIn className="size-[15px] text-primary" />
-          <span className="hidden sm:inline">Login</span>
+          {/* `sr-only` e não `hidden`: no celular o botão é só o ícone, e com
+              `hidden` ele ficava sem nome acessível (Lighthouse). */}
+          <span className="sr-only sm:not-sr-only">Login</span>
         </>
       )
       if (useModal) {

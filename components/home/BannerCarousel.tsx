@@ -102,18 +102,51 @@ function SlideFrame({
   )
 }
 
+/**
+ * Roda `callback` com o navegador ocioso, depois do evento `load`. Devolve o
+ * cancelamento (para o cleanup do efeito).
+ */
+function whenIdleAfterLoad(callback: () => void) {
+  let idleHandle: number | undefined
+  let timeoutHandle: number | undefined
+
+  const schedule = () => {
+    if (typeof window.requestIdleCallback === "function") {
+      idleHandle = window.requestIdleCallback(callback, { timeout: 2000 })
+    } else {
+      timeoutHandle = window.setTimeout(callback, 200)
+    }
+  }
+
+  if (document.readyState === "complete") schedule()
+  else window.addEventListener("load", schedule, { once: true })
+
+  return () => {
+    window.removeEventListener("load", schedule)
+    if (idleHandle !== undefined) window.cancelIdleCallback(idleHandle)
+    if (timeoutHandle !== undefined) window.clearTimeout(timeoutHandle)
+  }
+}
+
 /** Imagem do slide + a camada clicável que a envolve (ou não, se não houver link). */
 function BannerSlide({
   banner,
   isCurrent,
+  isArmed,
   index,
   total,
 }: {
   banner: Extract<CarouselBanner, { kind: "image" }>
   isCurrent: boolean
+  /** Sem isso o slide fica vazio: a imagem só entra quando ele vai ser exibido. */
+  isArmed: boolean
   index: number
   total: number
 }) {
+  if (!isArmed) {
+    return <SlideFrame index={index} total={total} isCurrent={isCurrent}>{null}</SlideFrame>
+  }
+
   const image = (
     <picture>
       {banner.imageUrlMobile && (
@@ -247,6 +280,27 @@ export default function BannerCarousel({
   // estado cru.
   const currentIndex = current < total ? current : 0
 
+  // Slides de imagem que já podem ter <img>. Os de fora de tela ficam
+  // empilhados sobre o atual (opacidade 0), então o `loading="lazy"` os vê
+  // "na tela" e baixa todos de uma vez, com prioridade alta: no celular eram
+  // ~320KB de banner invisível disputando banda com a primeira pintura, e o
+  // Lighthouse soma tudo que começa antes do LCP na estimativa dele. Agora só
+  // o primeiro slide vai no HTML; os vizinhos do atual entram depois do
+  // `load`, com o navegador ocioso, a tempo da troca automática ou do swipe.
+  const [armedSlides, setArmedSlides] = useState<ReadonlySet<number>>(() => new Set([0]))
+
+  useEffect(() => {
+    if (total <= 1) return
+    const neighbors = [(currentIndex + 1) % total, (currentIndex - 1 + total) % total]
+    return whenIdleAfterLoad(() => {
+      setArmedSlides((previous) =>
+        neighbors.every((index) => previous.has(index))
+          ? previous
+          : new Set([...previous, ...neighbors])
+      )
+    })
+  }, [currentIndex, total])
+
   const goTo = useCallback(
     (index: number) => {
       if (total === 0) return
@@ -357,6 +411,9 @@ export default function BannerCarousel({
               index={index}
               total={total}
               isCurrent={index === currentIndex}
+              // O slide atual sempre tem imagem, mesmo que a navegação tenha
+              // pulado para um ainda não armado (dot distante).
+              isArmed={index === currentIndex || armedSlides.has(index)}
             />
           )
         )}

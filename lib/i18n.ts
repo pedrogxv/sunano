@@ -289,6 +289,19 @@ type Translations = {
     tierDescriptions: { GOAT: string; SS: string; S: string; A: string; B: string; C: string; L: string }
     tierSubtitles: { GOAT: string; SS: string; S: string; A: string; B: string; C: string; L: string }
     modeDescriptions: { oled: string; overall: string; value: string; soundTyping: string; mechanical: string; magnetic: string; pcb: string; recommended: string; ips_va: string; competitive: string }
+    /** Aba "Velocidade" de mousepad/glasspad/feet (lib/speed-chart.ts). */
+    speedChart: {
+      tab: string
+      description: string
+      slow: string
+      fast: string
+      textured: string
+      smooth: string
+      disclaimer: string
+      empty: string
+      /** `speed`/`texture` já vêm formatados na escala 0–10 (`formatSpeedChartValue`). */
+      itemSummary: (name: string, speed: string, texture: string) => string
+    }
   }
   peripherals: {
     title: string
@@ -1411,6 +1424,17 @@ export const translations: Record<LocaleCode, Translations> = {
       tierDescriptions: { GOAT: "Elite — referência absoluta", SS: "Extremo — quase perfeito", S: "Top — ótima escolha", A: "Muito bom — consistente e forte", B: "Bom — opção sólida", C: "Ok — funciona bem, com limites", L: "Inferior — apenas para casos específicos" },
       tierSubtitles: { GOAT: "Apelão", SS: "Excepcional", S: "Muito bom", A: "Bom", B: "Decente", C: "Usável", L: "Veio Podi" },
       modeDescriptions: { oled: "Mostrando painéis OLED", overall: "Ordenado por desempenho geral", value: "Agrupado por faixa de preço", soundTyping: "Ordenado por som e digitação", mechanical: "Ordenado por desempenho puro", magnetic: "Ordenado por desempenho magnético", pcb: "Ordenado por desempenho de PCB", recommended: "Escolhas sugeridas pelo Sunano, priorizando o equilíbrio geral", ips_va: "Mostrando painéis IPS e VA", competitive: "Ordenado por desempenho competitivo" },
+      speedChart: {
+        tab: "Velocidade",
+        description: "Posicionado por velocidade e textura",
+        slow: "Lento",
+        fast: "Rápido",
+        textured: "Texturizado",
+        smooth: "Liso",
+        disclaimer: "Percepção da equipe Sunano. Lotes diferentes variam, e o feet, a força da mão e a umidade da sua região mudam a sensação.",
+        empty: "O gráfico desta categoria ainda está sendo montado.",
+        itemSummary: (name: string, speed: string, texture: string) => `${name}: velocidade ${speed} de 10, textura ${texture} de 10`,
+      },
     },
     peripherals: {
       title: "Periféricos",
@@ -2949,6 +2973,17 @@ export const translations: Record<LocaleCode, Translations> = {
       tierDescriptions: { GOAT: "Elite - Absolute reference", SS: "Extreme - Almost perfect", S: "Top - Great choice", A: "Very good - Strong and consistent", B: "Good - Solid option", C: "Okay - Works well with tradeoffs", L: "Lower - Only for niche cases" },
       tierSubtitles: { GOAT: "", SS: "", S: "", A: "", B: "", C: "", L: "" },
       modeDescriptions: { oled: "Showing OLED panels", overall: "Sorted by overall performance", value: "Grouped by price range", soundTyping: "Sorted by sound and typing feel", mechanical: "Sorted by mechanical performance", magnetic: "Sorted by magnetic performance", pcb: "Sorted by PCB performance", recommended: "Suggested picks by Sunano, prioritizing overall balance", ips_va: "Showing IPS and VA panels", competitive: "Sorted by competitive performance" },
+      speedChart: {
+        tab: "Speed",
+        description: "Placed by speed and texture",
+        slow: "Slow",
+        fast: "Fast",
+        textured: "Textured",
+        smooth: "Smooth",
+        disclaimer: "The Sunano team's perception. Batches vary, and your skates, hand pressure and local humidity change the feel.",
+        empty: "This category's chart is still being put together.",
+        itemSummary: (name: string, speed: string, texture: string) => `${name}: speed ${speed} out of 10, texture ${texture} out of 10`,
+      },
     },
     peripherals: {
       title: "Peripherals",

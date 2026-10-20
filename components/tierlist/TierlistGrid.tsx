@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react"
 
 import { PeripheralCard } from "./PeripheralCard"
+import { SpeedChart } from "./SpeedChart"
+import { hasSpeedChart } from "@/lib/speed-chart"
 import { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
 import { TIER_THEMES, PRICE_BAND_THEMES } from "@/lib/tierlist-theme"
@@ -308,6 +310,10 @@ const MASCOT_IMAGES: Record<string, string> = {}
 export function TierlistGrid({ filtered, category }: TierlistGridProps) {
   const t = useT()
   const [ratingMode, setRatingMode] = useState<RatingMode>(() => getDefaultRatingMode(category))
+  // A aba "Velocidade" não é um modo de tier (não tem tier/ordem próprios): troca a tabela
+  // pelo gráfico. Por isso fica fora de `RatingMode` e dos mapas por modo.
+  const [showSpeedChart, setShowSpeedChart] = useState(false)
+  const speedChartAvailable = hasSpeedChart(category)
   const modeConfig = MODE_CONFIGS[ratingMode]
   const orderKey = ORDER_KEY_BY_MODE[ratingMode]
   const allowLegacyFallback = ratingMode === "overall"
@@ -507,7 +513,10 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
   if (previousCategory !== category) {
     setPreviousCategory(category)
     setRatingMode(getDefaultRatingMode(category))
+    setShowSpeedChart(false)
   }
+
+  const tabCount = ratingModes.length + (speedChartAvailable ? 1 : 0)
 
   if (isComingSoon) {
     const mascotImage = MASCOT_IMAGES[category]
@@ -538,7 +547,9 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
       <div className={cn("flex flex-col gap-2.5 rounded-xl border p-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4", CARD_SURFACE)}>
         <p className="text-sm text-muted-foreground">
           {t.tierlist.viewingBy}{" "}
-          <span className="font-semibold text-foreground">{localizedModeDescription}</span>
+          <span className="font-semibold text-foreground">
+            {showSpeedChart ? t.tierlist.speedChart.description : localizedModeDescription}
+          </span>
         </p>
         {/* grid no mobile evita o wrap desbalanceado do flex (ex: 3 modos = 2 numa linha
             + 1 sozinho centralizado, "colado" visualmente) — cada botão ocupa uma célula
@@ -547,14 +558,17 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
           {ratingModes.map((mode) => (
             <button
               key={mode.key}
-              onClick={() => setRatingMode(mode.key)}
+              onClick={() => {
+                setRatingMode(mode.key)
+                setShowSpeedChart(false)
+              }}
               className={cn(
                 // A cor do modo vai no ponto, não no fundo: como classe de `bg`, ela
                 // vencia o `bg-primary/20` no twMerge e deixava o rótulo (text-primary,
                 // branco no tema escuro) ilegível sobre um fundo claro.
                 "flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-all sm:px-4",
-                ratingModes.length % 2 !== 0 && "last:col-span-2",
-                ratingMode === mode.key
+                tabCount % 2 !== 0 && "last:col-span-2",
+                !showSpeedChart && ratingMode === mode.key
                   ? "bg-primary/20 text-primary"
                   : "text-muted-foreground hover:bg-muted/40 hover:text-foreground",
               )}
@@ -564,154 +578,174 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
                 className={cn(
                   "size-1.5 shrink-0 rounded-full",
                   mode.color,
-                  ratingMode === mode.key ? "opacity-100" : "opacity-40",
+                  !showSpeedChart && ratingMode === mode.key ? "opacity-100" : "opacity-40",
                 )}
               />
               {mode.label}
             </button>
           ))}
+          {speedChartAvailable && (
+            <button
+              onClick={() => setShowSpeedChart(true)}
+              className={cn(
+                "flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-all sm:px-4",
+                tabCount % 2 !== 0 && "last:col-span-2",
+                showSpeedChart
+                  ? "bg-primary/20 text-primary"
+                  : "text-muted-foreground hover:bg-muted/40 hover:text-foreground",
+              )}
+              type="button"
+            >
+              <span className={cn("size-1.5 shrink-0 rounded-full bg-sky-400", showSpeedChart ? "opacity-100" : "opacity-40")} />
+              {t.tierlist.speedChart.tab}
+            </button>
+          )}
         </div>
       </div>
 
+      {showSpeedChart ? (
+        <SpeedChart items={filtered} />
+      ) : (
 
-      <div className={cn("relative overflow-visible rounded-xl border shadow-lg", CARD_SURFACE)}>
-        <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden rounded-xl bg-[radial-gradient(ellipse_at_top,_rgba(124,58,237,0.07),_transparent_60%)]" />
+        <div className={cn("relative overflow-visible rounded-xl border shadow-lg", CARD_SURFACE)}>
+          <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden rounded-xl bg-[radial-gradient(ellipse_at_top,_rgba(124,58,237,0.07),_transparent_60%)]" />
 
-        <table className="hidden w-full border-collapse md:table">
-          <tbody>
-            {displayRows.map((tierRow, tierIndex) => (
-              <tr
-                key={tierRow.key}
-                className={cn(tierIndex < displayRows.length - 1 && "border-b border-border")}
-              >
-                <td
-                  className={cn(
-                    "border-r border-border w-20 bg-gradient-to-b p-0",
-                    tierRow.gradient
-                  )}
+          <table className="hidden w-full border-collapse md:table">
+            <tbody>
+              {displayRows.map((tierRow, tierIndex) => (
+                <tr
+                  key={tierRow.key}
+                  className={cn(tierIndex < displayRows.length - 1 && "border-b border-border")}
                 >
-                  {/* h-full centra pela altura real da linha (não pela `td` inteira) — com
-                      `align-middle` o rótulo só respirava quando a linha era alta o bastante;
-                      faixas de preço com poucas linhas de cards ficavam com o texto espremido. */}
-                  <div className="flex h-full flex-col items-center justify-center gap-0.5 py-2 text-center">
-                    {isPriceBandMode && tierRow.label.startsWith("R$") ? (
-                      <span className={cn("flex flex-col items-center font-black leading-none", tierRow.textColor)}>
-                        <span className="text-xs font-bold opacity-80">R$</span>
-                        <span className="mt-0.5 text-2xl">{tierRow.label.slice(2)}</span>
-                      </span>
-                    ) : (
-                      <span
-                        className={cn(
-                          "font-black leading-tight",
-                          isPriceBandMode ? "text-lg sm:text-xl" : "text-2xl",
-                          tierRow.textColor,
-                        )}
-                      >
-                        {tierRow.label}
-                      </span>
+                  <td
+                    className={cn(
+                      "border-r border-border w-20 bg-gradient-to-b p-0",
+                      tierRow.gradient
                     )}
-                    {tierRow.subtitle && (
-                      <span className={cn("text-[10px] font-medium opacity-75", tierRow.textColor)}>
-                        {tierRow.subtitle}
-                      </span>
-                    )}
-                  </div>
-                </td>
-
-                <td className="align-middle bg-muted/20">
-                  <div className="p-2">
-                    {tierRow.items.length > 0 ? (
-                      <div className="grid w-full auto-rows-max grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-2.5">
-                        {tierRow.items.map((item) => (
-                          <PeripheralCard key={item.id} {...item} golpeMotivo={item.specs?.golpeMotivo} />
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="flex min-h-[48px] items-center justify-center">
-                        <span className="text-xs text-muted-foreground/30">—</span>
-                      </div>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <div className="md:hidden">
-          {!hasItems ? (
-            <div className="p-8 text-center">
-              <p className="text-sm text-muted-foreground">{t.tierlist.noItems}</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-border">
-              {displayRows.map((tierRow) => {
-                if (tierRow.items.length === 0) return null
-
-                return (
-                  <div key={tierRow.key}>
-                    <div className={cn("mx-2 mt-2 flex min-w-0 items-center gap-2.5 rounded-[11px] bg-gradient-to-b px-3 py-2", tierRow.gradient)}>
-                      <span
-                        className={cn(
-                          "shrink-0 rounded-md bg-black/15 px-2 py-0.5 text-xl font-black leading-none",
-                          tierRow.textColor,
-                        )}
-                      >
-                        {tierRow.label}
-                      </span>
+                  >
+                    {/* h-full centra pela altura real da linha (não pela `td` inteira) — com
+                        `align-middle` o rótulo só respirava quando a linha era alta o bastante;
+                        faixas de preço com poucas linhas de cards ficavam com o texto espremido. */}
+                    <div className="flex h-full flex-col items-center justify-center gap-0.5 py-2 text-center">
+                      {isPriceBandMode && tierRow.label.startsWith("R$") ? (
+                        <span className={cn("flex flex-col items-center font-black leading-none", tierRow.textColor)}>
+                          <span className="text-xs font-bold opacity-80">R$</span>
+                          <span className="mt-0.5 text-2xl">{tierRow.label.slice(2)}</span>
+                        </span>
+                      ) : (
+                        <span
+                          className={cn(
+                            "font-black leading-tight",
+                            isPriceBandMode ? "text-lg sm:text-xl" : "text-2xl",
+                            tierRow.textColor,
+                          )}
+                        >
+                          {tierRow.label}
+                        </span>
+                      )}
                       {tierRow.subtitle && (
-                        <span className={cn("min-w-0 truncate text-xs font-semibold uppercase tracking-wide opacity-80", tierRow.textColor)}>
+                        <span className={cn("text-[10px] font-medium opacity-75", tierRow.textColor)}>
                           {tierRow.subtitle}
                         </span>
                       )}
                     </div>
+                  </td>
 
-                    {/* p-2 alinha a grade com a faixa do tier (mx-2) e devolve largura aos
-                        cards: a cadeia de paddings aninhados consumia ~19% da tela. auto-fill
-                        deixa a grade decidir quantas colunas cabem em vez de forçar 3. */}
+                  <td className="align-middle bg-muted/20">
                     <div className="p-2">
-                      <div className="grid grid-cols-[repeat(auto-fill,minmax(100px,1fr))] gap-2">
-                        {tierRow.items.map((item) => (
-                          <PeripheralCard key={item.id} {...item} golpeMotivo={item.specs?.golpeMotivo} />
-                        ))}
+                      {tierRow.items.length > 0 ? (
+                        <div className="grid w-full auto-rows-max grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-2.5">
+                          {tierRow.items.map((item) => (
+                            <PeripheralCard key={item.id} {...item} golpeMotivo={item.specs?.golpeMotivo} />
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="flex min-h-[48px] items-center justify-center">
+                          <span className="text-xs text-muted-foreground/30">—</span>
+                        </div>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <div className="md:hidden">
+            {!hasItems ? (
+              <div className="p-8 text-center">
+                <p className="text-sm text-muted-foreground">{t.tierlist.noItems}</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-border">
+                {displayRows.map((tierRow) => {
+                  if (tierRow.items.length === 0) return null
+
+                  return (
+                    <div key={tierRow.key}>
+                      <div className={cn("mx-2 mt-2 flex min-w-0 items-center gap-2.5 rounded-[11px] bg-gradient-to-b px-3 py-2", tierRow.gradient)}>
+                        <span
+                          className={cn(
+                            "shrink-0 rounded-md bg-black/15 px-2 py-0.5 text-xl font-black leading-none",
+                            tierRow.textColor,
+                          )}
+                        >
+                          {tierRow.label}
+                        </span>
+                        {tierRow.subtitle && (
+                          <span className={cn("min-w-0 truncate text-xs font-semibold uppercase tracking-wide opacity-80", tierRow.textColor)}>
+                            {tierRow.subtitle}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* p-2 alinha a grade com a faixa do tier (mx-2) e devolve largura aos
+                          cards: a cadeia de paddings aninhados consumia ~19% da tela. auto-fill
+                          deixa a grade decidir quantas colunas cabem em vez de forçar 3. */}
+                      <div className="p-2">
+                        <div className="grid grid-cols-[repeat(auto-fill,minmax(100px,1fr))] gap-2">
+                          {tierRow.items.map((item) => (
+                            <PeripheralCard key={item.id} {...item} golpeMotivo={item.specs?.golpeMotivo} />
+                          ))}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )
-              })}
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {underReviewItems.length > 0 && (
+            <div className="border-t border-border bg-muted/10">
+              <div className="flex items-center justify-between border-b border-border bg-muted/30 px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <span className="text-xl font-black text-foreground">-</span>
+                  <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+                    {t.tierlist.underReview}
+                  </span>
+                </div>
+              </div>
+
+              <div className="hidden p-2 md:block">
+                <div className="grid w-full auto-rows-max grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-2.5">
+                  {underReviewItems.map((item) => (
+                    <PeripheralCard key={item.id} {...item} />
+                  ))}
+                </div>
+              </div>
+
+              <div className="p-2 md:hidden">
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(100px,1fr))] gap-2">
+                  {underReviewItems.map((item) => (
+                    <PeripheralCard key={item.id} {...item} />
+                  ))}
+                </div>
+              </div>
             </div>
           )}
         </div>
-
-        {underReviewItems.length > 0 && (
-          <div className="border-t border-border bg-muted/10">
-            <div className="flex items-center justify-between border-b border-border bg-muted/30 px-4 py-3">
-              <div className="flex items-center gap-3">
-                <span className="text-xl font-black text-foreground">-</span>
-                <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-                  {t.tierlist.underReview}
-                </span>
-              </div>
-            </div>
-
-            <div className="hidden p-2 md:block">
-              <div className="grid w-full auto-rows-max grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-2.5">
-                {underReviewItems.map((item) => (
-                  <PeripheralCard key={item.id} {...item} />
-                ))}
-              </div>
-            </div>
-
-            <div className="p-2 md:hidden">
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(100px,1fr))] gap-2">
-                {underReviewItems.map((item) => (
-                  <PeripheralCard key={item.id} {...item} />
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
+      )}
     </section>
   )
 }

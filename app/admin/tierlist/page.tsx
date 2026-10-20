@@ -41,6 +41,8 @@ import { tierLabel, tiersForCategory } from "@/lib/tier-utils"
 import { TierItemTooltipContent, type Ratings, type RatingKey } from "@/components/tierlist/TierItemTooltipContent"
 import { FilterBar } from "@/components/tierlist/FilterBar"
 import { TierlistMetaCard } from "@/components/admin/TierlistMetaCard"
+import { SpeedChartEditor } from "@/components/admin/SpeedChartEditor"
+import { hasSpeedChart, withSpeedChartPoint, type SpeedChartPoint } from "@/lib/speed-chart"
 import { CARD_SURFACE, CARD_SURFACE_INTERACTIVE } from "@/lib/ui-styles"
 
 type RatingMode = "oled" | "performance" | "value" | "recommended" | "soundTyping" | "mechanical" | "magnetic" | "pcb" | "ips_va" | "competitive"
@@ -1132,6 +1134,9 @@ export default function AdminPeripheralsPage() {
   const [selectedMouseShape, setSelectedMouseShape] = useState<MouseShape | "all">("all")
   const [selectedKeyboardLayout, setSelectedKeyboardLayout] = useState<KeyboardLayout | "all">("all")
   const [ratingMode, setRatingMode] = useState<RatingMode>("performance")
+  // Aba "Velocidade" (mousepad/glasspad/feet): troca o board de tiers pelo editor do gráfico.
+  // Não é um modo de tier, por isso fica fora de `RatingMode` (mesma escolha do TierlistGrid).
+  const [showSpeedChart, setShowSpeedChart] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -1979,7 +1984,8 @@ export default function AdminPeripheralsPage() {
         selectedKeyboardLayout === "all" ||
         (item.keyboard_layout ?? specs.keyboardLayout) === selectedKeyboardLayout
 
-      const matchesTierlistMode = participatesInMode(item, ratingMode)
+      // O gráfico não é aba de tier: entra todo periférico da categoria, vinculado ou não.
+      const matchesTierlistMode = showSpeedChart || participatesInMode(item, ratingMode)
 
       return matchesQuery && matchesBrand && matchesPrice && matchesMouseShape && matchesKeyboardLayout && matchesTierlistMode
     })
@@ -1991,6 +1997,7 @@ export default function AdminPeripheralsPage() {
     selectedPriceBand,
     selectedMouseShape,
     ratingMode,
+    showSpeedChart,
     selectedKeyboardLayout,
   ])
 
@@ -2078,8 +2085,36 @@ export default function AdminPeripheralsPage() {
     [filtered, isPriceBandMode],
   )
 
+  // Grava só a posição no gráfico, mas manda `specs` inteiro como o resto do board: o PATCH
+  // substitui a coluna. Otimista; se o save falhar, a foto volta para onde estava.
+  const handleSpeedChartPlace = useCallback(async (id: string, point: SpeedChartPoint | null) => {
+    const item = peripherals.find((p) => p.id === id)
+    if (!item) return
+    const previousSpecs = item.specs
+    const specs = withSpeedChartPoint(item.specs, point)
+    setPeripherals((current) => current.map((p) => (p.id === id ? { ...p, specs } : p)))
+
+    try {
+      const res = await fetch(`/api/admin/peripherals/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ specs }),
+      })
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null
+        throw new Error(data?.error ?? "Erro ao salvar a posição no gráfico.")
+      }
+    } catch (err) {
+      setPeripherals((current) => current.map((p) => (p.id === id ? { ...p, specs: previousSpecs } : p)))
+      toast.error("Erro ao salvar a posição no gráfico", {
+        description: err instanceof Error ? err.message : undefined,
+      })
+    }
+  }, [peripherals])
+
   const handleCategoryChange = (category: Category) => {
     setSelectedCategory(category)
+    if (!hasSpeedChart(category)) setShowSpeedChart(false)
     setSelectedBrand("all")
     setSelectedMouseShape("all")
     setSelectedKeyboardLayout("all")
@@ -2133,17 +2168,22 @@ export default function AdminPeripheralsPage() {
       <div className={cn("flex flex-col gap-4 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between", CARD_SURFACE)}>
         <div>
           <p className="text-xs font-medium text-muted-foreground">{t.tierlist.viewingBy}</p>
-          <p className="mt-0.5 text-sm font-semibold text-foreground">{modeDescription}</p>
+          <p className="mt-0.5 text-sm font-semibold text-foreground">
+            {showSpeedChart ? t.tierlist.speedChart.description : modeDescription}
+          </p>
         </div>
         <div className="flex flex-wrap justify-center gap-1 rounded-lg border border-border bg-muted/30 p-1 sm:justify-start">
           {getModesForCategory(selectedCategory).map((mode) => (
             <button
               key={mode.key}
               type="button"
-              onClick={() => setRatingMode(mode.key)}
+              onClick={() => {
+                setRatingMode(mode.key)
+                setShowSpeedChart(false)
+              }}
               className={cn(
                 "flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-all sm:px-4",
-                ratingMode === mode.key
+                !showSpeedChart && ratingMode === mode.key
                   ? "bg-cyan-500/20 text-cyan-300"
                   : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
               )}
@@ -2152,12 +2192,27 @@ export default function AdminPeripheralsPage() {
                 className={cn(
                   "size-1.5 shrink-0 rounded-full",
                   mode.color,
-                  ratingMode === mode.key ? "opacity-100" : "opacity-40",
+                  !showSpeedChart && ratingMode === mode.key ? "opacity-100" : "opacity-40",
                 )}
               />
               {getRatingModeLabel(mode.key, selectedCategory, locale)}
             </button>
           ))}
+          {hasSpeedChart(selectedCategory) && (
+            <button
+              type="button"
+              onClick={() => setShowSpeedChart(true)}
+              className={cn(
+                "flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-all sm:px-4",
+                showSpeedChart
+                  ? "bg-cyan-500/20 text-cyan-300"
+                  : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+              )}
+            >
+              <span className={cn("size-1.5 shrink-0 rounded-full bg-sky-400", showSpeedChart ? "opacity-100" : "opacity-40")} />
+              {t.tierlist.speedChart.tab}
+            </button>
+          )}
         </div>
       </div>
 
@@ -2174,6 +2229,8 @@ export default function AdminPeripheralsPage() {
         <div className="flex items-center justify-center py-14">
           <BoxLoader />
         </div>
+      ) : showSpeedChart ? (
+        <SpeedChartEditor items={filtered} onPlace={handleSpeedChartPlace} />
       ) : isPriceBandMode ? (
         // Faixa (o grupo) é derivada de `price`, mas pode mudar via drag: soltar um item
         // noutra faixa atualiza o preço dele pro mínimo daquela faixa (ver

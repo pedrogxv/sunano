@@ -43,6 +43,9 @@ const SCALAR_SPEC_KEYS = [
   "adminPriceGroup",
   "adminPriceBandOrder",
   "adminTierOrder", // fallback legado do modo "overall"
+  // Posição no gráfico de velocidade × textura (lib/speed-chart.ts).
+  "adminSpeedChartSpeed",
+  "adminSpeedChartTexture",
 ] as const
 
 export type TierlistSpecs = Record<string, unknown>

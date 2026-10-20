@@ -40,9 +40,13 @@ export default function DefaultHero({
         }}
       />
 
-      {/* Decorative glow, tinted with the mascot's colors */}
-      <div className="pointer-events-none absolute -top-20 right-0 size-72 rounded-full bg-amber-400/20 blur-3xl motion-safe:animate-[auth-blob-drift-a_16s_ease-in-out_infinite] dark:bg-amber-400/10" />
-      <div className="pointer-events-none absolute -bottom-24 -left-16 size-72 rounded-full bg-orange-500/10 blur-3xl motion-safe:animate-[auth-blob-drift-b_18s_ease-in-out_infinite]" />
+      {/* Decorative glow, tinted with the mascot's colors. A deriva só anima
+          do md pra cima: no celular, mover dois blur-3xl em loop (com o
+          backdrop-blur da pílula de números por cima, que refaz o desfoque a
+          cada frame) custava pintura contínua no aparelho mais fraco, e o
+          movimento é quase imperceptível na tela pequena. */}
+      <div className="pointer-events-none absolute -top-20 right-0 size-72 rounded-full bg-amber-400/20 blur-3xl md:motion-safe:animate-[auth-blob-drift-a_16s_ease-in-out_infinite] dark:bg-amber-400/10" />
+      <div className="pointer-events-none absolute -bottom-24 -left-16 size-72 rounded-full bg-orange-500/10 blur-3xl md:motion-safe:animate-[auth-blob-drift-b_18s_ease-in-out_infinite]" />
 
       <div className="relative grid gap-6 px-6 py-10 md:grid-cols-[1.1fr_auto] md:items-center md:px-12 md:py-14">
         <div className="space-y-5">
@@ -117,10 +121,17 @@ export default function DefaultHero({
         {/* Mascot */}
         <div className="relative mx-auto hidden w-48 shrink-0 md:block lg:w-56">
           <div className="absolute inset-4 -z-10 rounded-full bg-amber-400/25 blur-2xl" />
+          {/* `lazy`: no celular o bloco é `hidden`, e imagem lazy em
+              display:none nunca é baixada. Sem ele o React ainda gerava um
+              <link rel="preload"> no <head>, na frente do CSS. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/images/mascot/Logo-Sunano_calo-contorno.png"
+            src="/images/mascot/mascot-448.webp"
             alt="Mascote do Sunano"
+            width={448}
+            height={448}
+            loading="lazy"
+            decoding="async"
             className="w-full rotate-[-6deg] drop-shadow-2xl transition-transform duration-300 hover:rotate-0"
           />
         </div>

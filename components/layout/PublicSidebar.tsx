@@ -162,7 +162,13 @@ export function PublicSidebar() {
           // mobile, o que empurra o rodapé (painel de Aura, Patch Notes) para fora
           // da tela.
           "fixed inset-y-0 left-0 z-40 flex h-dvh w-60 shrink-0 flex-col border-border bg-background transition-all duration-300 md:relative md:inset-auto md:h-full md:translate-x-0",
-          isMobileOpen ? "translate-x-0" : "-translate-x-full",
+          // Gaveta fechada no celular: fora da tela, mas antes seguia pintando
+          // os destaques em loop (Loja/Promoções/Aura animam background-position
+          // e drop-shadow, que não rodam no compositor) a cada frame, o tempo
+          // todo — custo direto no INP. `invisible` tira da pintura e do Tab
+          // (a `transition-all` mantém visível durante o slide de saída) e
+          // `.sidebar-drawer-closed` pausa as animações (globals.css).
+          isMobileOpen ? "translate-x-0" : "-translate-x-full max-md:invisible sidebar-drawer-closed",
           isCollapsed ? "md:w-16" : "md:w-60"
         )}
       >
@@ -179,10 +185,16 @@ export function PublicSidebar() {
             {isCollapsed ? (
               <SunanoIcon />
             ) : (
+              // WebP reduzido (606×108, 3x do h-9). O PNG original tem
+              // 14285×2546 px / 464 KB: no celular a decodificação dele
+              // travava a primeira pintura. O PNG fica em /public porque o
+              // card de /api/og lê o arquivo (Satori não lê WebP).
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src="/images/mascot/logo-wordmark.png"
+                src="/images/mascot/logo-wordmark.webp"
                 alt="Sunano Tierlist"
+                width={606}
+                height={108}
                 className="h-9 w-auto shrink-0 object-contain"
               />
             )}

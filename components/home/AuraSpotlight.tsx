@@ -125,6 +125,8 @@ function PeripheralTeaser({ item }: { item: HomeAuraPeripheral }) {
           <img
             src={item.imageUrl}
             alt={item.name}
+            loading="lazy"
+            decoding="async"
             className={cn(
               "h-full w-full object-contain p-3 transition-transform duration-500 group-hover:scale-105",
               soldOut && "opacity-40 grayscale"

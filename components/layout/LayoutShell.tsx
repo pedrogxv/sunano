@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation"
 import { TopBar } from "@/components/layout/TopBar"
 import { ChangelogBanner } from "@/components/layout/ChangelogBanner"
 import { PublicSidebar } from "@/components/layout/PublicSidebar"
-import { AdminSidebar } from "@/components/layout/AdminSidebar"
 import { CartDrawer } from "@/components/store/CartDrawer"
 import { SupportFab } from "@/components/layout/SupportFab"
 import { useAuthModal } from "@/components/providers/auth-modal-context"
@@ -20,6 +19,13 @@ import { VipIntentWatcher } from "@/components/aura/VipIntentWatcher"
 const AuthModal = dynamic(() => import("@/components/auth/AuthModal").then((m) => m.AuthModal), {
   ssr: false,
 })
+
+// Import estático colocava a sidebar do painel inteira (e os ícones dela) no
+// bundle de TODA página pública. Com `dynamic` (SSR mantido) o chunk só é
+// baixado quando a rota é /admin.
+const AdminSidebar = dynamic(() =>
+  import("@/components/layout/AdminSidebar").then((m) => m.AdminSidebar)
+)
 
 export function LayoutShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()

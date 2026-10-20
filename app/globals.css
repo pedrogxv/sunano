@@ -240,6 +240,26 @@ h3,
   }
 }
 
+/* Aviso de versão nova já dispensado: o script inline do ChangelogBanner marca
+   o <html> antes da primeira pintura, então ele some sem aparecer e sumir
+   (e sem empurrar a página depois de carregada). */
+html[data-changelog-dismissed] .changelog-banner {
+  display: none;
+}
+
+/* Gaveta da sidebar FECHADA no celular (PublicSidebar): os destaques de
+   Loja/Promoções/Aura animam em loop propriedades que obrigam estilo + pintura
+   na thread principal a cada frame. Escondida fora da tela, a gaveta pagava
+   esse custo o tempo todo sem ninguém ver. Pausar (e não `animation: none`)
+   retoma do mesmo ponto quando ela abre. */
+@media (width < 48rem) {
+  .sidebar-drawer-closed *,
+  .sidebar-drawer-closed *::before,
+  .sidebar-drawer-closed *::after {
+    animation-play-state: paused !important;
+  }
+}
+
 /* Tier badge styles */
 .tier-badge-t0 {
   background: linear-gradient(135deg, oklch(0.6 0.22 25) 0%, oklch(0.5 0.2 20) 100%);

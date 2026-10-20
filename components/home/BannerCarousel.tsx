@@ -18,6 +18,11 @@ import { cn } from "@/lib/utils"
  * - Slides fora de tela ficam `inert`: não recebem foco nem clique.
  * - Sem rotação automática para quem pediu menos movimento no sistema
  *   (`prefers-reduced-motion`); a navegação manual continua.
+ * - No celular a rotação automática começa PARADA (o botão ▶ a liga). Lá o
+ *   hero tem ~340px de altura e um banner 16:5 tem ~125px: cada troca
+ *   sozinha subia a página inteira uns 200px, e layout shift sem interação
+ *   conta no CLS do Google (era o 0,3 do Lighthouse). Troca por swipe, dot ou
+ *   botão é interação e não conta. No desktop as alturas são parecidas.
  * - Setas ←/→ do teclado navegam; troca de slide é anunciada via `aria-live`.
  *
  * Cada banner é clicável: caminho interno navega pelo router (`next/link`),
@@ -47,17 +52,18 @@ const SWIPE_THRESHOLD_PX = 40
 
 const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)"
 
-function subscribeReducedMotion(onChange: () => void) {
-  const query = window.matchMedia(REDUCED_MOTION_QUERY)
-  query.addEventListener("change", onChange)
-  return () => query.removeEventListener("change", onChange)
-}
+/** Mesmo corte do `md` do Tailwind: daqui pra baixo o layout é o de celular. */
+const WIDE_VIEWPORT_QUERY = "(min-width: 768px)"
 
-function usePrefersReducedMotion() {
+function useMediaQuery(query: string, serverValue: boolean) {
   return useSyncExternalStore(
-    subscribeReducedMotion,
-    () => window.matchMedia(REDUCED_MOTION_QUERY).matches,
-    () => false // No servidor não dá para saber; assume movimento permitido.
+    (onChange) => {
+      const list = window.matchMedia(query)
+      list.addEventListener("change", onChange)
+      return () => list.removeEventListener("change", onChange)
+    },
+    () => window.matchMedia(query).matches,
+    () => serverValue
   )
 }
 
@@ -220,9 +226,14 @@ export default function BannerCarousel({
   const [current, setCurrent] = useState(0)
   // Pausa transitória: ponteiro em cima ou foco dentro do carrossel.
   const [isHoverPaused, setIsHoverPaused] = useState(false)
-  // Pausa deliberada: o visitante apertou o botão. Só ele reverte.
-  const [isStopped, setIsStopped] = useState(false)
-  const prefersReducedMotion = usePrefersReducedMotion()
+  // Pausa deliberada: o visitante apertou o botão. Só ele reverte. `null` =
+  // ainda não escolheu, e aí vale o padrão do viewport (parado no celular).
+  const [stoppedChoice, setStoppedChoice] = useState<boolean | null>(null)
+  // No servidor não dá para saber; assume movimento permitido e tela estreita
+  // (o desktop liga a rotação logo depois de hidratar, sem mudar o layout).
+  const prefersReducedMotion = useMediaQuery(REDUCED_MOTION_QUERY, false)
+  const isWideViewport = useMediaQuery(WIDE_VIEWPORT_QUERY, false)
+  const isStopped = stoppedChoice ?? !isWideViewport
 
   const dragStartRef = useRef<{ x: number; y: number; pointerId: number } | null>(null)
   const suppressClickRef = useRef(false)
@@ -404,7 +415,7 @@ export default function BannerCarousel({
             {/* WCAG 2.2.2: controle explícito para parar o movimento. */}
             <button
               type="button"
-              onClick={() => setIsStopped((value) => !value)}
+              onClick={() => setStoppedChoice(!isStopped)}
               aria-label={isStopped ? "Retomar rotação dos banners" : "Pausar rotação dos banners"}
               className="pointer-events-auto absolute bottom-2.5 right-3 rounded-full bg-black/35 p-1.5 text-white backdrop-blur-sm transition-colors hover:bg-black/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
             >

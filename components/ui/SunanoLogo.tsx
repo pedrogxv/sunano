@@ -8,10 +8,14 @@ interface SunanoIconProps {
 
 export function SunanoIcon({ className, title }: SunanoIconProps) {
   return (
+    // 128px (3x do size-9). O PNG original é 4500×4500: ~80 MB decodificado
+    // para desenhar um ícone de 36px.
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src="/images/mascot/Logo-Sunano_calo-contorno.png"
+      src="/images/mascot/mascot-128.webp"
       alt="Sunano"
+      width={128}
+      height={128}
       title={title}
       className={cn("size-9 shrink-0 object-contain", className)}
     />

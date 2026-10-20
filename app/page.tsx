@@ -63,6 +63,15 @@ function formatTimeAgo(dateStr: string) {
   return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })
 }
 
+/**
+ * Miniatura do YouTube no tamanho da lista da Home (w-32). A integração guarda
+ * a `hqdefault` (480×360, com tarja preta em cima e embaixo); a `mqdefault`
+ * (320×180) já é 16:9 e tem ~1/4 do peso. A página /videos segue com a grande.
+ */
+function homeVideoThumb(url: string) {
+  return url.replace(/\/hqdefault\.jpg$/, "/mqdefault.jpg")
+}
+
 function SectionHeader({
   icon: Icon,
   title,
@@ -161,6 +170,8 @@ export default async function HomePage() {
                         <img
                           src={p.image_url}
                           alt={p.name}
+                          loading="lazy"
+                          decoding="async"
                           className="absolute inset-0 size-full object-contain p-2 transition-transform group-hover:scale-105"
                         />
                       ) : (
@@ -285,6 +296,8 @@ export default async function HomePage() {
                         <img
                           src={post.media_image_urls[0]}
                           alt=""
+                          loading="lazy"
+                          decoding="async"
                           className="size-full object-cover"
                         />
                       </div>
@@ -338,6 +351,8 @@ export default async function HomePage() {
                         <img
                           src={post.media_image_urls[0]}
                           alt=""
+                          loading="lazy"
+                          decoding="async"
                           className="size-full object-cover"
                         />
                       </div>
@@ -389,8 +404,10 @@ export default async function HomePage() {
                     {video.thumbnailUrl && (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        src={video.thumbnailUrl}
+                        src={homeVideoThumb(video.thumbnailUrl)}
                         alt={video.title}
+                        loading="lazy"
+                        decoding="async"
                         className="absolute inset-0 size-full object-cover transition-transform duration-500 group-hover:scale-105"
                       />
                     )}

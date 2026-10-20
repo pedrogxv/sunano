@@ -1,3 +1,6 @@
+import { readFile } from "node:fs/promises"
+import { join } from "node:path"
+
 import { ImageResponse } from "next/og"
 import type { NextRequest } from "next/server"
 
@@ -64,6 +67,32 @@ function safeImageUrl(raw: string | null): string | undefined {
   } catch {
     return undefined
   }
+}
+
+/** Memoiza a leitura do logo entre invocações da mesma instância. */
+let brandLogoPromise: Promise<string | undefined> | undefined
+
+/**
+ * Logo da marca (a calopsita) como data URI.
+ *
+ * A faixa da marca desenhava um quadrado branco com um "S" no lugar do logo,
+ * e era isso que aparecia em todo link compartilhado. O arquivo é o mesmo do
+ * favicon (`app/icon.png`), em 512px: o original de `SunanoIcon` tem 4500px e
+ * pesaria em cada card à toa.
+ *
+ * Lido do disco, sem `fetch` na própria origem. O caminho é literal para o
+ * file tracing da Vercel incluir o PNG no bundle da função. Se a leitura
+ * falhar, o card sai só com o nome. Não vira erro.
+ */
+async function loadBrandLogo(): Promise<string | undefined> {
+  brandLogoPromise ??= readFile(join(process.cwd(), "public/images/mascot/sunano-icon.png"))
+    .then((buffer) => `data:image/png;base64,${buffer.toString("base64")}`)
+    .catch((error) => {
+      console.error("[api/og] logo da marca indisponível:", error)
+      return undefined
+    })
+
+  return brandLogoPromise
 }
 
 /** Acima disso a imagem não vale o custo de decodificar dentro do card. */
@@ -255,7 +284,10 @@ async function renderCard(request: NextRequest) {
   const eyebrow = searchParams.get("eyebrow")?.slice(0, EYEBROW_LIMIT)
   const subtitle = searchParams.get("subtitle")?.slice(0, SUBTITLE_LIMIT)
   const imageSource = safeImageUrl(searchParams.get("image"))
-  const image = imageSource ? await loadImageAsDataUri(imageSource) : undefined
+  const [image, brandLogo] = await Promise.all([
+    imageSource ? loadImageAsDataUri(imageSource) : undefined,
+    loadBrandLogo(),
+  ])
   const variant = searchParams.get("variant") ?? "cover"
 
   // Avatar e produto ficam num quadro quadrado ao lado do texto; capa ocupa a
@@ -282,22 +314,10 @@ async function renderCard(request: NextRequest) {
       >
         {/* Faixa da marca */}
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: 52,
-              height: 52,
-              borderRadius: 14,
-              background: "#FFFFFF",
-              color: "#000000",
-              fontSize: 30,
-              fontWeight: 700,
-            }}
-          >
-            S
-          </div>
+          {brandLogo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={brandLogo} alt="" width={60} height={60} style={{ objectFit: "contain" }} />
+          ) : null}
           <div style={{ display: "flex", fontSize: 30, fontWeight: 700, letterSpacing: -0.5 }}>
             {SITE_NAME}
           </div>

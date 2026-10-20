@@ -31,10 +31,15 @@ const spaceGrotesk = Space_Grotesk({
   variable: "--font-space-grotesk",
 })
 
+// Só o RankingCrownBadge usa (páginas de ranking). Com o preload padrão o
+// arquivo entrava no <head> de TODA página, disputando banda com o CSS e as
+// duas fontes que a primeira pintura de fato espera. Sem preload ele baixa
+// quando a regra `font-handwritten` aparece na tela (display: swap).
 const caveat = Caveat({
   subsets: ["latin"],
   weight: ["600", "700"],
   variable: "--font-caveat",
+  preload: false,
 })
 
 const SITE_TITLE = "Sunano | Tierlist de Periféricos"

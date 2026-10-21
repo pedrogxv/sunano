@@ -41,6 +41,27 @@ export function revalidateStorefront() {
   }
 }
 
+/**
+ * Página de produto da Loja (ISR) depois de uma compra que mexeu no estoque
+ * ou nas vagas do lote. Sem isto ela anunciava a quantidade antiga (ou o
+ * botão de comprar de um item esgotado) até o `revalidate` vencer — num
+ * lançamento, a fila inteira chegava ao checkout para ouvir "estoque
+ * insuficiente".
+ *
+ * Uma regeneração por compra, não por visita: continua muito mais barato que
+ * a página dinâmica de antes.
+ */
+export function revalidateStoreProducts(slugs: string[]) {
+  for (const slug of new Set(slugs)) {
+    if (!slug) continue
+    try {
+      revalidatePath(`/loja/${slug}`)
+    } catch (error) {
+      console.error("[revalidate-public] revalidateStoreProducts:", slug, error)
+    }
+  }
+}
+
 /** Equivalente para post de blog/notícia, que compartilham a tabela `blog_posts`. */
 export function revalidateBlogPost(slug?: string | null) {
   try {

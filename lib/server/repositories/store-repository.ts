@@ -1467,6 +1467,8 @@ export type StoreProductDetail = {
   is_launch: boolean
   /** Prazo da pré-venda/lançamento (ver lib/store-sale-window.ts). */
   sale_window: SaleWindow | null
+  /** Teto de unidades por cliente (conta ou CPF); null = sem limite. */
+  max_per_customer: number | null
 }
 
 export type StoreProductSpec = {
@@ -1547,7 +1549,7 @@ export const getStoreProductDetail = cache(async (
   }
   if (!product) return null
 
-  const baseDetail = product as unknown as Omit<StoreProductDetail, "sku" | "preorder" | "is_launch" | "sale_window">
+  const baseDetail = product as unknown as Omit<StoreProductDetail, "sku" | "preorder" | "is_launch" | "sale_window" | "max_per_customer">
   let linkedPeripheral: LinkedPeripheralRef | null = null
 
   const [extras, skuRows, specsResult, variantsResult, variantGroupsResult, peripheralsResult, peripheralResult] =
@@ -1674,21 +1676,25 @@ export const getStoreProductDetail = cache(async (
 async function getProductPageExtras(
   productId: string,
   saleType: StoreSaleType
-): Promise<Pick<StoreProductDetail, "sku" | "preorder" | "is_launch" | "sale_window">> {
+): Promise<Pick<StoreProductDetail, "sku" | "preorder" | "is_launch" | "sale_window" | "max_per_customer">> {
   const db = createSupabaseAdminClient()
-  const [{ data, error }, reserved] = await Promise.all([
+  const [{ data, error }, reserved, { data: limitRow }] = await Promise.all([
     db
       .from("store_products")
       .select("sku, is_launch, preorder_status, preorder_batch_name, preorder_ships_at, preorder_limit, sale_window_ends_at, sale_window_end_action, sale_window_end_price_cents")
       .eq("id", productId)
       .maybeSingle(),
     saleType === "pre_order" ? getPreorderReserved([productId]) : Promise.resolve(new Map<string, number>()),
+    // Consulta à parte: sem a migration 20270101000000 a coluna não existe, e
+    // o erro aqui só some com o limite, não com os campos acima.
+    db.from("store_products").select("max_per_customer").eq("id", productId).maybeSingle(),
   ])
   if (error) console.error("[store-repository] getProductPageExtras:", error)
   const isLaunch = data ? isLaunchActive(data, Date.now()) : false
 
   return {
     sku: data?.sku ?? null,
+    max_per_customer: limitRow?.max_per_customer ?? null,
     is_launch: isLaunch,
     sale_window: (saleType === "pre_order" || isLaunch) && data ? toSaleWindow(data) : null,
     preorder:
@@ -2124,9 +2130,8 @@ export async function replaceProductVariantGroups(
   return result
 }
 
-/** Limite diário (janela de 24h corridas) de unidades por produto e por usuário,
- * aplicado só a produtos sem controle de estoque (ver checkout/route.ts). */
-export const DAILY_PURCHASE_LIMIT_NO_STOCK = 15
+/** Limite diário por produto sem controle de estoque. Mora em `lib/store-cart-limits.ts` (o carrinho também usa). */
+export { DAILY_PURCHASE_LIMIT_NO_STOCK } from "@/lib/store-cart-limits"
 
 /**
  * Quantidade já comprada por um usuário de um produto específico nas
@@ -2134,8 +2139,11 @@ export const DAILY_PURCHASE_LIMIT_NO_STOCK = 15
  * ignorando pedidos cancelados/expirados — ver
  * 20260921000009_store_daily_purchase_limit.sql). Usada pelo checkout só
  * para produtos sem estoque cadastrado, onde não há outro teto natural.
+ *
+ * `null` quando a consulta falha: devolver 0 (como antes) liberava a compra
+ * sem limite justamente quando o banco estava sob pressão.
  */
-export async function getRecentProductPurchaseQuantity(userId: string, productId: string): Promise<number> {
+export async function getRecentProductPurchaseQuantity(userId: string, productId: string): Promise<number | null> {
   const db = createSupabaseAdminClient()
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
   const { data, error } = await db.rpc("get_recent_product_purchase_quantity", {
@@ -2146,7 +2154,7 @@ export async function getRecentProductPurchaseQuantity(userId: string, productId
 
   if (error) {
     console.error("[store-repository] getRecentProductPurchaseQuantity:", error)
-    return 0
+    return null
   }
   return data ?? 0
 }

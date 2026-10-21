@@ -49,13 +49,15 @@ const POLL_INTERVAL_MS = 3000
 
 /**
  * Pagamento com cartão no nosso site (Stripe ou Mercado Pago, pelo `gateway`
- * do pedido). `null` = ainda não consultado; `"hosted"` = pedido da Asaas,
- * cujo cartão é pago na página dela e que volta aqui só para aguardar a
- * confirmação.
+ * do pedido), ou na página da InfinitePay (`checkoutUrl` para voltar a ela).
+ * `null` = ainda não consultado; `"hosted"` = pedido da Asaas, cujo cartão é
+ * pago na página dela e que volta aqui só para aguardar a confirmação.
  */
 type CardInfo =
   | {
-      gateway?: "stripe" | "mercadopago"
+      gateway?: "stripe" | "mercadopago" | "infinitepay"
+      /** InfinitePay: link do checkout dela enquanto o pedido está pendente. */
+      checkoutUrl?: string | null
       state: CardPaymentState
       amountCents: number
       lastError?: string | null
@@ -70,6 +72,11 @@ function CardCheckoutContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const orderId = searchParams.get("orderId")
+  // Retorno da InfinitePay: ela acrescenta a transação e a fatura à URL.
+  const infinitePayTransaction = searchParams.get("transaction_nsu")
+  const infinitePaySlug = searchParams.get("slug")
+  const infinitePayReceipt = searchParams.get("receipt_url")
+  const returnedFromInfinitePay = Boolean(infinitePayTransaction && infinitePaySlug)
   const { clear } = useCart()
 
   const [order, setOrder] = useState<OrderStatus | null>(null)
@@ -148,6 +155,31 @@ function CardCheckoutContent() {
     return () => clearInterval(interval)
   }, [orderId, fetchOrder, fetchCardState])
 
+  // Voltou da InfinitePay: pede a conferência na hora (o servidor consulta a
+  // InfinitePay antes de liberar). Sem isto o pedido esperaria o webhook.
+  const infinitePayConfirmSent = useRef(false)
+  // Enquanto confere, um pedido que expirou antes do pagamento não mostra
+  // "expirou": o pagamento tardio ainda o quita.
+  const [infinitePayConfirming, setInfinitePayConfirming] = useState(returnedFromInfinitePay)
+  useEffect(() => {
+    if (!orderId || !returnedFromInfinitePay || infinitePayConfirmSent.current) return
+    infinitePayConfirmSent.current = true
+    fetch(`/api/store/orders/${orderId}/infinitepay-return`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        transaction_nsu: infinitePayTransaction,
+        slug: infinitePaySlug,
+        receipt_url: infinitePayReceipt,
+      }),
+    })
+      .then(() => fetchOrder())
+      .catch(() => {
+        // O polling do pedido e o webhook seguem valendo.
+      })
+      .finally(() => setInfinitePayConfirming(false))
+  }, [orderId, returnedFromInfinitePay, infinitePayTransaction, infinitePaySlug, infinitePayReceipt, fetchOrder])
+
   // Pedido pendente: descobre se é para mostrar o formulário de cartão.
   useEffect(() => {
     if (order?.status === "pending" && card === null) fetchCardState()
@@ -171,7 +203,7 @@ function CardCheckoutContent() {
     )
   }
 
-  if (!order) {
+  if (!order || (infinitePayConfirming && order.status === "expired")) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4">
         <Loader2 className="size-8 animate-spin text-muted-foreground" />
@@ -338,7 +370,9 @@ function CardCheckoutContent() {
     )
   }
 
-  if (card !== "hosted" && card.state === "ready") {
+  // InfinitePay e retorno do pagamento: aguarda a confirmação (abaixo), sem
+  // oferecer pagar de novo um pedido que acabou de ser pago.
+  if (card !== "hosted" && card.state === "ready" && !(card.gateway === "infinitepay" && returnedFromInfinitePay)) {
     const lines = order.items.filter((item) => item.name)
     const itemsCents = lines.reduce((sum, item) => sum + (item.price_cents ?? 0) * (item.quantity ?? 1), 0)
     // O valor do cartão já vem com o acréscimo, fixado no servidor: a linha só
@@ -388,9 +422,11 @@ function CardCheckoutContent() {
               <span className="text-xl font-black text-emerald-400">{formatBRL(card.amountCents)}</span>
             </div>
             <p className="mt-1 text-right text-xs text-muted-foreground">
-              {card.gateway === "mercadopago" && (card.maxInstallments ?? 1) > 1
-                ? `Em até ${card.maxInstallments}x no crédito`
-                : "À vista no crédito"}
+              {card.gateway === "infinitepay"
+                ? "Parcelas escolhidas na página da InfinitePay"
+                : card.gateway === "mercadopago" && (card.maxInstallments ?? 1) > 1
+                  ? `Em até ${card.maxInstallments}x no crédito`
+                  : "À vista no crédito"}
             </p>
           </div>
 
@@ -401,7 +437,40 @@ function CardCheckoutContent() {
         </aside>
 
         <div className={card.gateway === "mercadopago" ? "" : "rounded-xl border border-border bg-muted/20 p-4 lg:p-6"}>
-          {card.gateway === "mercadopago" ? (
+          {card.gateway === "infinitepay" ? (
+            <div className="space-y-4 text-center lg:text-left">
+              <div className="space-y-1">
+                <h2 className="text-lg font-bold text-foreground">Pagamento pendente</h2>
+                <p className="text-sm text-muted-foreground">
+                  O cartão é digitado na página segura da InfinitePay, nunca no nosso site. Se você
+                  fechou a página antes de concluir, continue de onde parou
+                </p>
+              </div>
+              {/* O link da InfinitePay continua pagável depois de pago, e o
+                  site só sabe do pagamento pelo retorno ou pelo webhook. Se os
+                  dois se perderam, o pedido segue "pendente" aqui: o botão não
+                  pode parecer o próximo passo de quem já pagou. */}
+              <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-left text-xs text-amber-200">
+                <ShieldCheck className="mt-0.5 size-3.5 shrink-0" />
+                <p>
+                  Já pagou? Não pague de novo. A confirmação chega sozinha e pode levar alguns minutos. Se passar de
+                  30 minutos, fale com o suporte com o número do pedido
+                </p>
+              </div>
+              {card.checkoutUrl ? (
+                <Button asChild className="w-full gap-2">
+                  <a href={card.checkoutUrl}>
+                    <CreditCard className="size-4" />
+                    Ainda não paguei, ir para o pagamento
+                  </a>
+                </Button>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  O link de pagamento não está disponível. Cancele este pedido em Meus Pedidos e finalize de novo
+                </p>
+              )}
+            </div>
+          ) : card.gateway === "mercadopago" ? (
             <MercadoPagoCardForm
               amountCents={card.amountCents}
               maxInstallments={card.maxInstallments ?? 1}

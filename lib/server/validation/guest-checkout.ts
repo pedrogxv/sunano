@@ -1,6 +1,8 @@
 import "server-only"
 import * as z from "zod"
 
+import { isValidPhone, normalizePhone } from "@/lib/br-format"
+
 /**
  * Validação de CPF com dígitos verificadores (não só formato/tamanho) —
  * o dado vem direto do cliente e precisa ser confiável o bastante para
@@ -31,8 +33,8 @@ export function isValidCPF(raw: string): boolean {
 /**
  * Nome+CPF enviados por um usuário logado que ainda não tem esses dados no
  * perfil (sem e-mail, que já vem da sessão), para o checkout completar o
- * perfil no mesmo request em vez de mandar a pessoa para uma tela de edição
- * que não existe.
+ * perfil no mesmo request em vez de mandar a pessoa para Minha conta no meio
+ * da compra. Minha conta (`parsePurchaseProfileUpdate`) usa este mesmo schema.
  */
 export const payerInfoSchema = z.object({
   guestName: z
@@ -56,10 +58,11 @@ export type PayerInfo = z.infer<typeof payerInfoSchema>
  * que mapeamos para `province` na chamada à Asaas.
  */
 export const payerAddressSchema = z.object({
+  // Brasileiro (só dígitos, com DDD) ou de fora ("+<DDI><número>"): ver `normalizePhone`
   guestPhone: z
     .string("Informe um telefone válido.")
-    .transform((value) => value.replace(/\D/g, ""))
-    .refine((value) => value.length === 10 || value.length === 11, "Informe um telefone válido."),
+    .transform(normalizePhone)
+    .refine(isValidPhone, "Informe um telefone válido. Fora do Brasil, comece com + e o código do país."),
   guestPostalCode: z
     .string("Informe um CEP válido.")
     .transform((value) => value.replace(/\D/g, ""))

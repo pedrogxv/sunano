@@ -8,7 +8,15 @@ import { notifyDiscordOrderEvent } from "@/lib/server/repositories/discord-order
 import { sendOrderEmail } from "@/lib/server/repositories/order-emails-repository"
 import { syncCommissionForRefund } from "@/lib/server/repositories/affiliates-repository"
 import { logAdminAction } from "@/lib/server/repositories/store-admin-audit-repository"
-import { clampPage, clampPageSize, escapeLikePattern, escapeOrFilterValue, rangeFor } from "@/lib/server/repositories/_shared"
+import {
+  clampPage,
+  clampPageSize,
+  escapeLikePattern,
+  escapeOrFilterValue,
+  isMissingDbFunction,
+  rangeFor,
+} from "@/lib/server/repositories/_shared"
+import { acquireLease } from "@/lib/server/lease"
 import { computeEffectivePrice } from "@/lib/store-pricing"
 import { getSelectionRulesForCheckout } from "@/lib/server/repositories/store-repository"
 import { patchOrderMetadata } from "@/lib/server/repositories/order-metadata-repository"
@@ -121,6 +129,7 @@ type OrderFilterQuery<T> = {
 const GATEWAY_ORDER_FILTER: Record<PaymentGateway, <T extends OrderFilterQuery<T>>(query: T) => T> = {
   stripe: (query) => query.or("stripe_payment_intent_id.not.is.null,stripe_session_id.not.is.null"),
   mercadopago: (query) => query.eq("payment_gateway", "mercadopago"),
+  infinitepay: (query) => query.eq("payment_gateway", "infinitepay"),
   asaas: (query) =>
     query
       .is("stripe_payment_intent_id", null)
@@ -129,7 +138,7 @@ const GATEWAY_ORDER_FILTER: Record<PaymentGateway, <T extends OrderFilterQuery<T
       // descartaria essas linhas. Um `.or()` só: dois no mesmo request não
       // se combinam como se espera.
       .or(
-        "payment_method.is.null,and(payment_method.neq.aura,or(payment_gateway.is.null,payment_gateway.neq.mercadopago))"
+        "payment_method.is.null,and(payment_method.neq.aura,or(payment_gateway.is.null,payment_gateway.not.in.(mercadopago,infinitepay)))"
       ),
 }
 
@@ -252,6 +261,164 @@ export async function takeStock(db: StockDb, line: StockMovement): Promise<boole
       ? await db.rpc("decrement_variant_stock", { p_variant_id: line.variantId, p_quantity: line.quantity })
       : await db.rpc("decrement_store_stock", { p_product_id: line.productId, p_quantity: line.quantity })
   return Boolean(data)
+}
+
+export type StockReservation =
+  | { ok: true; /** Estoque que sobrou; `null` = sem controle de estoque. */ remaining: number | null }
+  | { ok: false }
+
+/**
+ * Reserva do checkout: desconta o estoque E grava a linha no diário
+ * (`store_stock_reservations`) na mesma transação (`reserve_store_stock`).
+ *
+ * Eram dois comandos (`takeStock` e depois o insert do diário): a Function
+ * que morresse entre eles deixava a unidade descontada sem registro nenhum,
+ * fora da prateleira para sempre. Desfazer é `releaseReservationGroup`.
+ */
+export async function reserveStock(
+  db: StockDb,
+  reservationGroup: string,
+  line: StockMovement
+): Promise<StockReservation> {
+  const { data, error } = await db.rpc("reserve_store_stock", {
+    p_reservation_group: reservationGroup,
+    p_product_id: line.productId,
+    p_variant_id: line.variantId,
+    p_sku_id: line.skuId,
+    p_quantity: line.quantity,
+  })
+
+  if (isMissingDbFunction(error)) return reserveStockLegacy(db, reservationGroup, line)
+  if (error) throw new Error(`reserve_store_stock: ${error.message}`)
+  return data?.ok ? { ok: true, remaining: data.remaining ?? null } : { ok: false }
+}
+
+/** Caminho anterior, só enquanto a migration 20270101000000 não estiver aplicada. Remover depois. */
+async function reserveStockLegacy(db: StockDb, reservationGroup: string, line: StockMovement): Promise<StockReservation> {
+  if (!(await takeStock(db, line))) return { ok: false }
+  const { error } = await db.from("store_stock_reservations").insert({
+    reservation_group: reservationGroup,
+    product_id: line.productId,
+    variant_id: line.variantId,
+    ...(line.skuId ? { sku_id: line.skuId } : {}),
+    quantity: line.quantity,
+  })
+  if (error) console.error("[orders-repository] reserva sem diário (fallback):", error)
+  return { ok: true, remaining: null }
+}
+
+/**
+ * Desfaz uma reserva inteira do checkout — diário E estoque, na mesma
+ * transação (`release_stock_reservation_group`). Vale também para as linhas
+ * de pré-venda (`reserve_preorder`), que só saem do diário.
+ *
+ * Só serve ENQUANTO o diário ainda tem a reserva (antes do pedido existir).
+ * Depois de `confirmReservations` o pedido é que segura o estoque, e
+ * devolver é `restoreStock` por linha.
+ *
+ * `legacyLines` é o caminho de antes da migration 20270101000000: apaga o
+ * diário e devolve linha a linha. Remover junto com o fallback.
+ */
+export async function releaseReservationGroup(
+  db: StockDb,
+  reservationGroup: string,
+  legacyLines: StockMovement[]
+): Promise<void> {
+  const { error } = await db.rpc("release_stock_reservation_group", { p_reservation_group: reservationGroup })
+  if (!error) return
+  if (!isMissingDbFunction(error)) {
+    // As linhas seguem no diário: o cron as devolve em 15 min. Não há o que
+    // repetir aqui sem arriscar devolver duas vezes.
+    console.error("[orders-repository] release_stock_reservation_group:", reservationGroup, error)
+    return
+  }
+
+  await db.from("store_stock_reservations").delete().eq("reservation_group", reservationGroup)
+  await Promise.all(
+    legacyLines.map(async (line) => {
+      try {
+        await restoreStock(db, line)
+      } catch (err) {
+        console.error("[orders-repository] falha ao reverter reserva de estoque:", line, err)
+      }
+    })
+  )
+}
+
+type ReleasedOrder = {
+  id: string
+  metadata: Record<string, unknown> | null
+  items: Record<string, unknown>[]
+  asaas_payment_id: string | null
+  asaas_checkout_id: string | null
+  stripe_payment_intent_id: string | null
+  payment_gateway: string | null
+}
+
+/**
+ * Tira pedidos de `pending` (para `expired` ou `cancelled`) e devolve o
+ * estoque dos itens na MESMA transação (`release_pending_store_orders`).
+ *
+ * Antes eram dois passos: o UPDATE de status e depois um RPC de estoque por
+ * item. A Function que morresse no meio (o cron tem 30 s, e um lote grande de
+ * expirações cabia mal nisso) deixava pedidos expirados com as unidades fora
+ * da prateleira para sempre — nada mais olhava para eles.
+ *
+ * Só volta o que AINDA estava pendente no momento da escrita: um pedido pago
+ * por um webhook concorrente fica de fora e nada dele é devolvido.
+ */
+async function releasePendingOrders(
+  db: StockDb,
+  orderIds: string[],
+  toStatus: "expired" | "cancelled"
+): Promise<{ orders: ReleasedOrder[]; error: string | null }> {
+  if (orderIds.length === 0) return { orders: [], error: null }
+
+  const { data, error } = await db.rpc("release_pending_store_orders", {
+    p_order_ids: orderIds,
+    p_to_status: toStatus,
+  })
+
+  if (isMissingDbFunction(error)) return releasePendingOrdersLegacy(db, orderIds, toStatus)
+  if (error) return { orders: [], error: error.message }
+
+  return {
+    orders: (data ?? []).map((row) => ({
+      id: row.order_id,
+      metadata: row.order_metadata,
+      items: Array.isArray(row.order_items) ? row.order_items : [],
+      asaas_payment_id: row.order_asaas_payment_id,
+      asaas_checkout_id: row.order_asaas_checkout_id,
+      stripe_payment_intent_id: row.order_stripe_payment_intent_id,
+      payment_gateway: row.order_payment_gateway,
+    })),
+    error: null,
+  }
+}
+
+/** Caminho anterior (status e estoque em passos separados). Remover junto com o fallback. */
+async function releasePendingOrdersLegacy(
+  db: StockDb,
+  orderIds: string[],
+  toStatus: "expired" | "cancelled"
+): Promise<{ orders: ReleasedOrder[]; error: string | null }> {
+  const { data, error } = await db
+    .from("store_orders")
+    .update({ status: toStatus, updated_at: new Date().toISOString() })
+    .in("id", orderIds)
+    .eq("status", "pending")
+    .select("id, items, metadata, asaas_payment_id, asaas_checkout_id, stripe_payment_intent_id, payment_gateway")
+  if (error) return { orders: [], error: error.message }
+
+  const orders = (data ?? []) as unknown as ReleasedOrder[]
+  await Promise.all(
+    orders.flatMap((order) =>
+      ((order.items ?? []) as unknown as OrderStockLine[])
+        .filter(lineMovesPhysicalStock)
+        .map((item) => restoreStock(db, orderLineStockMovement(item)))
+    )
+  )
+  return { orders, error: null }
 }
 
 /**
@@ -394,13 +561,15 @@ export type UserOrderSummary = {
   complement: OrderComplementSummary
   /** Este pedido É o pagamento de complemento do pedido indicado. */
   complement_for: OrderComplementTarget | null
+  /** Prazo da loja para pagar um pedido `pending` (coluna `pix_expires_at`, que vale para todo método). */
+  payment_expires_at: string | null
 }
 
 /** O pedido original de um pagamento de complemento. */
 export type OrderComplementTarget = { order_id: string; order_number: string }
 
 const ORDER_COLUMNS =
-  "id, status, total_cents, items, created_at, payment_method, aura_cost_paid, asaas_payment_id, asaas_receipt_url, stripe_payment_intent_id, metadata, pix_copy_paste, pix_qr_code_base64, tracking_code, carrier, service_form_answers, complement_due_cents, complement_note, complement_for_order_id, " +
+  "id, status, total_cents, items, created_at, payment_method, aura_cost_paid, asaas_payment_id, asaas_receipt_url, stripe_payment_intent_id, metadata, pix_expires_at, pix_copy_paste, pix_qr_code_base64, tracking_code, carrier, service_form_answers, complement_due_cents, complement_note, complement_for_order_id, " +
   SHIPPING_COLUMNS
 
 type ComplementColumns = {
@@ -506,11 +675,17 @@ function toUserOrderSummaryBase(row: unknown): Omit<UserOrderSummary, "complemen
   const {
     stripe_payment_intent_id: stripePaymentIntentId,
     metadata,
+    pix_expires_at: paymentExpiresAt,
     ...raw
-  } = row as Omit<UserOrderSummary, "complement" | "complement_for"> &
-    RawShippingColumns & { stripe_payment_intent_id: string | null; metadata: Record<string, unknown> | null }
+  } = row as Omit<UserOrderSummary, "complement" | "complement_for" | "payment_expires_at"> &
+    RawShippingColumns & {
+      stripe_payment_intent_id: string | null
+      metadata: Record<string, unknown> | null
+      pix_expires_at: string | null
+    }
   return {
     ...raw,
+    payment_expires_at: paymentExpiresAt,
     // Pedido do Stripe: a cobrança e o comprovante entram nos mesmos campos
     // que a tela já mostra. `metadata` não vai para o cliente.
     asaas_payment_id: raw.asaas_payment_id ?? stripePaymentIntentId,
@@ -587,6 +762,18 @@ export type OrderCardReviewFlag = {
   approved_at?: string
 }
 
+/** `metadata.infinitepay_unapplied`, gravado por `applyInfinitePayPayment`. */
+export type OrderInfinitePayUnapplied = {
+  transaction_nsu: string
+  slug: string
+  receipt_url: string | null
+  amount_cents: number
+  paid_amount_cents: number
+  capture_method: string | null
+  reason: string
+  detected_at: string
+}
+
 export type OrderChargebackFlag = {
   event: string
   dispute_status: string
@@ -627,6 +814,12 @@ export type AdminOrderRow = {
   payment_gateway: string | null
   /** Pagamento APROVADO do Mercado Pago. Null enquanto o cartão não passou. */
   mercadopago_payment_id: string | null
+  /** Transação da InfinitePay que quitou o pedido (estorno é manual, no app dela). */
+  infinitepay_transaction_nsu: string | null
+  /** Comprovante da InfinitePay. */
+  infinitepay_receipt_url: string | null
+  /** Pagamento na InfinitePay que NÃO quitou o pedido (valor, expirado, duplicado): estornar no app. */
+  infinitepay_unapplied: OrderInfinitePayUnapplied | null
   /** Cartão do Stripe autorizado e SEGURADO para revisão (nada cobrado ainda). */
   card_review: OrderCardReviewFlag | null
   /** Aviso precoce de fraude do emissor (Stripe Radar). */
@@ -663,7 +856,7 @@ export type AdminOrderRow = {
 }
 
 const ADMIN_ORDER_COLUMNS =
-  "id, status, total_cents, pix_price_cents, items, created_at, updated_at, payment_method, aura_cost_paid, customer_name, customer_email, metadata, tracking_code, carrier, shipped_at, delivered_at, refunded_cents, refund_reason, refunded_at, asaas_payment_id, stripe_payment_intent_id, stripe_session_id, payment_gateway, mercadopago_payment_id, is_sandbox, service_form_answers, complement_due_cents, complement_note, complement_for_order_id, " +
+  "id, status, total_cents, pix_price_cents, items, created_at, updated_at, payment_method, aura_cost_paid, customer_name, customer_email, metadata, tracking_code, carrier, shipped_at, delivered_at, refunded_cents, refund_reason, refunded_at, asaas_payment_id, stripe_payment_intent_id, stripe_session_id, payment_gateway, mercadopago_payment_id, infinitepay_transaction_nsu, infinitepay_receipt_url, is_sandbox, service_form_answers, complement_due_cents, complement_note, complement_for_order_id, " +
   SHIPPING_COLUMNS
 
 type AdminOrderRawRow = {
@@ -691,6 +884,8 @@ type AdminOrderRawRow = {
   stripe_session_id: string | null
   payment_gateway: string | null
   mercadopago_payment_id: string | null
+  infinitepay_transaction_nsu: string | null
+  infinitepay_receipt_url: string | null
   is_sandbox: boolean
   service_form_answers: unknown
 } & RawShippingColumns &
@@ -823,6 +1018,9 @@ export async function listOrdersForAdmin(filters?: {
       stripe_session_id: row.stripe_session_id ?? null,
       payment_gateway: row.payment_gateway ?? null,
       mercadopago_payment_id: row.mercadopago_payment_id ?? null,
+      infinitepay_transaction_nsu: row.infinitepay_transaction_nsu ?? null,
+      infinitepay_receipt_url: row.infinitepay_receipt_url ?? null,
+      infinitepay_unapplied: (row.metadata?.infinitepay_unapplied as OrderInfinitePayUnapplied | undefined) ?? null,
       user_id: userId,
       user_display_name: userId ? profiles[userId]?.display_name ?? null : null,
       customer_cpf: userId ? cpfByUser[userId] ?? null : null,
@@ -1284,14 +1482,41 @@ export async function refundOrder(
     reason?: string
     /** Estorno por suspeita de fraude (aviso do emissor). Só o Stripe usa o sinal (alimenta o Radar). */
     fraudulent?: boolean
+    /**
+     * InfinitePay não tem estorno por API: o admin devolve no app dela e
+     * confirma aqui que já devolveu. Sem isto, o pedido não muda.
+     */
+    manualConfirmed?: boolean
   },
+  adminId?: string | null
+): Promise<RepositoryResult> {
+  // Um estorno por pedido por vez. A Asaas não tem chave de idempotência: dois
+  // cliques (ou dois admins) num estorno parcial liam o mesmo `refunded_cents`,
+  // os dois chamavam o gateway e o dinheiro saía duas vezes, enquanto o banco
+  // gravava só um. O prazo cobre a chamada ao gateway com folga.
+  const lease = await acquireLease(`store_refund:${id}`, 120)
+  if (!lease.acquired) {
+    return lease.reason === "error"
+      ? { ok: false, error: "Não foi possível iniciar o estorno agora. Tente novamente.", status: 503 }
+      : { ok: false, error: "Já existe um estorno deste pedido em andamento. Aguarde e confira o pedido.", status: 409 }
+  }
+  try {
+    return await refundOrderLocked(id, params, adminId)
+  } finally {
+    await lease.release()
+  }
+}
+
+async function refundOrderLocked(
+  id: string,
+  params: Parameters<typeof refundOrder>[1],
   adminId?: string | null
 ): Promise<RepositoryResult> {
   const db = createSupabaseAdminClient()
 
   const { data: existing } = await db
     .from("store_orders")
-    .select("id, status, total_cents, pix_price_cents, refunded_cents, asaas_payment_id, stripe_payment_intent_id, mercadopago_payment_id, metadata, affiliate_id")
+    .select("id, status, total_cents, pix_price_cents, refunded_cents, asaas_payment_id, stripe_payment_intent_id, mercadopago_payment_id, infinitepay_transaction_nsu, metadata, affiliate_id")
     .eq("id", id)
     .maybeSingle()
 
@@ -1301,7 +1526,12 @@ export async function refundOrder(
   if (!["paid", "awaiting_shipping_info", "shipped", "delivered"].includes(existing.status)) {
     return { ok: false, error: "Só é possível estornar um pedido pago.", status: 400 }
   }
-  if (!existing.asaas_payment_id && !existing.stripe_payment_intent_id && !existing.mercadopago_payment_id) {
+  if (
+    !existing.asaas_payment_id &&
+    !existing.stripe_payment_intent_id &&
+    !existing.mercadopago_payment_id &&
+    !existing.infinitepay_transaction_nsu
+  ) {
     return {
       ok: false,
       error: "Este pedido não tem cobrança de gateway associada; estorne manualmente e atualize o status.",
@@ -1315,10 +1545,21 @@ export async function refundOrder(
     return { ok: false, error: "Valor de estorno inválido para o saldo restante do pedido.", status: 400 }
   }
 
-  // Pedido do Mercado Pago (cartão): mesma regra — o gateway estorna
-  // primeiro, o banco só grava se ele aceitar. A chave de idempotência segue
-  // a do Stripe: clique duplo colapsa, nova tentativa depois de falha não.
-  if (existing.mercadopago_payment_id) {
+  // Pedido da InfinitePay: o estorno é feito no app dela (não há API). O
+  // banco só grava quando o admin confirma que JÁ devolveu, para o pedido
+  // nunca dizer "reembolsado" com o dinheiro ainda na conta.
+  if (existing.infinitepay_transaction_nsu) {
+    if (!params.manualConfirmed) {
+      return {
+        ok: false,
+        error: `A InfinitePay não estorna pelo site. Estorne no app da InfinitePay (transação ${existing.infinitepay_transaction_nsu}) e confirme aqui.`,
+        status: 400,
+      }
+    }
+  } else if (existing.mercadopago_payment_id) {
+    // Pedido do Mercado Pago (cartão): mesma regra — o gateway estorna
+    // primeiro, o banco só grava se ele aceitar. A chave de idempotência segue
+    // a do Stripe: clique duplo colapsa, nova tentativa depois de falha não.
     const { refundMercadoPagoOrder, MercadoPagoError } = await import("@/lib/server/integrations/mercadopago")
     const failedAttempts = refundAttemptsOf(existing.metadata)
     try {
@@ -1403,11 +1644,19 @@ export async function refundOrder(
   if (params.reason) update.refund_reason = params.reason
   if (isFullRefund) update.status = "refunded"
 
-  const { error } = await db.from("store_orders").update(update).eq("id", id)
-  if (error) {
-    // O estorno já aconteceu de verdade no Asaas — não propaga como falha
+  // Condicional ao acumulado LIDO: se outro caminho (webhook de estorno feito
+  // no painel do gateway) gravou no meio, este UPDATE não sobrescreve o valor
+  // dele com uma soma calculada sobre um número velho.
+  const { data: written, error } = await db
+    .from("store_orders")
+    .update(update)
+    .eq("id", id)
+    .eq("refunded_cents", existing.refunded_cents)
+    .select("id")
+  if (error || !written?.length) {
+    // O estorno já aconteceu de verdade no gateway — não propaga como falha
     // total, mas também não finge que o banco está em dia.
-    console.error("[orders-repository] refundOrder — grava status:", error)
+    console.error("[orders-repository] refundOrder — grava status:", id, error ?? "acumulado mudou no meio")
     return { ok: false, error: "Estorno feito no gateway, mas falhou ao atualizar o pedido. Verifique manualmente.", status: 500 }
   }
 
@@ -1479,9 +1728,10 @@ function refundAttemptsOf(metadata: unknown): number {
  * Pedidos legados sem `asaas_payment_id` são cancelados só localmente — o
  * PIX gerado simplesmente nunca será pago e expira sozinho no gateway.
  *
- * O UPDATE condicional (`WHERE status = 'pending'`) roda antes da chamada à
- * Asaas e da devolução de estoque, mesmo padrão de `expireStalePendingOrders`:
- * evita cancelar um pedido que acabou de ser pago por um webhook concorrente.
+ * A transição (`WHERE status = 'pending'`) e a devolução do estoque são uma
+ * transação só (`releasePendingOrders`) e rodam antes da chamada ao gateway,
+ * mesmo padrão de `expireStalePendingOrders`: evita cancelar um pedido que
+ * acabou de ser pago por um webhook concorrente.
  */
 export async function cancelOrder(
   id: string,
@@ -1490,16 +1740,30 @@ export async function cancelOrder(
 ): Promise<RepositoryResult> {
   const db = createSupabaseAdminClient()
 
-  const { data: existing } = await db
-    .from("store_orders")
-    .update({ status: "cancelled", updated_at: new Date().toISOString() })
-    .eq("id", id)
-    .eq("status", "pending")
-    .select("id, items, metadata, asaas_payment_id, stripe_payment_intent_id")
-    .maybeSingle()
-
+  // Status e estoque na mesma transação: o pedido só sai de `pending` com as
+  // unidades já de volta na prateleira (ver `releasePendingOrders`).
+  const { orders: released, error: releaseError } = await releasePendingOrders(db, [id], "cancelled")
+  if (releaseError) {
+    console.error("[orders-repository] cancelOrder:", releaseError)
+    return { ok: false, error: "Não foi possível cancelar o pedido. Tente novamente.", status: 500 }
+  }
+  const existing = released[0]
   if (!existing) {
     return { ok: false, error: "Só é possível cancelar um pedido aguardando pagamento.", status: 400 }
+  }
+
+  // Cartão hospedado da Asaas: o checkout seguia pagável até vencer sozinho
+  // depois do cancelamento. Falha (já pago, já expirado) cai no webhook.
+  //
+  // InfinitePay não tem como cancelar o link pela API: pagamento num pedido
+  // cancelado vira `infinitepay_unapplied` (estorno manual, aviso no Discord).
+  if (existing.asaas_checkout_id) {
+    const { cancelCheckout } = await import("@/lib/server/integrations/asaas")
+    try {
+      await cancelCheckout(existing.asaas_checkout_id)
+    } catch (err) {
+      console.error("[orders-repository] cancelOrder — Asaas checkout:", err)
+    }
   }
 
   // Pedido do Stripe: cancela o PaymentIntent para o QR deixar de ser pagável
@@ -1527,11 +1791,7 @@ export async function cancelOrder(
     }
   }
 
-  // Pré-venda fica de fora: não teve estoque descontado para devolver.
-  const cart = ((existing.items as OrderStockLine[]) ?? []).filter(lineMovesPhysicalStock)
-  await Promise.all(cart.map((item) => restoreStock(db, orderLineStockMovement(item))))
-
-  const ownerId = orderOwnerId(existing.metadata as Record<string, unknown> | null)
+  const ownerId = orderOwnerId(existing.metadata)
   if (ownerId) {
     await notifyOrderStatusChange({ userId: ownerId, orderId: id, status: "cancelled" })
   }
@@ -1579,6 +1839,13 @@ async function cancelStripeIntentsBestEffort(intentIds: string[]): Promise<void>
   }
 }
 
+/** Pedidos expirados por execução do cron (ver `expireStalePendingOrders`). */
+const EXPIRE_BATCH_SIZE = 300
+/** Avisos no site disparados em paralelo. */
+const NOTIFY_BATCH_SIZE = 20
+/** Quanto do `maxDuration` (30 s) do cron os avisos do Discord podem usar. */
+const DISCORD_TIME_BUDGET_MS = 18_000
+
 export type ExpireStalePendingOrdersResult = {
   expired_count: number
   stock_restored_count: number
@@ -1600,19 +1867,25 @@ export type ExpireStalePendingOrdersResult = {
  * pedido que acabou de ser pago.
  */
 export async function expireStalePendingOrders(): Promise<ExpireStalePendingOrdersResult> {
+  const startedAt = Date.now()
   const db = createSupabaseAdminClient()
   const now = new Date().toISOString()
   const fallbackCutoff = new Date(Date.now() - PIX_EXPIRATION_MINUTES * 60_000).toISOString()
 
-  const { data: expiredOrders, error } = await db
+  // Fila com teto por execução, mais antigos primeiro. Sem teto, um pico de
+  // pedidos abandonados (lançamento) virava UM update gigante seguido de
+  // centenas de avisos numa função de 30 s. O que sobrar sai na execução
+  // seguinte — o cron roda a cada 5 min.
+  const { data: candidates, error } = await db
     .from("store_orders")
-    .update({ status: "expired", updated_at: now })
+    .select("id")
     .eq("status", "pending")
     .or(`pix_expires_at.lt.${now},and(pix_expires_at.is.null,created_at.lt.${fallbackCutoff})`)
-    .select("id, items, metadata, stripe_payment_intent_id")
+    .order("created_at", { ascending: true })
+    .limit(EXPIRE_BATCH_SIZE)
 
   if (error) {
-    console.error("[orders-repository] expireStalePendingOrders — update:", error)
+    console.error("[orders-repository] expireStalePendingOrders — fila:", error)
     return {
       expired_count: 0,
       stock_restored_count: 0,
@@ -1621,45 +1894,44 @@ export async function expireStalePendingOrders(): Promise<ExpireStalePendingOrde
     }
   }
 
-  const orders = (expiredOrders ?? []) as {
-    id: string
-    items: Record<string, unknown>[]
-    metadata: Record<string, unknown> | null
-    stripe_payment_intent_id: string | null
-  }[]
-
-  // ORDEM IMPORTA (a função tem `maxDuration` de 30 s e os pedidos acima já
-  // saíram de `pending`, então nada os reprocessa): primeiro o que não pode se
-  // perder, o ESTOQUE; depois fechar a cobrança no Stripe, que é rede externa e
-  // pode demorar; por último os avisos. Antes, o cancelamento no Stripe rodava
-  // em série ANTES de devolver o estoque: um Stripe lento matava a função no
-  // meio e as unidades ficavam descontadas para sempre.
-
-  // Achata (pedido, item) numa lista única e restaura o estoque em paralelo —
-  // cada RPC é independente (produto/variante diferentes), então não há
-  // motivo pra serializar pedido por pedido, item por item.
-  const restoreTasks = orders.flatMap((order) => {
-    // Pré-venda não teve estoque descontado — devolver aqui inventaria unidades.
-    const cart = (order.items as unknown as OrderStockLine[]).filter(lineMovesPhysicalStock)
-    return cart.map((item) => ({ orderId: order.id, item }))
-  })
-
-  const results = await Promise.all(
-    restoreTasks.map(async ({ orderId, item }) => {
-      const restored = await restoreStock(db, orderLineStockMovement(item))
-      return { orderId, item, restored }
-    })
+  // Status + estoque numa transação só (ver `releasePendingOrders`): o que
+  // não pode se perder, o ESTOQUE, já está de volta quando esta linha
+  // retorna, e o resto (Stripe, avisos) é rede externa que pode demorar.
+  const { orders, error: releaseError } = await releasePendingOrders(
+    db,
+    (candidates ?? []).map((row) => row.id),
+    "expired"
   )
 
   const errors: string[] = []
-  let stockRestoredCount = 0
-  for (const { orderId, item, restored } of results) {
-    if (restored) {
-      stockRestoredCount += 1
-    } else {
-      const message = `Falha ao devolver estoque do pedido expirado ${orderId} (item ${item.variant_id ?? item.id})`
-      console.error("[orders-repository] expireStalePendingOrders —", message)
-      errors.push(message)
+  if (releaseError) {
+    console.error("[orders-repository] expireStalePendingOrders — release:", releaseError)
+    errors.push(releaseError)
+  }
+  const stockRestoredCount = orders.reduce(
+    (sum, order) => sum + (order.items as unknown as OrderStockLine[]).filter(lineMovesPhysicalStock).length,
+    0
+  )
+
+  // Reservas órfãs: estoque decrementado pelo checkout cuja Function morreu
+  // antes de criar o pedido. Não há pedido para a fila acima achar, então
+  // sem esta chamada essas unidades ficariam descontadas para sempre. A
+  // janela (15 min) é folgada em relação ao `maxDuration = 30s` da rota de
+  // checkout — nunca devolve estoque de um request ainda em andamento. Vem
+  // antes dos avisos: é estoque, não pode ficar para trás por causa deles.
+  let orphanedReleased = 0
+  const { data: orphans, error: orphanError } = await db.rpc("release_orphaned_stock_reservations", {
+    p_older_than_minutes: 15,
+  })
+  if (orphanError) {
+    console.error("[orders-repository] release_orphaned_stock_reservations:", orphanError)
+    errors.push(orphanError.message)
+  } else {
+    orphanedReleased = Number(orphans ?? 0)
+    if (orphanedReleased > 0) {
+      console.warn(
+        `[orders-repository] ${orphanedReleased} reserva(s) órfã(s) de estoque devolvida(s) — checkout interrompido antes de criar o pedido.`
+      )
     }
   }
 
@@ -1672,38 +1944,31 @@ export async function expireStalePendingOrders(): Promise<ExpireStalePendingOrde
     orders.map((order) => order.stripe_payment_intent_id).filter((id): id is string => Boolean(id))
   )
 
-  for (const order of orders) {
-    const ownerId = orderOwnerId(order.metadata)
-    if (!ownerId) continue
-    await notifyOrderStatusChange({ userId: ownerId, orderId: order.id, status: "expired" })
+  // Aviso no site: um insert por pedido, em lotes paralelos.
+  for (let start = 0; start < orders.length; start += NOTIFY_BATCH_SIZE) {
+    await Promise.allSettled(
+      orders.slice(start, start + NOTIFY_BATCH_SIZE).map((order) => {
+        const ownerId = orderOwnerId(order.metadata)
+        return ownerId
+          ? notifyOrderStatusChange({ userId: ownerId, orderId: order.id, status: "expired" })
+          : Promise.resolve()
+      })
+    )
   }
 
-  // Em série, não em paralelo: um lote grande de expirações dispararia
-  // dezenas de requisições simultâneas e bateria no rate limit do Discord.
+  // Discord em série (paralelo bate no rate limit deles) e com orçamento de
+  // tempo: o painel do pedido é informativo, e esperar por ele não pode
+  // estourar o `maxDuration` antes da limpeza de reservas órfãs abaixo.
+  let discordSkipped = 0
   for (const order of orders) {
+    if (Date.now() - startedAt > DISCORD_TIME_BUDGET_MS) {
+      discordSkipped += 1
+      continue
+    }
     await notifyDiscordOrderEvent({ orderId: order.id, status: "expired", actor: "cron" })
   }
-
-  // Reservas órfãs: estoque decrementado pelo checkout cuja Function morreu
-  // antes de criar o pedido. Não há pedido para o loop acima achar, então
-  // sem esta chamada essas unidades ficariam descontadas para sempre. A
-  // janela (15 min) é folgada em relação ao `maxDuration = 20s` da rota de
-  // checkout — nunca devolve estoque de um request ainda em andamento.
-  let orphanedReleased = 0
-  const { data: released, error: releaseError } = await db.rpc(
-    "release_orphaned_stock_reservations",
-    { p_older_than_minutes: 15 }
-  )
-  if (releaseError) {
-    console.error("[orders-repository] release_orphaned_stock_reservations:", releaseError)
-    errors.push(releaseError.message)
-  } else {
-    orphanedReleased = Number(released ?? 0)
-    if (orphanedReleased > 0) {
-      console.warn(
-        `[orders-repository] ${orphanedReleased} reserva(s) órfã(s) de estoque devolvida(s) — checkout interrompido antes de criar o pedido.`
-      )
-    }
+  if (discordSkipped > 0) {
+    console.warn(`[orders-repository] expireStalePendingOrders — ${discordSkipped} aviso(s) do Discord pulado(s) por tempo.`)
   }
 
   return {
@@ -1754,22 +2019,29 @@ export async function expirePendingOrderByGatewayRef(
 ): Promise<ExpireOrderByPaymentResult> {
   const db = createSupabaseAdminClient()
 
-  const { data: expiredOrders, error } = await db
+  const { data: matches, error } = await db
     .from("store_orders")
-    .update({ status: "expired", updated_at: new Date().toISOString() })
+    .select("id")
     .eq(column, value)
     .eq("status", "pending")
-    .select("id, items, metadata")
 
   if (error) {
-    console.error("[orders-repository] expirePendingOrderByGatewayRef — update:", error)
+    console.error("[orders-repository] expirePendingOrderByGatewayRef — busca:", error)
     return { expired: false, orderId: null, errors: [error.message] }
   }
 
-  const order = (expiredOrders ?? [])[0] as
-    | { id: string; items: Record<string, unknown>[]; metadata: Record<string, unknown> | null }
-    | undefined
+  // Status e estoque na mesma transação (ver `releasePendingOrders`).
+  const { orders, error: releaseError } = await releasePendingOrders(
+    db,
+    (matches ?? []).map((row) => row.id),
+    "expired"
+  )
+  if (releaseError) {
+    console.error("[orders-repository] expirePendingOrderByGatewayRef — release:", releaseError)
+    return { expired: false, orderId: null, errors: [releaseError] }
+  }
 
+  const order = orders[0]
   if (!order) return { expired: false, orderId: null, errors: [] }
 
   const ownerId = orderOwnerId(order.metadata)
@@ -1779,25 +2051,7 @@ export async function expirePendingOrderByGatewayRef(
 
   await notifyDiscordOrderEvent({ orderId: order.id, status: "expired", actor })
 
-  // Pré-venda não teve estoque descontado — devolver aqui inventaria unidades.
-  const cart = ((order.items ?? []) as unknown as OrderStockLine[]).filter(lineMovesPhysicalStock)
-
-  const results = await Promise.all(
-    cart.map(async (item) => {
-      const restored = await restoreStock(db, orderLineStockMovement(item))
-      return { item, restored }
-    })
-  )
-
-  const errors: string[] = []
-  for (const { item, restored } of results) {
-    if (restored) continue
-    const message = `Falha ao devolver estoque do pedido expirado ${order.id} (item ${item.variant_id ?? item.id})`
-    console.error("[orders-repository] expirePendingOrderByGatewayRef —", message)
-    errors.push(message)
-  }
-
-  return { expired: true, orderId: order.id, errors }
+  return { expired: true, orderId: order.id, errors: [] }
 }
 
 /**

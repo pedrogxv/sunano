@@ -3,6 +3,7 @@ import "server-only"
 import { isSandboxGateway as isAsaasSandbox } from "@/lib/server/integrations/asaas"
 import { isStripeSandbox } from "@/lib/server/integrations/stripe"
 import { isMercadoPagoSandbox } from "@/lib/server/integrations/mercadopago"
+import { isInfinitePaySandbox } from "@/lib/server/integrations/infinitepay"
 import type { PaymentGateway } from "@/lib/payment-gateways"
 
 export { orderPaymentGateway, type PaymentGateway } from "@/lib/payment-gateways"
@@ -11,7 +12,7 @@ export { orderPaymentGateway, type PaymentGateway } from "@/lib/payment-gateways
  * Gateways da Loja, POR FORMA DE PAGAMENTO:
  *
  *   STORE_PIX_GATEWAY   = asaas | stripe                 (quem emite o PIX)
- *   STORE_CARD_GATEWAY  = asaas | stripe | mercadopago   (quem cobra o cartão)
+ *   STORE_CARD_GATEWAY  = asaas | stripe | mercadopago | infinitepay   (quem cobra o cartão)
  *   STORE_PAYMENT_METHODS = pix[,credit_card]            (cartão ligado ou não)
  *
  * Trocar de gateway é trocar UMA env. Cada uma, ausente, cai no
@@ -28,7 +29,7 @@ export { orderPaymentGateway, type PaymentGateway } from "@/lib/payment-gateways
  */
 
 const PIX_GATEWAYS = ["asaas", "stripe"] as const satisfies readonly PaymentGateway[]
-const CARD_GATEWAYS = ["asaas", "stripe", "mercadopago"] as const satisfies readonly PaymentGateway[]
+const CARD_GATEWAYS = ["asaas", "stripe", "mercadopago", "infinitepay"] as const satisfies readonly PaymentGateway[]
 
 export type PixGateway = (typeof PIX_GATEWAYS)[number]
 export type CardGateway = (typeof CARD_GATEWAYS)[number]
@@ -97,6 +98,7 @@ function configuredStorePaymentMethods(): ReadonlySet<StorePaymentMethod> {
 function gatewaySandbox(gateway: PaymentGateway): boolean {
   if (gateway === "stripe") return isStripeSandbox()
   if (gateway === "mercadopago") return isMercadoPagoSandbox()
+  if (gateway === "infinitepay") return isInfinitePaySandbox()
   return isAsaasSandbox()
 }
 
@@ -153,7 +155,8 @@ export function storeCardPaymentsEnabled(): boolean {
 /**
  * Parcelas que o gateway de cartão ATIVO de fato oferece, a partir do máximo
  * salvo no admin. O Stripe Brasil não parcela (o cartão é à vista), e a
- * vitrine diria "em até 6x sem juros" para uma compra sem parcela nenhuma.
+ * vitrine diria "em até 6x" para uma compra sem parcela nenhuma. A InfinitePay
+ * oferece até 12x na página dela; a vitrine anuncia o máximo do admin.
  */
 export function storeCardMaxInstallments(savedMax: number): number {
   return storeCardGateway() === "stripe" ? 1 : savedMax
@@ -162,10 +165,12 @@ export function storeCardMaxInstallments(savedMax: number): number {
 /**
  * O cartão é digitado no NOSSO site (`/checkout/card`), e não numa página
  * hospedada pelo gateway? Muda o texto do checkout ("página segura da
- * Asaas" × "os dados vão direto para o Mercado Pago").
+ * Asaas" × "os dados vão direto para o Mercado Pago"). Asaas e InfinitePay
+ * hospedam o cartão.
  */
 export function storeCardFormOnSite(): boolean {
-  return storeCardGateway() !== "asaas"
+  const gateway = storeCardGateway()
+  return gateway !== "asaas" && gateway !== "infinitepay"
 }
 
 /**

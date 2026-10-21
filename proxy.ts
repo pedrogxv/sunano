@@ -123,6 +123,18 @@ function isServerActionRequest(request: NextRequest) {
 const STORE_CATEGORY_PREFIX = "/loja/categoria/"
 const STORE_BYPASS_CATEGORY_PREFIX = "/loja/acesso-equipe/categoria/"
 
+// Página de produto (`/loja/[slug]`, ISR): mesma cópia dinâmica para a equipe.
+// Os segmentos estáticos de `app/loja/` não são produto.
+const STORE_BYPASS_PRODUCT_PREFIX = "/loja/acesso-equipe/produto/"
+const STORE_STATIC_SEGMENTS = new Set(["categoria", "marca", "avaliacoes", "acesso-equipe"])
+
+/** Slug de `/loja/<slug>` quando a URL é de uma página de produto. */
+function storeProductSlug(pathname: string): string | null {
+  const match = /^\/loja\/([^/]+)\/?$/.exec(pathname)
+  if (!match || STORE_STATIC_SEGMENTS.has(match[1])) return null
+  return match[1]
+}
+
 // Tela de aviso pública do modo de manutenção (app/maintenance/page.tsx).
 const MAINTENANCE_PATH = "/maintenance"
 
@@ -822,6 +834,16 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
   ) {
     const bypassUrl = request.nextUrl.clone()
     bypassUrl.pathname = STORE_BYPASS_CATEGORY_PREFIX + pathname.slice(STORE_CATEGORY_PREFIX.length)
+    const rewriteResponse = NextResponse.rewrite(bypassUrl)
+    copyCookies(response, rewriteResponse)
+    return rewriteResponse
+  }
+
+  // Mesma regra para a página de produto, que também virou ISR.
+  const productSlug = storeBypass && isStoreMaintenanceEnabled() ? storeProductSlug(pathname) : null
+  if (productSlug) {
+    const bypassUrl = request.nextUrl.clone()
+    bypassUrl.pathname = STORE_BYPASS_PRODUCT_PREFIX + productSlug
     const rewriteResponse = NextResponse.rewrite(bypassUrl)
     copyCookies(response, rewriteResponse)
     return rewriteResponse

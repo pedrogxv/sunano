@@ -1151,6 +1151,16 @@ export type Database = {
         Insert: Omit<Database["public"]["Tables"]["rate_limit_events"]["Row"], "id" | "created_at">
         Update: Partial<Database["public"]["Tables"]["rate_limit_events"]["Insert"]>
       }
+      app_leases: {
+        Relationships: []
+        Row: {
+          key: string
+          owner: string
+          expires_at: string
+        }
+        Insert: Database["public"]["Tables"]["app_leases"]["Row"]
+        Update: Partial<Database["public"]["Tables"]["app_leases"]["Row"]>
+      }
       offers_cache: {
         Relationships: []
         Row: {
@@ -1241,6 +1251,7 @@ export type Database = {
           sale_type: "pre_order" | "ready_stock" | "normal"
           /** Teto de unidades em pré-venda (null = sem teto). Só vale com sale_type = pre_order. */
           preorder_limit: number | null
+          max_per_customer: number | null
           /** false = produto que não é enviado (digital/serviço) — o checkout não pede endereço de entrega. */
           requires_shipping: boolean
           is_active: boolean
@@ -1294,6 +1305,7 @@ export type Database = {
           condition_notes?: string | null
           sale_type?: "pre_order" | "ready_stock" | "normal"
           preorder_limit?: number | null
+          max_per_customer?: number | null
           requires_shipping?: boolean
           is_active?: boolean
           is_sold_out?: boolean
@@ -1336,6 +1348,7 @@ export type Database = {
           condition_notes?: string | null
           sale_type?: "pre_order" | "ready_stock" | "normal"
           preorder_limit?: number | null
+          max_per_customer?: number | null
           requires_shipping?: boolean
           is_active?: boolean
           is_sold_out?: boolean
@@ -1946,7 +1959,12 @@ export type Database = {
           stripe_session_id: string | null
           stripe_payment_intent_id: string | null
           payment_gateway: string | null
+          payer_document_hash: string | null
           mercadopago_payment_id: string | null
+          infinitepay_checkout_url: string | null
+          infinitepay_transaction_nsu: string | null
+          infinitepay_invoice_slug: string | null
+          infinitepay_receipt_url: string | null
           asaas_payment_id: string | null
           asaas_customer_id: string | null
           asaas_receipt_url: string | null
@@ -2025,7 +2043,12 @@ export type Database = {
           stripe_session_id?: string | null
           stripe_payment_intent_id?: string | null
           payment_gateway?: string | null
+          payer_document_hash?: string | null
           mercadopago_payment_id?: string | null
+          infinitepay_checkout_url?: string | null
+          infinitepay_transaction_nsu?: string | null
+          infinitepay_invoice_slug?: string | null
+          infinitepay_receipt_url?: string | null
           asaas_payment_id?: string | null
           asaas_customer_id?: string | null
           asaas_receipt_url?: string | null
@@ -2083,7 +2106,12 @@ export type Database = {
           stripe_session_id?: string | null
           stripe_payment_intent_id?: string | null
           payment_gateway?: string | null
+          payer_document_hash?: string | null
           mercadopago_payment_id?: string | null
+          infinitepay_checkout_url?: string | null
+          infinitepay_transaction_nsu?: string | null
+          infinitepay_invoice_slug?: string | null
+          infinitepay_receipt_url?: string | null
           asaas_payment_id?: string | null
           asaas_customer_id?: string | null
           asaas_receipt_url?: string | null
@@ -3040,6 +3068,54 @@ export type Database = {
       increment_variant_stock: {
         Args: { p_variant_id: string; p_quantity: number }
         Returns: boolean
+      }
+      // 20270101000000_store_concurrency_hardening.sql
+      acquire_lease: {
+        Args: { p_key: string; p_owner: string; p_ttl_seconds: number }
+        Returns: boolean
+      }
+      release_lease: {
+        Args: { p_key: string; p_owner: string }
+        Returns: boolean
+      }
+      consume_rate_limit: {
+        Args: { p_action: string; p_identifier: string; p_max_attempts: number; p_window_seconds: number }
+        Returns: { allowed: boolean; attempt_id?: string; retry_after_seconds?: number }
+      }
+      reserve_store_stock: {
+        Args: {
+          p_reservation_group: string
+          p_product_id: string
+          p_variant_id: string | null
+          p_sku_id: string | null
+          p_quantity: number
+        }
+        Returns: { ok: boolean; remaining?: number | null }
+      }
+      store_customer_product_quantities: {
+        Args: {
+          p_product_ids: string[]
+          p_user_id: string
+          p_payer_document_hash: string | null
+          p_is_sandbox: boolean
+        }
+        Returns: { product_id: string; quantity: number }[]
+      }
+      release_stock_reservation_group: {
+        Args: { p_reservation_group: string }
+        Returns: number
+      }
+      release_pending_store_orders: {
+        Args: { p_order_ids: string[]; p_to_status: "expired" | "cancelled" }
+        Returns: {
+          order_id: string
+          order_metadata: Record<string, unknown> | null
+          order_items: Record<string, unknown>[]
+          order_asaas_payment_id: string | null
+          order_asaas_checkout_id: string | null
+          order_stripe_payment_intent_id: string | null
+          order_payment_gateway: string | null
+        }[]
       }
       get_recent_product_purchase_quantity: {
         Args: { p_user_id: string; p_product_id: string; p_since: string }

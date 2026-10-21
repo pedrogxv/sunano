@@ -168,7 +168,7 @@ export function LaunchCard(props: StoreProductCard) {
           {!singlePrice && cardEnabled && (
             <p className="text-[10px] text-[#7a7a7a]">
               ou {formatBRL(computeItemCardPriceCents(effectiveCents, cardSurchargePercent, false))} no cartão
-              {cardMaxInstallments > 1 && ` em até ${cardMaxInstallments}x sem juros`}
+              {cardMaxInstallments > 1 && `, em até ${cardMaxInstallments}x`}
             </p>
           )}
         </div>

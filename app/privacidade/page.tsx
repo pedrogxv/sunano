@@ -336,10 +336,9 @@ export default function PrivacidadePage() {
             <li><strong>Confirmação e acesso:</strong> saber se tratamos seus dados e consultá-los.</li>
             <li>
               <strong>Correção:</strong> atualizar nome, avatar, banner e bio em{" "}
-              <Link href="/perfil" className="text-primary hover:underline">/perfil</Link>. Para corrigir
-              CPF, telefone ou endereço, envie um e-mail para{" "}
-              <a href="mailto:privacidade@sunano.gg" className="text-primary hover:underline">privacidade@sunano.gg</a>
-              {" "}; esses campos
+              <Link href="/perfil" className="text-primary hover:underline">/perfil</Link>, e CPF, telefone
+              e endereços em{" "}
+              <Link href="/conta#compras" className="text-primary hover:underline">/conta → Dados de compra</Link>.
             </li>
             <li>
               <strong>Anonimização, bloqueio ou eliminação:</strong> remover dados desnecessários ou

@@ -161,6 +161,7 @@ export function useProductSelection(detail: StoreProductDetailResult | null): Pr
         condition: product.condition,
         sale_type: product.sale_type,
         singlePrice,
+        maxPerCustomer: product.max_per_customer,
       }
     },
   }

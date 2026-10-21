@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import {
   CalendarClock,
@@ -34,17 +34,22 @@ import {
   type OrderComplementSummary,
 } from "@/lib/store-payment-complement"
 import { cn } from "@/lib/utils"
+import { cartLineMaxQuantity } from "@/lib/store-cart-limits"
 import { SALE_TYPE_ICON, SALE_TYPE_LABEL } from "@/lib/store-sale-type"
 import { CARD_SURFACE, CARD_SURFACE_INTERACTIVE } from "@/lib/ui-styles"
+import { CheckoutPayerCard } from "@/components/store/CheckoutPayerCard"
 import {
-  CheckoutPayerCard,
-  formatCepInput,
-  formatCpfInput,
-  formatPhoneInput,
+  EMPTY_PAYER_FORM,
   isPayerFormComplete,
+  payerFormFromProfile,
+  payerFormToPayload,
   type PayerForm,
-} from "@/components/store/CheckoutPayerCard"
+} from "@/components/store/PayerFields"
+import type { PurchaseProfile } from "@/lib/purchase-profile"
 import { RemoveCartItemDialog, type PendingRemoval } from "@/components/store/RemoveCartItemDialog"
+import { PendingOrderConflictDialog, PendingOrdersNotice } from "@/components/store/CheckoutPendingOrders"
+import { useUserOrders, type UserOrder } from "@/lib/hooks/use-user-orders"
+import { PENDING_ORDER_CONFLICT_CODE, pendingOrdersSharingCart } from "@/lib/store-pending-orders"
 import { CheckoutShippingCard } from "@/components/store/CheckoutShippingCard"
 import { CheckoutAffiliatePicker } from "@/components/store/CheckoutAffiliatePicker"
 import {
@@ -55,34 +60,12 @@ import {
 import {
   EMPTY_SHIPPING_FORM,
   isShippingFormComplete,
-  isoToBirthDateInput,
-  toShippingResidenceType,
+  shippingFormFromProfile,
   shippingFormToPayload,
   type ShippingForm,
 } from "@/components/store/ShippingAddressFields"
 
 type PaymentMethod = "pix" | "credit_card"
-
-/** Formata só quando há valor — os campos do perfil são todos opcionais. */
-function formatOptionalPhone(value: string | null | undefined): string {
-  return value ? formatPhoneInput(value) : ""
-}
-function formatOptionalCep(value: string | null | undefined): string {
-  return value ? formatCepInput(value) : ""
-}
-
-const EMPTY_PAYER_FORM: PayerForm = {
-  name: "",
-  document: "",
-  phone: "",
-  postalCode: "",
-  street: "",
-  number: "",
-  complement: "",
-  neighborhood: "",
-  city: "",
-  state: "",
-}
 
 interface PayerInfoResponse {
   /** Quem cobra o cartão (gateway de cartão da loja). */
@@ -91,35 +74,12 @@ interface PayerInfoResponse {
   cardFormOnSite?: boolean
   /** Mercado Pago: o cartão é digitado aqui mesmo e o pedido nasce no "Pagar". */
   cardGateway?: string
-  fullName?: string | null
-  cpf?: string | null
+  /** Cobrança e última entrega salvas no perfil (mesmo contrato de Minha conta). */
+  payer: PurchaseProfile["payer"]
+  shipping: PurchaseProfile["shipping"]
   email?: string | null
-  phone?: string | null
-  postalCode?: string | null
-  street?: string | null
-  number?: string | null
-  complement?: string | null
-  neighborhood?: string | null
-  city?: string | null
-  state?: string | null
   hasCompletePayerInfo?: boolean
   hasCompleteAddressInfo?: boolean
-  /** Último endereço de ENTREGA (distinto do de cobrança acima). */
-  shipping?: {
-    recipient?: string | null
-    cpf?: string | null
-    /** "AAAA-MM-DD". Só existe na entrega salva: a cobrança não guarda nascimento. */
-    birthDate?: string | null
-    residenceType?: string | null
-    phone?: string | null
-    postalCode?: string | null
-    street?: string | null
-    number?: string | null
-    complement?: string | null
-    neighborhood?: string | null
-    city?: string | null
-    state?: string | null
-  } | null
 }
 
 interface ValidatedCartLine {
@@ -190,6 +150,11 @@ export default function CheckoutPage() {
   const [cardStep, setCardStep] = useState(false)
   const [editingPayer, setEditingPayer] = useState(false)
   const [loading, setLoading] = useState(false)
+  // Trava síncrona contra envio duplo. `loading` só desabilita o botão no
+  // próximo render: Enter + clique (ou dois toques rápidos no celular) cabiam
+  // antes dele e criavam dois pedidos. O servidor também recusa (uma compra
+  // por conta por vez), mas a segunda resposta piscava um erro na tela.
+  const submittingRef = useRef(false)
   const [error, setError] = useState<string | null>(null)
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pix")
   const [pendingRemoval, setPendingRemoval] = useState<PendingRemoval | null>(null)
@@ -292,6 +257,47 @@ export default function CheckoutPage() {
     [items]
   )
 
+  // Pedidos aguardando pagamento: aviso no topo e, se algum tem produto do
+  // carrinho, a pergunta "pagar o aberto ou substituir" no clique. O servidor
+  // recusa o duplicado de qualquer jeito (409); aqui é para avisar antes.
+  const { orders: pendingOrders, refetch: refetchPendingOrders } = useUserOrders({
+    pageSize: 10,
+    filters: { status: "pending" },
+  })
+  const pendingConflicts = useMemo(
+    () => (isComplement ? [] : pendingOrdersSharingCart(pendingOrders, cartProductIds.split(",").filter(Boolean))),
+    [isComplement, pendingOrders, cartProductIds]
+  )
+  const pendingConflictIds = useMemo(() => new Set(pendingConflicts.map((order) => order.id)), [pendingConflicts])
+  // Pedidos que a pessoa escolheu substituir por esta compra (vão no corpo).
+  const [replaceOrderIds, setReplaceOrderIds] = useState<string[]>([])
+  // Ids do diálogo de conflito. Derivado da lista, para o 409 do servidor
+  // abrir o diálogo assim que o refetch trouxer os pedidos.
+  const [conflictPromptIds, setConflictPromptIds] = useState<string[]>([])
+  const conflictPromptOrders = pendingOrders.filter((order) => conflictPromptIds.includes(order.id))
+  const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null)
+
+  async function cancelPendingOrder(order: UserOrder) {
+    setCancellingOrderId(order.id)
+    setError(null)
+    const res = await fetch(`/api/store/orders/${order.id}/cancel`, { method: "POST" }).catch(() => null)
+    if (!res?.ok) {
+      const data = (await res?.json().catch(() => null)) as { error?: string } | null
+      setError(data?.error ?? "Não foi possível cancelar o pedido. Tente de novo")
+    }
+    setCancellingOrderId(null)
+    setReplaceOrderIds((ids) => ids.filter((id) => id !== order.id))
+    refetchPendingOrders()
+  }
+
+  /** 409 do checkout: um produto do carrinho entrou num pedido aberto (outra aba, outro aparelho). */
+  function handlePendingConflict(data: { error?: string; pendingOrderIds?: string[] }) {
+    setError(data.error ?? "Você já tem um pedido aguardando pagamento com este produto")
+    setConflictPromptIds(data.pendingOrderIds ?? [])
+    setReplaceOrderIds([])
+    refetchPendingOrders()
+  }
+
   useEffect(() => {
     if (authLoading) return
     if (!user) {
@@ -322,41 +328,8 @@ export default function CheckoutPage() {
         // são endereços diferentes desde que ganharam colunas próprias no
         // perfil. Na primeira compra ainda não há entrega salva, e aí a
         // cobrança é o melhor palpite disponível (quase sempre o mesmo lugar).
-        const lastShipping = data.shipping
-        const hasSavedShipping = Boolean(lastShipping?.postalCode)
-        setShippingForm({
-          recipient: (hasSavedShipping ? lastShipping?.recipient : data.fullName) ?? "",
-          postalCode: formatOptionalCep(
-            hasSavedShipping ? lastShipping?.postalCode : data.postalCode
-          ),
-          residenceType: hasSavedShipping ? toShippingResidenceType(lastShipping?.residenceType) : "",
-          street: (hasSavedShipping ? lastShipping?.street : data.street) ?? "",
-          number: (hasSavedShipping ? lastShipping?.number : data.number) ?? "",
-          complement: (hasSavedShipping ? lastShipping?.complement : data.complement) ?? "",
-          neighborhood:
-            (hasSavedShipping ? lastShipping?.neighborhood : data.neighborhood) ?? "",
-          city: (hasSavedShipping ? lastShipping?.city : data.city) ?? "",
-          state: (hasSavedShipping ? lastShipping?.state : data.state) ?? "",
-          // Sem entrega salva, o CPF da cobrança acompanha o nome da cobrança
-          // que já foi para o campo de nome: o par continua sendo da mesma pessoa.
-          cpf: formatCpfInput((hasSavedShipping ? lastShipping?.cpf : data.cpf) ?? ""),
-          phone: formatOptionalPhone(
-            hasSavedShipping ? lastShipping?.phone : data.phone
-          ),
-          birthDate: hasSavedShipping ? isoToBirthDateInput(lastShipping?.birthDate) : "",
-        })
-        setPayerForm({
-          name: data.fullName ?? "",
-          document: data.cpf ? formatCpfInput(data.cpf) : "",
-          phone: data.phone ? formatPhoneInput(data.phone) : "",
-          postalCode: data.postalCode ? formatCepInput(data.postalCode) : "",
-          street: data.street ?? "",
-          number: data.number ?? "",
-          complement: data.complement ?? "",
-          neighborhood: data.neighborhood ?? "",
-          city: data.city ?? "",
-          state: data.state ?? "",
-        })
+        setShippingForm(shippingFormFromProfile(data, { fallbackToPayer: true }))
+        setPayerForm(payerFormFromProfile(data.payer))
       })
       .catch(() => {
         // Falha na checagem não bloqueia a compra: a rota de checkout valida
@@ -530,7 +503,7 @@ export default function CheckoutPage() {
     setPendingRemoval(null)
   }
 
-  function buildCheckoutBody() {
+  function buildCheckoutBody(replaceIds: string[] = replaceOrderIds) {
     return {
       items: checkoutItems.map((i) => ({
         productId: i.productId,
@@ -539,26 +512,14 @@ export default function CheckoutPage() {
         quantity: i.quantity,
       })),
       paymentMethod,
-      guestName: payerForm.name,
-      guestDocument: payerForm.document.replace(/\D/g, ""),
-      ...(requireAddress
-        ? {
-            guestPhone: payerForm.phone.replace(/\D/g, ""),
-            guestPostalCode: payerForm.postalCode.replace(/\D/g, ""),
-            guestStreet: payerForm.street,
-            guestNumber: payerForm.number,
-            guestComplement: payerForm.complement || undefined,
-            guestNeighborhood: payerForm.neighborhood,
-            guestCity: payerForm.city,
-            guestState: payerForm.state,
-          }
-        : {}),
+      ...payerFormToPayload(payerForm, { includeAddress: requireAddress }),
       // Só manda o endereço quando está completo e não foi pulado: o
       // servidor recusa um endereço pela metade (e faz bem — pedido com
       // rua e sem número parece pronto para despachar e não é).
       ...(shippingComplete && !shippingSkipped ? shippingFormToPayload(shippingForm) : {}),
       ...(affiliateCode !== undefined && !isComplement ? { affiliateCode } : {}),
       ...(isComplement ? { complementOrderId } : {}),
+      ...(replaceIds.length > 0 ? { replacePendingOrderIds: replaceIds } : {}),
     }
   }
 
@@ -581,6 +542,25 @@ export default function CheckoutPage() {
       return
     }
 
+    // Produto do carrinho num pedido aberto: pergunta antes (pagar o aberto
+    // ou substituir). Já confirmado, segue com os ids no corpo.
+    if (pendingConflicts.some((order) => !replaceOrderIds.includes(order.id))) {
+      setConflictPromptIds(pendingConflicts.map((order) => order.id))
+      return
+    }
+
+    await proceedCheckout(replaceOrderIds)
+  }
+
+  /** "Substituir" do diálogo: o servidor cancela o pedido aberto na mesma chamada que cria este. */
+  function replacePendingAndContinue() {
+    const ids = conflictPromptOrders.map((order) => order.id)
+    setReplaceOrderIds(ids)
+    setConflictPromptIds([])
+    void proceedCheckout(ids)
+  }
+
+  async function proceedCheckout(replaceIds: string[]) {
     // Recolhe os cards para a pessoa ver o resumo do que está sendo enviado.
     setEditingPayer(false)
     setEditingShipping(false)
@@ -591,22 +571,39 @@ export default function CheckoutPage() {
       return
     }
 
+    if (submittingRef.current) return
+    submittingRef.current = true
     setLoading(true)
 
     try {
       const res = await fetch("/api/store/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildCheckoutBody()),
+        body: JSON.stringify(buildCheckoutBody(replaceIds)),
       })
 
-      const data = (await res.json()) as {
+      // Timeout da plataforma (504) volta HTML, não JSON. O pedido pode ter
+      // sido criado mesmo assim: a mensagem manda conferir antes de repetir
+      // (e, se repetir, a trava de um pedido por produto oferece pagar o
+      // aberto em vez de criar outro).
+      const data = (await res.json().catch(() => ({
+        error: "A resposta demorou demais. Confira em Meus Pedidos se o pedido foi criado antes de tentar de novo.",
+      }))) as {
         orderId?: string
         accessToken?: string | null
         checkoutUrl?: string
         /** Stripe / Mercado Pago: o cartão é digitado no nosso site, em `/checkout/card`. */
         cardPayment?: boolean
         error?: string
+        code?: string
+        pendingOrderIds?: string[]
+      }
+
+      if (res.status === 409 && data.code === PENDING_ORDER_CONFLICT_CODE) {
+        handlePendingConflict(data)
+        submittingRef.current = false
+        setLoading(false)
+        return
       }
 
       if (!res.ok || !data.orderId) {
@@ -640,7 +637,16 @@ export default function CheckoutPage() {
 
       window.location.href = url
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao iniciar checkout")
+      // Falha de rede (`fetch` rejeitado) cai aqui com a mensagem crua do
+      // navegador ("Failed to fetch"); a resposta do servidor já vem em PT.
+      setError(
+        err instanceof TypeError
+          ? "Sem conexão com o servidor. Confira sua internet e, antes de tentar de novo, se o pedido aparece em Meus Pedidos."
+          : err instanceof Error
+            ? err.message
+            : "Erro ao iniciar checkout"
+      )
+      submittingRef.current = false
       setLoading(false)
     }
   }
@@ -651,15 +657,37 @@ export default function CheckoutPage() {
    * formulário com a mensagem.
    */
   async function payWithCard(card: MercadoPagoCardPayload): Promise<MercadoPagoPayResult> {
+    if (submittingRef.current) return { ok: false, error: "Já estamos processando o pagamento. Aguarde" }
+    submittingRef.current = true
     setError(null)
     const res = await fetch("/api/store/checkout", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...buildCheckoutBody(), card }),
     }).catch(() => null)
-    const data = ((await res?.json().catch(() => ({}))) ?? {}) as { orderId?: string; error?: string }
+    const data = ((await res?.json().catch(() => ({}))) ?? {}) as {
+      orderId?: string
+      error?: string
+      code?: string
+      pendingOrderIds?: string[]
+    }
+    if (res?.status === 409 && data.code === PENDING_ORDER_CONFLICT_CODE) {
+      submittingRef.current = false
+      // Fecha o formulário: o diálogo de conflito decide, e "Substituir" reabre.
+      setCardStep(false)
+      handlePendingConflict(data)
+      return { ok: false, error: data.error ?? "Você já tem um pedido aguardando pagamento com este produto" }
+    }
     if (!res || !res.ok || !data.orderId) {
-      return { ok: false, error: data.error ?? "Não foi possível processar o cartão agora. Tente de novo em instantes" }
+      submittingRef.current = false
+      return {
+        ok: false,
+        error:
+          data.error ??
+          (res
+            ? "Não foi possível processar o cartão agora. Confira em Meus Pedidos antes de tentar de novo"
+            : "Sem conexão com o servidor. Confira em Meus Pedidos antes de tentar de novo"),
+      }
     }
     // Pedido criado (pago ou em análise): o carrinho cumpriu seu papel. A tela
     // de cartão mostra a confirmação, ou aguarda a análise.
@@ -748,7 +776,7 @@ export default function CheckoutPage() {
   const storeBase = "/loja"
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-10">
+    <div className="mx-auto max-w-3xl px-4 py-8 sm:py-10 lg:max-w-6xl">
       <h1 className="mb-1 text-2xl font-black text-foreground">
         {isComplement ? "Pagar complemento" : "Finalizar Compra"}
       </h1>
@@ -758,454 +786,498 @@ export default function CheckoutPage() {
           : `${itemCount} ${itemCount === 1 ? "item" : "itens"} no carrinho`}
       </p>
 
-      <div className="mb-4 space-y-2">
-        {checkoutItems.map((item) => {
-          const optionIds = item.variantOptions.map((o) => o.optionId)
-          return (
-          <div
-            key={`${item.productId}:${item.variantId ?? "base"}:${optionIds.join(",")}`}
-            className={cn("flex items-center gap-3 rounded-xl border p-3 transition-colors", CARD_SURFACE_INTERACTIVE)}
-          >
-            {/* Photo */}
-            <Link
-              href={`${storeBase}/${item.slug}`}
-              className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border/60 bg-[var(--card-image-bg)] transition-transform hover:scale-105"
-            >
-              {item.image ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={item.image} alt={item.name} className="h-full w-full object-contain p-1" loading="lazy" decoding="async" />
-              ) : (
-                <Package className="size-5 text-muted-foreground" />
-              )}
-            </Link>
-
-            {/* Info: name, variant, badges */}
-            <div className="min-w-0 flex-1">
-              <Link
-                href={`${storeBase}/${item.slug}`}
-                className="truncate text-sm font-semibold text-foreground hover:underline"
-              >
-                {item.name}
-              </Link>
-              {(item.variantLabel || item.variantOptions.length > 0) && (
-                <p className="truncate text-[11px] text-muted-foreground">
-                  {[item.variantLabel, ...item.variantOptions.map((o) => `${o.groupName}: ${o.label}`)]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </p>
-              )}
-              {!isComplement && <p className="mt-1 text-xs text-muted-foreground">{formatBRL(item.priceCents)} cada</p>}
-              {item.sale_type !== "normal" && (() => {
-                const SaleTypeIcon = SALE_TYPE_ICON[item.sale_type]
-                return (
-                  <span
-                    className={cn(
-                      "mt-1 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[9.5px] font-bold",
-                      item.sale_type === "pre_order"
-                        ? "bg-amber-500/15 text-amber-400"
-                        : "bg-emerald-500/15 text-emerald-400"
-                    )}
-                  >
-                    <SaleTypeIcon className="size-2.5" strokeWidth={2.5} />
-                    {SALE_TYPE_LABEL[item.sale_type]}
-                  </span>
-                )
-              })()}
-              {item.stock !== null && item.stock <= 3 && (
-                <p className="mt-0.5 text-[10px] font-semibold text-amber-400">
-                  Últimas {item.stock} unidades!
-                </p>
-              )}
-            </div>
-
-            {/* Qty controls + line total */}
-            <div className="flex shrink-0 flex-col items-end gap-1.5">
-              {!isComplement && (
-              <>
-              <button
-                onClick={() => requestRemoval(item, false)}
-                aria-label={`Remover ${item.name}`}
-                className="text-muted-foreground/60 transition-colors hover:text-red-400"
-              >
-                <Trash2 className="size-3.5" />
-              </button>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() =>
-                    item.quantity <= 1
-                      ? requestRemoval(item, true)
-                      : decrement(item.productId, item.variantId, optionIds)
-                  }
-                  aria-label={item.quantity <= 1 ? `Remover ${item.name}` : "Diminuir quantidade"}
-                  className="flex size-6 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground"
-                >
-                  <Minus className="size-3" />
-                </button>
-                <span className="w-5 text-center text-xs font-bold text-foreground">{item.quantity}</span>
-                <button
-                  onClick={() => increment(item.productId, item.variantId, optionIds)}
-                  disabled={item.stock !== null && item.quantity >= item.stock}
-                  aria-label="Aumentar quantidade"
-                  className={cn(
-                    "flex size-6 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground",
-                    item.stock !== null && item.quantity >= item.stock && "cursor-not-allowed opacity-40"
-                  )}
-                >
-                  <Plus className="size-3" />
-                </button>
-              </div>
-              </>
-              )}
-              <span className="text-sm font-bold text-foreground">
-                {formatBRL(item.priceCents * item.quantity)}
-              </span>
-            </div>
-          </div>
-          )
-        })}
-      </div>
-
-      {/* Payment method toggle. Sem cartão (Stripe: só PIX), o PIX é o único
-          botão e não anuncia desconto em relação a um meio que não existe. */}
-      <div className={cn("mb-6 grid gap-2", cardEnabled ? "grid-cols-2" : "grid-cols-1")}>
-        <button
-          type="button"
-          onClick={() => setPaymentMethod("pix")}
-          className={cn(
-            "flex flex-col items-center gap-1.5 rounded-xl border px-4 py-3 text-sm font-semibold transition-all hover:-translate-y-0.5",
-            paymentMethod === "pix"
-              ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-400 shadow-lg shadow-emerald-500/10"
-              : cn(CARD_SURFACE_INTERACTIVE, "text-muted-foreground")
-          )}
-        >
-          <QrCode className="size-5" />
-          PIX
-          <span className="text-[10px] font-normal text-muted-foreground">
-            {formatBRL(total)}
-            {cardEnabled && cardSurchargeCents > 0 && ` (-${cardSurchargePercent}%)`}
-          </span>
-        </button>
-        {cardEnabled && (
-        <button
-          type="button"
-          onClick={() => setPaymentMethod("credit_card")}
-          className={cn(
-            "flex flex-col items-center gap-1.5 rounded-xl border px-4 py-3 text-sm font-semibold transition-all hover:-translate-y-0.5",
-            paymentMethod === "credit_card"
-              ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-400 shadow-lg shadow-emerald-500/10"
-              : cn(CARD_SURFACE_INTERACTIVE, "text-muted-foreground")
-          )}
-        >
-          <CreditCard className="size-5" />
-          Cartão de crédito
-          <span className="text-[10px] font-normal text-muted-foreground">{formatBRL(cardTotal)}</span>
-        </button>
-        )}
-      </div>
-
-      {/* Divergências desde que o item foi posto no carrinho. Aparecem aqui,
-          antes do resumo e do botão, porque um erro no carrinho é recuperável
-          (a pessoa remove o item e segue) e o mesmo erro depois do clique em
-          comprar é abandono. */}
-      {staleLines.length > 0 && (
-        <div className="mb-4 space-y-1.5 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3">
-          <p className="text-sm font-bold text-amber-400">O preço de alguns itens mudou</p>
-          {staleLines.map((line) => {
-            const local = items.find(
-              (i) => i.productId === line.productId && (i.variantId ?? null) === (line.variantId ?? null)
-            )
-            if (!local || line.priceCents == null) return null
-            return (
-              <p key={`${line.productId}:${line.variantId ?? "base"}`} className="text-xs text-amber-400/90">
-                <span className="font-semibold">{line.name ?? local.name}</span>:{" "}
-                <span className="line-through">{formatBRL(local.priceCents)}</span> →{" "}
-                {formatBRL(line.priceCents)}
-              </p>
-            )
-          })}
-          <p className="pt-0.5 text-[11px] text-amber-400/70">
-            O valor cobrado é sempre o preço atual, mostrado no total abaixo.
-          </p>
-        </div>
+      {user && !isComplement && (
+        <PendingOrdersNotice
+          orders={pendingOrders}
+          conflictIds={pendingConflictIds}
+          cancellingId={cancellingOrderId}
+          onCancel={cancelPendingOrder}
+        />
       )}
 
-      {cartIssues.length > 0 && (
-        <div className="mb-4 space-y-1.5 rounded-xl border border-red-500/25 bg-red-500/[0.06] px-4 py-3">
-          <p className="text-sm font-bold text-red-400">
-            {cartIssues.length === 1 ? "Um item precisa da sua atenção" : "Alguns itens precisam da sua atenção"}
-          </p>
-          {cartIssues.map((line) => {
-            const local = items.find(
-              (i) => i.productId === line.productId && (i.variantId ?? null) === (line.variantId ?? null)
-            )
-            const reason = CART_ISSUE_LABEL[line.issues[0] ?? ""] ?? "não pode ser comprado agora"
+      {/* Duas colunas a partir de `lg`: o que se revisa e preenche à esquerda,
+          o resumo e o botão de pagar à direita, presos na tela enquanto a
+          pessoa rola. No celular é uma coluna só, na ordem do funil: itens,
+          forma de pagamento, dados, e só então o total e o botão. */}
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start lg:gap-8">
+        <div className="min-w-0">
+        <div className="mb-4 space-y-2">
+          {checkoutItems.map((item) => {
+            const optionIds = item.variantOptions.map((o) => o.optionId)
             return (
-              <div
-                key={`${line.productId}:${line.variantId ?? "base"}`}
-                className="flex items-center justify-between gap-3 text-xs text-red-400/90"
+            <div
+              key={`${item.productId}:${item.variantId ?? "base"}:${optionIds.join(",")}`}
+              className={cn("flex items-center gap-3 rounded-xl border p-3 transition-colors", CARD_SURFACE_INTERACTIVE)}
+            >
+              {/* Photo */}
+              <Link
+                href={`${storeBase}/${item.slug}`}
+                className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border/60 bg-[var(--card-image-bg)] transition-transform hover:scale-105"
               >
-                <span>
-                  <span className="font-semibold">{line.name ?? local?.name ?? "Item"}</span> {reason}.
-                </span>
-                {local && (
+                {item.image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={item.image} alt={item.name} className="h-full w-full object-contain p-1" loading="lazy" decoding="async" />
+                ) : (
+                  <Package className="size-5 text-muted-foreground" />
+                )}
+              </Link>
+
+              {/* Info: name, variant, badges */}
+              <div className="min-w-0 flex-1">
+                {/* `block`: `truncate` num <a> inline não corta nada, e nome
+                    longo vazava por cima dos botões de quantidade no celular. */}
+                <Link
+                  href={`${storeBase}/${item.slug}`}
+                  className="block truncate text-sm font-semibold text-foreground hover:underline"
+                >
+                  {item.name}
+                </Link>
+                {(item.variantLabel || item.variantOptions.length > 0) && (
+                  <p className="truncate text-[11px] text-muted-foreground">
+                    {[item.variantLabel, ...item.variantOptions.map((o) => `${o.groupName}: ${o.label}`)]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                )}
+                {!isComplement && <p className="mt-1 text-xs text-muted-foreground">{formatBRL(item.priceCents)} cada</p>}
+                {item.sale_type !== "normal" && (() => {
+                  const SaleTypeIcon = SALE_TYPE_ICON[item.sale_type]
+                  return (
+                    <span
+                      className={cn(
+                        "mt-1 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[9.5px] font-bold",
+                        item.sale_type === "pre_order"
+                          ? "bg-amber-500/15 text-amber-400"
+                          : "bg-emerald-500/15 text-emerald-400"
+                      )}
+                    >
+                      <SaleTypeIcon className="size-2.5" strokeWidth={2.5} />
+                      {SALE_TYPE_LABEL[item.sale_type]}
+                    </span>
+                  )
+                })()}
+                {item.stock !== null && item.stock <= 3 && (
+                  <p className="mt-0.5 text-[10px] font-semibold text-amber-400">
+                    Últimas {item.stock} unidades!
+                  </p>
+                )}
+              </div>
+
+              {/* Qty controls + line total */}
+              <div className="flex shrink-0 flex-col items-end gap-1.5">
+                {!isComplement && (
+                <>
+                {/* Alvos de toque: 32px no celular (eram 24px, e o "+" vivia
+                    acertando o "−" vizinho); 24px a partir de `sm`, com mouse. */}
+                <button
+                  type="button"
+                  onClick={() => requestRemoval(item, false)}
+                  aria-label={`Remover ${item.name}`}
+                  className="-m-1.5 flex size-8 items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:text-red-400 sm:m-0 sm:size-6"
+                >
+                  <Trash2 className="size-3.5" />
+                </button>
+                <div className="flex items-center gap-1">
                   <button
                     type="button"
                     onClick={() =>
-                      remove(local.productId, local.variantId, local.variantOptions.map((o) => o.optionId))
+                      item.quantity <= 1
+                        ? requestRemoval(item, true)
+                        : decrement(item.productId, item.variantId, optionIds)
                     }
-                    className="shrink-0 font-semibold underline underline-offset-2 hover:text-red-300"
+                    aria-label={item.quantity <= 1 ? `Remover ${item.name}` : "Diminuir quantidade"}
+                    className="flex size-8 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground sm:size-6"
                   >
-                    Remover
+                    <Minus className="size-3" />
                   </button>
+                  <span className="w-6 text-center text-xs font-bold tabular-nums text-foreground" aria-live="polite">
+                    {item.quantity}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => increment(item.productId, item.variantId, optionIds)}
+                    disabled={item.quantity >= cartLineMaxQuantity(item)}
+                    aria-label="Aumentar quantidade"
+                    className="flex size-8 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 sm:size-6"
+                  >
+                    <Plus className="size-3" />
+                  </button>
+                </div>
+                </>
                 )}
+                <span className="text-sm font-bold text-foreground">
+                  {formatBRL(item.priceCents * item.quantity)}
+                </span>
               </div>
+            </div>
             )
           })}
         </div>
-      )}
 
-      {/* Order summary */}
-      {/* Subtotal é a soma dos preços que a pessoa viu na vitrine (`total`),
-          nunca o preço do cartão: abrir o resumo com um número MAIOR do que o
-          anunciado lê-se como "o preço subiu", justamente no ponto de maior
-          atrito do funil. No cartão, o acréscimo aparece como linha própria —
-          além de ser o certo a fazer, cobrar diferenciado exige discriminar
-          o valor. */}
-      <div className={cn("mb-6 space-y-1.5 rounded-xl border px-4 py-3", CARD_SURFACE)}>
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>Subtotal ({itemCount} {itemCount === 1 ? "item" : "itens"})</span>
-          <span>{formatBRL(total)}</span>
-        </div>
-        {paymentMethod === "credit_card" && cardSurchargeCents > 0 && (
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Acréscimo do cartão</span>
-            <span>+{formatBRL(cardSurchargeCents)}</span>
-          </div>
-        )}
-        {paymentMethod === "pix" && cardEnabled && cardSurchargeCents > 0 && (
-          <div className="flex items-center justify-between text-xs text-emerald-400">
-            <span>Economia à vista no PIX</span>
-            <span>{formatBRL(cardSurchargeCents)}</span>
-          </div>
-        )}
-        {/* O total nunca teve frete: a linha só diz isso em voz alta. Carrinho
-            só de serviço não vai pelo correio, então não fala de frete. */}
-        {showShipping && (
-          <div className="flex items-center justify-between text-xs">
-            <span className="flex items-center gap-1.5 text-muted-foreground">
-              <Truck className="size-3.5" />
-              Frete
+        {/* Payment method toggle. Sem cartão (Stripe: só PIX), o PIX é o único
+            botão e não anuncia desconto em relação a um meio que não existe. */}
+        <div className={cn("mb-6 grid gap-2", cardEnabled ? "grid-cols-2" : "grid-cols-1")}>
+          <button
+            type="button"
+            onClick={() => setPaymentMethod("pix")}
+            className={cn(
+              "flex flex-col items-center gap-1.5 rounded-xl border px-4 py-3 text-sm font-semibold transition-all hover:-translate-y-0.5",
+              paymentMethod === "pix"
+                ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-400 shadow-lg shadow-emerald-500/10"
+                : cn(CARD_SURFACE_INTERACTIVE, "text-muted-foreground")
+            )}
+          >
+            <QrCode className="size-5" />
+            PIX
+            <span className="text-[10px] font-normal text-muted-foreground">
+              {formatBRL(total)}
+              {cardEnabled && cardSurchargeCents > 0 && ` (-${cardSurchargePercent}%)`}
             </span>
-            <span className="font-bold text-emerald-400">Grátis</span>
+          </button>
+          {cardEnabled && (
+          <button
+            type="button"
+            onClick={() => setPaymentMethod("credit_card")}
+            className={cn(
+              "flex flex-col items-center gap-1.5 rounded-xl border px-4 py-3 text-sm font-semibold transition-all hover:-translate-y-0.5",
+              paymentMethod === "credit_card"
+                ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-400 shadow-lg shadow-emerald-500/10"
+                : cn(CARD_SURFACE_INTERACTIVE, "text-muted-foreground")
+            )}
+          >
+            <CreditCard className="size-5" />
+            Cartão de crédito
+            <span className="text-[10px] font-normal text-muted-foreground">{formatBRL(cardTotal)}</span>
+          </button>
+          )}
+        </div>
+
+        {/* Divergências desde que o item foi posto no carrinho. Aparecem aqui,
+            antes do resumo e do botão, porque um erro no carrinho é recuperável
+            (a pessoa remove o item e segue) e o mesmo erro depois do clique em
+            comprar é abandono. */}
+        {staleLines.length > 0 && (
+          <div className="mb-4 space-y-1.5 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3">
+            <p className="text-sm font-bold text-amber-400">O preço de alguns itens mudou</p>
+            {staleLines.map((line) => {
+              const local = items.find(
+                (i) => i.productId === line.productId && (i.variantId ?? null) === (line.variantId ?? null)
+              )
+              if (!local || line.priceCents == null) return null
+              return (
+                <p key={`${line.productId}:${line.variantId ?? "base"}`} className="text-xs text-amber-400/90">
+                  <span className="font-semibold">{line.name ?? local.name}</span>:{" "}
+                  <span className="line-through">{formatBRL(local.priceCents)}</span> →{" "}
+                  {formatBRL(line.priceCents)}
+                </p>
+              )
+            })}
+            <p className="pt-0.5 text-[11px] text-amber-400/70">
+              O valor cobrado é sempre o preço atual, mostrado no total abaixo.
+            </p>
           </div>
         )}
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>Pagamento</span>
-          <span>
-            {paymentMethod === "pix"
-              ? "PIX (aprovação imediata)"
-              : !cardFormOnSite
-                ? `Cartão de crédito, via página segura da ${paymentGatewayLabel}`
-                : cardMaxInstallments > 1
-                  ? "Cartão de crédito"
-                  : "Cartão de crédito à vista"}
-          </span>
-        </div>
-        <div className="flex items-center justify-between border-t border-border/60 pt-1.5 text-sm font-bold">
-          <span>Total</span>
-          <span className="text-emerald-400">{formatBRL(payableTotal)}</span>
-        </div>
-      </div>
 
-      {/* Previsão de entrega: a mesma conta da página do produto
-          (lib/store-shipping.ts). Pré-venda conta da chegada do lote, então
-          não tem data. */}
-      {showShipping && (
-        <div className="mb-6 flex items-start gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] px-4 py-3">
-          <CalendarClock className="mt-0.5 size-4 shrink-0 text-emerald-400" />
-          <div>
-            <p className="text-sm font-semibold text-foreground">
-              {onlyPreOrderItems ? (
-                `Entrega em até ${STORE_DELIVERY_BUSINESS_DAYS} dias úteis após a chegada do lote`
-              ) : deliveryDeadline ? (
-                <>
-                  Entrega estimada: até <span className="text-emerald-400">{deliveryDeadline}</span>
-                </>
-              ) : (
-                `Entrega em até ${STORE_DELIVERY_BUSINESS_DAYS} dias úteis`
-              )}
+        {cartIssues.length > 0 && (
+          <div className="mb-4 space-y-1.5 rounded-xl border border-red-500/25 bg-red-500/[0.06] px-4 py-3">
+            <p className="text-sm font-bold text-red-400">
+              {cartIssues.length === 1 ? "Um item precisa da sua atenção" : "Alguns itens precisam da sua atenção"}
             </p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {onlyPreOrderItems
-                ? "Frete grátis. O prazo começa a contar quando o estoque chega."
-                : `Frete grátis. Até ${STORE_DELIVERY_BUSINESS_DAYS} dias úteis contados da confirmação do pagamento.`}
-              {hasPreOrderItem && !onlyPreOrderItems &&
-                ` Itens em pré-venda: até ${STORE_DELIVERY_BUSINESS_DAYS} dias úteis após a chegada do lote.`}
+            {cartIssues.map((line) => {
+              const local = items.find(
+                (i) => i.productId === line.productId && (i.variantId ?? null) === (line.variantId ?? null)
+              )
+              const reason = CART_ISSUE_LABEL[line.issues[0] ?? ""] ?? "não pode ser comprado agora"
+              return (
+                <div
+                  key={`${line.productId}:${line.variantId ?? "base"}`}
+                  className="flex items-center justify-between gap-3 text-xs text-red-400/90"
+                >
+                  <span>
+                    <span className="font-semibold">{line.name ?? local?.name ?? "Item"}</span> {reason}.
+                  </span>
+                  {local && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        remove(local.productId, local.variantId, local.variantOptions.map((o) => o.optionId))
+                      }
+                      className="shrink-0 font-semibold underline underline-offset-2 hover:text-red-300"
+                    >
+                      Remover
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {hasPreOrderItem && (
+          <div className="mb-6 flex items-start gap-2.5 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3 text-sm text-amber-400">
+            <Rocket className="mt-0.5 size-4 shrink-0" />
+            <p>
+              <span className="font-bold">Seu pedido tem item(ns) em pré-venda.</span> O pagamento é processado
+              normalmente, mas o envio desses produtos só acontece quando o estoque chegar; acompanhe o status na sua conta.
             </p>
           </div>
-        </div>
-      )}
+        )}
 
-      {hasPreOrderItem && (
-        <div className="mb-6 flex items-start gap-2.5 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3 text-sm text-amber-400">
-          <Rocket className="mt-0.5 size-4 shrink-0" />
-          <p>
-            <span className="font-bold">Seu pedido tem item(ns) em pré-venda.</span> O pagamento é processado
-            normalmente, mas o envio desses produtos só acontece quando o estoque chegar; acompanhe o status na sua conta.
-          </p>
-        </div>
-      )}
+        <form id="checkout-form" onSubmit={handleSubmit} className="space-y-4">
+          {!authLoading && !user && (
+            <div className={cn("space-y-3 rounded-xl border p-4 text-center", CARD_SURFACE)}>
+              <p className="text-sm text-foreground">Você precisa estar logado para finalizar a compra.</p>
+              <p className="text-xs text-muted-foreground">
+                Isso protege seu pedido e permite acompanhar o status da entrega na sua conta.
+              </p>
+              <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                <Button
+                  type="button"
+                  onClick={() => openLogin(loginPath)}
+                  className="gap-2 bg-emerald-600 text-white transition-transform hover:-translate-y-0.5 hover:bg-emerald-500"
+                >
+                  <LogIn className="size-4" />
+                  Entrar
+                </Button>
+                <Button type="button" variant="outline" onClick={() => openRegister(loginPath)}>
+                  Criar conta
+                </Button>
+              </div>
+            </div>
+          )}
 
-      {/* Trust / security info */}
-      <div className="mb-6 grid grid-cols-1 gap-2 sm:grid-cols-3">
-        <div className={cn("flex items-center gap-2 rounded-lg border px-3 py-2 transition-colors", CARD_SURFACE)}>
-          <QrCode className="size-4 shrink-0 text-emerald-400" />
-          <span className="text-[11px] text-muted-foreground">
-            {paymentMethod === "pix"
-              ? "Pagamento via PIX, sem cadastro de cartão"
-              : cardFormOnSite
-                ? `Os dados do cartão vão direto para o ${paymentGatewayLabel}, criptografados — nunca para o nosso servidor`
-                : `Cartão digitado direto na página segura da ${paymentGatewayLabel}, nunca no nosso site`}
-          </span>
-        </div>
-        <div className={cn("flex items-center gap-2 rounded-lg border px-3 py-2 transition-colors", CARD_SURFACE)}>
-          <Lock className="size-4 shrink-0 text-emerald-400" />
-          <span className="text-[11px] text-muted-foreground">Conexão criptografada (HTTPS) ponta a ponta</span>
-        </div>
-        <div className={cn("flex items-center gap-2 rounded-lg border px-3 py-2 transition-colors", CARD_SURFACE)}>
-          <ShieldCheck className="size-4 shrink-0 text-emerald-400" />
-          <span className="text-[11px] text-muted-foreground">Dados tratados conforme a LGPD</span>
-        </div>
-      </div>
+          {!authLoading && user && payerInfoChecked && (
+            <CheckoutPayerCard
+              form={payerForm}
+              onChange={setPayerForm}
+              email={payerEmail}
+              requireAddress={requireAddress}
+              editing={editingPayer}
+              onEditingChange={setEditingPayer}
+              incomplete={payerIncomplete}
+              loadFailed={payerInfoFailed}
+            />
+          )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {!authLoading && !user && (
-          <div className={cn("space-y-3 rounded-xl border p-4 text-center", CARD_SURFACE)}>
-            <p className="text-sm text-foreground">Você precisa estar logado para finalizar a compra.</p>
-            <p className="text-xs text-muted-foreground">
-              Isso protege seu pedido e permite acompanhar o status da entrega na sua conta.
-            </p>
-            <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
-              <Button
-                type="button"
-                onClick={() => openLogin(loginPath)}
-                className="gap-2 bg-emerald-600 text-white transition-transform hover:-translate-y-0.5 hover:bg-emerald-500"
-              >
-                <LogIn className="size-4" />
-                Entrar
-              </Button>
-              <Button type="button" variant="outline" onClick={() => openRegister(loginPath)}>
-                Criar conta
-              </Button>
+          {!authLoading && user && payerInfoChecked && showShipping && (
+            <CheckoutShippingCard
+              form={shippingForm}
+              onChange={setShippingForm}
+              editing={editingShipping}
+              onEditingChange={setEditingShipping}
+              skipped={shippingSkipped}
+              onSkippedChange={setShippingSkipped}
+            />
+          )}
+
+          {/* Logo acima do botão de pagar: é o último passo antes de finalizar,
+              onde a pessoa ainda lembra de quem a trouxe até aqui. */}
+          {!authLoading && user && payerInfoChecked && !isComplement && (
+            <CheckoutAffiliatePicker value={affiliateCode} onChange={setAffiliateCode} disabled={loading} />
+          )}
+
+        </form>
+        </div>
+
+        {/* Sticky só sem o formulário do cartão aberto: com ele o resumo fica
+            mais alto que a tela, e o fim (o botão de pagar) ficaria
+            inalcançável até o fim da página. */}
+        <aside
+          aria-label="Resumo do pedido"
+          className={cn(
+            "mt-6 space-y-4 lg:mt-0",
+            !cardStep && "lg:sticky lg:top-[calc(var(--sticky-header-h)+1rem)]"
+          )}
+        >
+        {/* Order summary */}
+        {/* Subtotal é a soma dos preços que a pessoa viu na vitrine (`total`),
+            nunca o preço do cartão: abrir o resumo com um número MAIOR do que o
+            anunciado lê-se como "o preço subiu", justamente no ponto de maior
+            atrito do funil. No cartão, o acréscimo aparece como linha própria —
+            além de ser o certo a fazer, cobrar diferenciado exige discriminar
+            o valor. */}
+        <div className={cn("space-y-1.5 rounded-xl border px-4 py-3", CARD_SURFACE)}>
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>Subtotal ({itemCount} {itemCount === 1 ? "item" : "itens"})</span>
+            <span>{formatBRL(total)}</span>
+          </div>
+          {paymentMethod === "credit_card" && cardSurchargeCents > 0 && (
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Acréscimo do cartão</span>
+              <span>+{formatBRL(cardSurchargeCents)}</span>
+            </div>
+          )}
+          {paymentMethod === "pix" && cardEnabled && cardSurchargeCents > 0 && (
+            <div className="flex items-center justify-between text-xs text-emerald-400">
+              <span>Economia à vista no PIX</span>
+              <span>{formatBRL(cardSurchargeCents)}</span>
+            </div>
+          )}
+          {/* O total nunca teve frete: a linha só diz isso em voz alta. Carrinho
+              só de serviço não vai pelo correio, então não fala de frete. */}
+          {showShipping && (
+            <div className="flex items-center justify-between text-xs">
+              <span className="flex items-center gap-1.5 text-muted-foreground">
+                <Truck className="size-3.5" />
+                Frete
+              </span>
+              <span className="font-bold text-emerald-400">Grátis</span>
+            </div>
+          )}
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>Pagamento</span>
+            <span>
+              {paymentMethod === "pix"
+                ? "PIX (aprovação imediata)"
+                : !cardFormOnSite
+                  ? `Cartão de crédito, via página segura da ${paymentGatewayLabel}`
+                  : cardMaxInstallments > 1
+                    ? "Cartão de crédito"
+                    : "Cartão de crédito à vista"}
+            </span>
+          </div>
+          <div className="flex items-center justify-between border-t border-border/60 pt-1.5 text-sm font-bold">
+            <span>Total</span>
+            <span className="text-emerald-400">{formatBRL(payableTotal)}</span>
+          </div>
+        </div>
+
+        {/* Previsão de entrega: a mesma conta da página do produto
+            (lib/store-shipping.ts). Pré-venda conta da chegada do lote, então
+            não tem data. */}
+        {showShipping && (
+          <div className="flex items-start gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] px-4 py-3">
+            <CalendarClock className="mt-0.5 size-4 shrink-0 text-emerald-400" />
+            <div>
+              <p className="text-sm font-semibold text-foreground">
+                {onlyPreOrderItems ? (
+                  `Entrega em até ${STORE_DELIVERY_BUSINESS_DAYS} dias úteis após a chegada do lote`
+                ) : deliveryDeadline ? (
+                  <>
+                    Entrega estimada: até <span className="text-emerald-400">{deliveryDeadline}</span>
+                  </>
+                ) : (
+                  `Entrega em até ${STORE_DELIVERY_BUSINESS_DAYS} dias úteis`
+                )}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {onlyPreOrderItems
+                  ? "Frete grátis. O prazo começa a contar quando o estoque chega."
+                  : `Frete grátis. Até ${STORE_DELIVERY_BUSINESS_DAYS} dias úteis contados da confirmação do pagamento.`}
+                {hasPreOrderItem && !onlyPreOrderItems &&
+                  ` Itens em pré-venda: até ${STORE_DELIVERY_BUSINESS_DAYS} dias úteis após a chegada do lote.`}
+              </p>
             </div>
           </div>
         )}
 
-        {!authLoading && user && payerInfoChecked && (
-          <CheckoutPayerCard
-            form={payerForm}
-            onChange={setPayerForm}
-            email={payerEmail}
-            requireAddress={requireAddress}
-            editing={editingPayer}
-            onEditingChange={setEditingPayer}
-            incomplete={payerIncomplete}
-            loadFailed={payerInfoFailed}
-          />
-        )}
+          {/* Loja fechada: avisa ANTES do botão, e o botão fica desabilitado —
+              em vez de deixar a pessoa preencher tudo, clicar em "Pagar" e só
+              então receber o 503 como se fosse falha dela. O carrinho fica
+              intacto para quando a loja abrir. */}
+          {storeClosed && (
+            <div className="flex items-start gap-2.5 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3 text-sm text-amber-400">
+              <Package className="mt-0.5 size-4 shrink-0" />
+              <p>
+                <span className="font-bold">A Loja está fechada para novos pedidos no momento.</span> Seu
+                carrinho fica salvo; assim que reabrirmos, é só voltar aqui e finalizar a compra.
+              </p>
+            </div>
+          )}
 
-        {!authLoading && user && payerInfoChecked && showShipping && (
-          <CheckoutShippingCard
-            form={shippingForm}
-            onChange={setShippingForm}
-            editing={editingShipping}
-            onEditingChange={setEditingShipping}
-            skipped={shippingSkipped}
-            onSkippedChange={setShippingSkipped}
-          />
-        )}
+          {error && (
+            <p className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>
+          )}
 
-        {/* Logo acima do botão de pagar: é o último passo antes de finalizar,
-            onde a pessoa ainda lembra de quem a trouxe até aqui. */}
-        {!authLoading && user && payerInfoChecked && !isComplement && (
-          <CheckoutAffiliatePicker value={affiliateCode} onChange={setAffiliateCode} disabled={loading} />
-        )}
+          {(authLoading || user) && !cardStep && (
+            <Button
+              type="submit"
+              form="checkout-form"
+              className="w-full gap-2 bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-500 hover:shadow-emerald-500/30 disabled:hover:translate-y-0"
+              disabled={
+                loading || authLoading || !payerInfoChecked || payerBlocking || shippingBlocking || storeClosed
+              }
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  {paymentMethod === "pix" ? "Gerando cobrança PIX..." : "Preparando pagamento..."}
+                </>
+              ) : storeClosed ? (
+                "Loja fechada no momento"
+              ) : payerBlocking ? (
+                "Preencha os dados da cobrança"
+              ) : shippingBlocking ? (
+                "Complete o endereço de entrega"
+              ) : paymentMethod === "pix" ? (
+                "Gerar PIX"
+              ) : cardHere ? (
+                "Continuar para o cartão"
+              ) : (
+                "Pagar com cartão"
+              )}
+            </Button>
+          )}
 
-        {/* Loja fechada: avisa ANTES do botão, e o botão fica desabilitado —
-            em vez de deixar a pessoa preencher tudo, clicar em "Pagar" e só
-            então receber o 503 como se fosse falha dela. O carrinho fica
-            intacto para quando a loja abrir. */}
-        {storeClosed && (
-          <div className="flex items-start gap-2.5 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3 text-sm text-amber-400">
-            <Package className="mt-0.5 size-4 shrink-0" />
-            <p>
-              <span className="font-bold">A Loja está fechada para novos pedidos no momento.</span> Seu
-              carrinho fica salvo; assim que reabrirmos, é só voltar aqui e finalizar a compra.
-            </p>
+        {/* Fora do <form> do checkout: o Brick tem o próprio formulário e botão
+            "Pagar", e o submit dele subiria até o `handleSubmit` daqui. */}
+        {cardStep && user && (
+          <div className="space-y-2">
+            <MercadoPagoCardForm
+              amountCents={cardTotal}
+              maxInstallments={cardMaxInstallments}
+              payerEmail={payerEmail}
+              onPay={payWithCard}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full text-muted-foreground"
+              onClick={() => setCardStep(false)}
+            >
+              Voltar e revisar o pedido
+            </Button>
           </div>
         )}
 
-        {error && (
-          <p className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>
-        )}
-
-        {(authLoading || user) && !cardStep && (
-          <Button
-            type="submit"
-            className="w-full gap-2 bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-500 hover:shadow-emerald-500/30 disabled:hover:translate-y-0"
-            disabled={
-              loading || authLoading || !payerInfoChecked || payerBlocking || shippingBlocking || storeClosed
-            }
-          >
-            {loading ? (
-              <>
-                <Loader2 className="size-4 animate-spin" />
-                {paymentMethod === "pix" ? "Gerando cobrança PIX..." : "Preparando pagamento..."}
-              </>
-            ) : storeClosed ? (
-              "Loja fechada no momento"
-            ) : payerBlocking ? (
-              "Preencha os dados da cobrança"
-            ) : shippingBlocking ? (
-              "Complete o endereço de entrega"
-            ) : paymentMethod === "pix" ? (
-              "Gerar PIX"
-            ) : cardHere ? (
-              "Continuar para o cartão"
-            ) : (
-              "Pagar com cartão"
-            )}
-          </Button>
-        )}
-
-      </form>
-
-      {/* Fora do <form> do checkout: o Brick tem o próprio formulário e botão
-          "Pagar", e o submit dele subiria até o `handleSubmit` daqui. */}
-      {cardStep && user && (
-        <div className="mt-4 space-y-2">
-          <MercadoPagoCardForm
-            amountCents={cardTotal}
-            maxInstallments={cardMaxInstallments}
-            payerEmail={payerEmail}
-            onPay={payWithCard}
-          />
-          <Button
-            type="button"
-            variant="ghost"
-            className="w-full text-muted-foreground"
-            onClick={() => setCardStep(false)}
-          >
-            Voltar e revisar o pedido
-          </Button>
+        {/* Trust / security info */}
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 lg:grid-cols-1">
+          <div className={cn("flex items-center gap-2 rounded-lg border px-3 py-2 transition-colors", CARD_SURFACE)}>
+            <QrCode className="size-4 shrink-0 text-emerald-400" />
+            <span className="text-[11px] text-muted-foreground">
+              {paymentMethod === "pix"
+                ? "Pagamento via PIX, sem cadastro de cartão"
+                : cardFormOnSite
+                  ? `Os dados do cartão vão direto para o ${paymentGatewayLabel}, criptografados — nunca para o nosso servidor`
+                  : `Cartão digitado direto na página segura da ${paymentGatewayLabel}, nunca no nosso site`}
+            </span>
+          </div>
+          <div className={cn("flex items-center gap-2 rounded-lg border px-3 py-2 transition-colors", CARD_SURFACE)}>
+            <Lock className="size-4 shrink-0 text-emerald-400" />
+            <span className="text-[11px] text-muted-foreground">Conexão criptografada (HTTPS) ponta a ponta</span>
+          </div>
+          <div className={cn("flex items-center gap-2 rounded-lg border px-3 py-2 transition-colors", CARD_SURFACE)}>
+            <ShieldCheck className="size-4 shrink-0 text-emerald-400" />
+            <span className="text-[11px] text-muted-foreground">Dados tratados conforme a LGPD</span>
+          </div>
         </div>
-      )}
 
-      <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 pt-5 text-center text-[10px] text-muted-foreground/70">
-        <Link href="/privacidade" className="hover:text-emerald-400 hover:underline">
-          Privacidade
-        </Link>
+        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 pt-1 text-center text-[10px] text-muted-foreground/70">
+          <Link href="/privacidade" className="hover:text-emerald-400 hover:underline">
+            Privacidade
+          </Link>
+        </div>
+
+        </aside>
       </div>
+
+      <PendingOrderConflictDialog
+        orders={conflictPromptOrders}
+        onOpenChange={(open) => {
+          if (!open) setConflictPromptIds([])
+        }}
+        onReplace={replacePendingAndContinue}
+      />
 
       <RemoveCartItemDialog
         pending={pendingRemoval}

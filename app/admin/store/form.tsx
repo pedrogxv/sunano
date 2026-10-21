@@ -146,6 +146,8 @@ export interface StoreProduct {
   sale_type: "pre_order" | "ready_stock" | "normal"
   /** Teto de reservas de pré-venda; null = sem teto. */
   preorder_limit?: number | null
+  /** Teto de unidades por cliente (conta ou CPF); null = sem limite. */
+  max_per_customer?: number | null
   is_active: boolean
   is_sold_out: boolean
   requires_shipping?: boolean
@@ -501,6 +503,8 @@ export function StoreProductForm({
     sale_type: product?.sale_type ?? "normal",
     preorder_limit:
       product?.preorder_limit != null ? String(product.preorder_limit) : "",
+    max_per_customer:
+      product?.max_per_customer != null ? String(product.max_per_customer) : "",
     is_active: product?.is_active !== false,
     is_sold_out: product?.is_sold_out ?? false,
     // Produto existente sem a coluna preenchida é físico (a loja só vendia
@@ -1164,6 +1168,13 @@ export function StoreProductForm({
         }
       }
 
+      if (formData.max_per_customer.trim() !== "") {
+        const limit = Number(formData.max_per_customer)
+        if (!Number.isInteger(limit) || limit < 1 || limit > 999) {
+          throw new Error("Limite por cliente inválido. Use um número inteiro entre 1 e 999, ou deixe vazio.")
+        }
+      }
+
       let stockValue: number | null = null
       if (hasStock) {
         stockValue = parseInt(formData.stock, 10)
@@ -1325,6 +1336,9 @@ export function StoreProductForm({
           formData.sale_type === "pre_order" && formData.preorder_limit.trim() !== ""
             ? Number(formData.preorder_limit)
             : null,
+        // Vazio = sem limite por cliente.
+        max_per_customer:
+          formData.max_per_customer.trim() !== "" ? Number(formData.max_per_customer) : null,
         is_active: formData.is_active,
         is_sold_out: formData.is_sold_out,
         requires_shipping: formData.requires_shipping,
@@ -2197,6 +2211,23 @@ export function StoreProductForm({
                 <SelectItem value="inactive">🔒 Inativo (oculto)</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Limite por cliente</Label>
+            <Input
+              type="number"
+              min={1}
+              max={999}
+              step={1}
+              value={formData.max_per_customer}
+              onChange={(e) => set("max_per_customer", e.target.value)}
+              placeholder="Sem limite"
+            />
+            <p className="text-[10px] text-muted-foreground">
+              Para lançamento disputado: máximo de unidades por pessoa, somando os pedidos pagos e os aguardando
+              pagamento. Contas diferentes com o mesmo CPF contam juntas. Vazio = sem limite.
+            </p>
           </div>
 
           {!hasCombinations && (

@@ -12,6 +12,7 @@ import { computeCardTotalCents } from "@/lib/store-pricing"
 import { useStoreSettings } from "@/lib/hooks/use-store-settings"
 import { cn } from "@/lib/utils"
 import { SALE_TYPE_ICON, SALE_TYPE_LABEL } from "@/lib/store-sale-type"
+import { cartLineMaxQuantity } from "@/lib/store-cart-limits"
 
 export function CartButton() {
   const { count, setOpen } = useCart()
@@ -220,11 +221,11 @@ export function CartDrawer() {
                       </span>
                       <button
                         onClick={() => increment(item.productId, item.variantId, optionIds)}
-                        disabled={item.stock !== null && item.quantity >= item.stock}
+                        disabled={item.quantity >= cartLineMaxQuantity(item)}
                         aria-label="Aumentar quantidade"
                         className={cn(
                           "flex size-9 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground md:size-7",
-                          item.stock !== null && item.quantity >= item.stock && "cursor-not-allowed opacity-40"
+                          item.quantity >= cartLineMaxQuantity(item) && "cursor-not-allowed opacity-40"
                         )}
                       >
                         <Plus className="size-3.5" />

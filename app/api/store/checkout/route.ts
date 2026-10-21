@@ -24,6 +24,12 @@ import { MercadoPagoError } from "@/lib/server/integrations/mercadopago"
 import { payMercadoPagoCardOrder } from "@/lib/server/repositories/mercadopago-orders-repository"
 import { mercadoPagoCardSchema } from "@/lib/server/validation/mercadopago-card"
 import { mercadoPagoDeclineMessage } from "@/lib/card-decline-messages"
+import { createInfinitePayCheckoutLink, infinitePayWebhookUrl } from "@/lib/server/integrations/infinitepay"
+import {
+  getPendingOrdersSnapshot,
+  replacePendingOrders,
+} from "@/lib/server/repositories/pending-order-conflicts-repository"
+import { PENDING_ORDER_CONFLICT_CODE } from "@/lib/store-pending-orders"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { getRequestUser, isImpersonating } from "@/lib/server/auth/current-user"
 import {
@@ -49,10 +55,20 @@ import {
 import {
   PIX_EXPIRATION_MINUTES,
   PREORDER_PIX_EXPIRATION_MINUTES,
+  releaseReservationGroup,
+  reserveStock,
   restoreStock,
-  takeStock,
   type StockMovement,
 } from "@/lib/server/repositories/orders-repository"
+import { acquireLease, type Lease } from "@/lib/server/lease"
+import { rejectIfBot } from "@/lib/server/bot-check"
+import { payerDocumentFingerprint } from "@/lib/server/payer-fingerprint"
+import {
+  getCustomerLimits,
+  getCustomerProductQuantities,
+} from "@/lib/server/repositories/customer-purchase-limits-repository"
+import { MAX_QUANTITY_PER_LINE } from "@/lib/store-cart-limits"
+import { revalidateStoreProducts } from "@/lib/server/seo/revalidate-public"
 import { getStoreSettings } from "@/lib/server/repositories/store-settings-repository"
 import {
   readAffiliateRefCookie,
@@ -81,7 +97,16 @@ export const maxDuration = 30
 type DecrementedLine = StockMovement
 
 const MAX_ITEM_LINES = 50
-const MAX_QUANTITY_PER_LINE = 20
+
+/**
+ * Prazo da trava "um checkout por conta" (ver `acquireLease`). Cobre o
+ * `maxDuration` com folga: se a Function morrer segurando a trava, ela vence
+ * sozinha e a próxima tentativa da pessoa passa.
+ */
+const CHECKOUT_LEASE_SECONDS = maxDuration + 15
+
+/** Resposta quando a mesma conta já tem um checkout em andamento. */
+const CHECKOUT_IN_PROGRESS_CODE = "checkout_in_progress"
 
 /**
  * Pedidos aguardando pagamento que uma conta pode ter ao mesmo tempo.
@@ -95,13 +120,14 @@ const MAX_QUANTITY_PER_LINE = 20
  */
 const MAX_PENDING_ORDERS_PER_USER = 3
 
+// Ids são UUID: validar o formato aqui devolve 400 com mensagem, em vez de
+// deixar o Postgres recusar o `in.(...)` lá na frente com um 500.
 const checkoutItemSchema = z.object({
-  productId: z
-    .string("Quantidade inválida no carrinho.")
-    .min(1, "Quantidade inválida no carrinho."),
-  variantId: z.string().min(1, "Quantidade inválida no carrinho.").nullish(),
+  productId: z.uuid("Item inválido no carrinho. Remova-o e adicione de novo."),
+  variantId: z.uuid("Item inválido no carrinho. Remova-o e adicione de novo.").nullish(),
   variantOptionIds: z
-    .array(z.string().min(1, "Quantidade inválida no carrinho."))
+    .array(z.uuid("Item inválido no carrinho. Remova-o e adicione de novo."))
+    .max(20, "Item inválido no carrinho. Remova-o e adicione de novo.")
     .nullish(),
   quantity: z
     .number("Quantidade inválida no carrinho.")
@@ -159,6 +185,12 @@ const checkoutBodySchema = z.object({
    * não numa segunda chamada depois de o pedido existir.
    */
   card: mercadoPagoCardSchema.optional(),
+  /**
+   * Pedidos pendentes que esta compra substitui (resposta ao 409
+   * `pending_order_conflict`). Só confirma a escolha: quem decide o que é
+   * cancelado é o servidor, pelos pedidos do usuário com produto do carrinho.
+   */
+  replacePendingOrderIds: z.array(z.uuid()).max(MAX_PENDING_ORDERS_PER_USER * 2).optional(),
   /** Marca explícita de "não quero informar agora" — só aceita enquanto o endereço for opcional. */
 })
 
@@ -220,27 +252,25 @@ async function isSelfReferral(
 }
 
 /**
- * Reverte as reservas de estoque já aplicadas neste request (RPC atômica de
- * incremento, mesmo padrão de segurança do decremento). Chamada em qualquer
- * caminho de erro depois que pelo menos uma linha foi decrementada — não há
- * transação real via PostgREST entre o decremento e o insert do pedido, então
- * o rollback é manual.
+ * Reverte as reservas de estoque já aplicadas neste request. Não há
+ * transação via PostgREST entre a reserva e o insert do pedido, então o
+ * rollback é manual — mas cada metade dele é atômica:
+ *
+ * - Com `reservationGroup` (o pedido ainda não existe): diário e estoque
+ *   voltam juntos numa transação (`releaseReservationGroup`), inclusive as
+ *   reservas de pré-venda. Antes o diário era apagado e o estoque devolvido
+ *   linha a linha depois: morrer no meio perdia as unidades.
+ * - Sem (o pedido existiu e foi apagado, ex. cartão recusado): o diário já
+ *   foi baixado em `confirmReservations`, e cada linha volta por `restoreStock`.
  */
 async function revertDecrements(
   db: SupabaseClient<Database>,
   lines: DecrementedLine[],
   reservationGroup?: string
 ) {
-  // Apaga o diário ANTES de devolver o estoque: se o processo morrer no meio
-  // desta função, a alternativa (diário apagado e estoque não devolvido)
-  // seria invisível, enquanto esta ordem deixa o cron devolver de novo — e a
-  // RPC de release só age sobre linhas que ainda existem, então no pior caso
-  // o estoque volta uma vez só.
   if (reservationGroup) {
-    await db
-      .from("store_stock_reservations")
-      .delete()
-      .eq("reservation_group", reservationGroup)
+    await releaseReservationGroup(db, reservationGroup, lines)
+    return
   }
 
   await Promise.all(
@@ -393,6 +423,19 @@ export async function POST(request: NextRequest) {
   // achar, e sem ele o estoque ficaria descontado para sempre.
   const reservationGroup = randomUUID()
   const db = createSupabaseAdminClient()
+  // Depois de `confirmReservation` o PEDIDO segura o estoque: um erro dali em
+  // diante (aviso, Discord) não pode devolver as unidades — o pedido segue
+  // pendente e é a expiração dele que as devolve. Antes, o catch externo
+  // devolvia de qualquer jeito e deixava estoque a mais na prateleira.
+  let reservationConfirmed = false
+  const confirmReservation = async () => {
+    await confirmReservations(db, reservationGroup)
+    reservationConfirmed = true
+  }
+  // Trava "um checkout por conta" (ver o portão logo depois da autenticação).
+  let checkoutLease: Lease | null = null
+  // Trava por CPF, só em compra de produto com limite por cliente.
+  let payerLease: Lease | null = null
 
   // Segunda checagem da mesma flag que o proxy já aplica (proxy.ts) — fechado
   // por padrão, caso o matcher/lógica do proxy mude e essa rota deixe de
@@ -430,6 +473,11 @@ export async function POST(request: NextRequest) {
         { status: 429 }
       )
     }
+
+    // Vercel BotID (Basic, gratuito): script que dispara compras sem rodar o
+    // desafio no navegador. Antes da sessão e de qualquer escrita.
+    const botBlocked = await rejectIfBot("checkout")
+    if (botBlocked) return botBlocked
 
     const user = await getRequestUser(request)
     if (!user) {
@@ -472,31 +520,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Teto de pedidos pendentes (ver MAX_PENDING_ORDERS_PER_USER). Conta só
-    // o ambiente atual do gateway: um pedido de sandbox nunca prende estoque
-    // de produção e vice-versa.
-    const { count: pendingCount, error: pendingError } = await db
-      .from("store_orders")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "pending")
-      .eq("is_sandbox", isActiveGatewaySandbox())
-      .contains("metadata", { user_id: user.id })
-    if (pendingError) {
-      const { body, status } = dbErrorResponse(
-        pendingError,
-        "Não foi possível conferir seus pedidos em aberto. Tente novamente."
-      )
-      return NextResponse.json(body, { status })
-    }
-    if ((pendingCount ?? 0) >= MAX_PENDING_ORDERS_PER_USER) {
-      return NextResponse.json(
-        {
-          error: `Você já tem ${pendingCount} pedidos aguardando pagamento. Pague ou cancele um deles em Meus Pedidos antes de criar outro.`,
-        },
-        { status: 409 }
-      )
-    }
-
     const rawBody = await request.json().catch(() => null)
     const parsedBody = checkoutBodySchema.safeParse(rawBody)
     if (!parsedBody.success) {
@@ -506,6 +529,73 @@ export async function POST(request: NextRequest) {
       )
     }
     const { items, paymentMethod, complementOrderId } = parsedBody.data
+
+    // Um checkout por conta por vez. Tudo daqui até o insert do pedido é
+    // "ler, decidir, gravar" em várias idas ao banco: o teto de pedidos
+    // pendentes, a trava de um pedido por produto e o limite diário leem o
+    // estado ANTES de o pedido existir. Sem a trava, duas abas (ou um script,
+    // ou o duplo clique) passavam todas pelas conferências e cada uma
+    // segurava estoque e gerava uma cobrança. Com ela, a segunda requisição
+    // espera a primeira terminar — e aí enxerga o pedido que ela criou.
+    checkoutLease = await acquireLease(`store_checkout:${user.id}`, CHECKOUT_LEASE_SECONDS)
+    if (!checkoutLease.acquired && checkoutLease.reason === "error") {
+      return NextResponse.json(
+        { error: "Não foi possível iniciar a compra agora. Tente novamente em instantes." },
+        { status: 503 }
+      )
+    }
+    if (!checkoutLease.acquired) {
+      return NextResponse.json(
+        {
+          error: "Já estamos processando um pedido seu. Aguarde alguns segundos e confira em Meus Pedidos antes de tentar de novo.",
+          code: CHECKOUT_IN_PROGRESS_CODE,
+        },
+        { status: 409 }
+      )
+    }
+
+    // Pedidos em aberto do usuário (ver `pending-order-conflicts-repository`).
+    // Um produto do carrinho já num pedido pendente = 409 até a pessoa
+    // escolher pagar o aberto ou substituí-lo (`replacePendingOrderIds`). O
+    // complemento não passa pelo carrinho: só conta para o teto.
+    const pendingSnapshot = await getPendingOrdersSnapshot({
+      userId: user.id,
+      productIds: complementOrderId ? [] : items.map((item) => item.productId),
+      isSandbox: isActiveGatewaySandbox(),
+    })
+    if (!pendingSnapshot.ok) {
+      const { body, status } = dbErrorResponse(
+        pendingSnapshot.error,
+        "Não foi possível conferir seus pedidos em aberto. Tente novamente."
+      )
+      return NextResponse.json(body, { status })
+    }
+    const { pendingIds, conflictIds } = pendingSnapshot.snapshot
+    const replaceRequested = new Set(parsedBody.data.replacePendingOrderIds ?? [])
+    if (conflictIds.some((id) => !replaceRequested.has(id))) {
+      return NextResponse.json(
+        {
+          error: "Você já tem um pedido aguardando pagamento com este produto. Pague esse pedido ou substitua-o por este.",
+          code: PENDING_ORDER_CONFLICT_CODE,
+          pendingOrderIds: conflictIds,
+        },
+        { status: 409 }
+      )
+    }
+    // Só os que o servidor achou: o corpo nunca escolhe o que cancelar.
+    const ordersToReplace = conflictIds
+
+    // Teto de pedidos pendentes (ver MAX_PENDING_ORDERS_PER_USER), já sem os
+    // que esta compra vai substituir.
+    const remainingPending = pendingIds.length - ordersToReplace.length
+    if (remainingPending >= MAX_PENDING_ORDERS_PER_USER) {
+      return NextResponse.json(
+        {
+          error: `Você já tem ${remainingPending} pedidos aguardando pagamento. Pague ou cancele um deles em Meus Pedidos antes de criar outro.`,
+        },
+        { status: 409 }
+      )
+    }
 
     // Escolha do seletor ganha do cookie. Um código escolhido que não serve
     // mais (afiliado suspenso entre abrir a tela e pagar) é recusado em vez
@@ -592,6 +682,22 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Substitui o pedido aberto AGORA, depois das validações baratas (uma
+    // recusa acima não pode deixar a pessoa sem o pedido antigo e sem o
+    // novo) e ANTES da reserva: com 1 unidade em estoque, é o pedido antigo
+    // que a segura.
+    if (ordersToReplace.length > 0) {
+      const replaced = await replacePendingOrders(ordersToReplace)
+      if (!replaced.ok) {
+        return NextResponse.json(
+          {
+            error: `O pedido #${orderNumber(replaced.paidOrderId)} acabou de ser pago. Confira em Meus Pedidos antes de comprar de novo.`,
+          },
+          { status: 409 }
+        )
+      }
+    }
+
     // Agrupa por (produto, variante, opções de variante) antes de checar
     // estoque — sem isso, repetir o mesmo par em várias entradas do carrinho
     // passava pela checagem de estoque por linha mesmo pedindo, no total,
@@ -661,7 +767,7 @@ export async function POST(request: NextRequest) {
       db
         .from("store_products")
         .select(
-          "id, name, price_cents, promo_price_cents, stock, images, type, condition, is_active, is_sold_out, requires_shipping, sale_type, category, service_form_fields, is_payment_complement"
+          "id, slug, name, price_cents, promo_price_cents, stock, images, type, condition, is_active, is_sold_out, requires_shipping, sale_type, category, service_form_fields, is_payment_complement"
         )
         .in("id", productIds),
       getVariantsForCheckout(variantIds),
@@ -933,14 +1039,22 @@ export async function POST(request: NextRequest) {
           }
         )
       )
+      // Sem a conta não há limite: recusar é o lado seguro (a pessoa tenta de
+      // novo em instantes), liberar sem teto era o que acontecia antes.
+      if (checks.some((c) => c.alreadyBought === null)) {
+        return NextResponse.json(
+          { error: "Não foi possível conferir o limite de compra agora. Tente novamente em instantes." },
+          { status: 503 }
+        )
+      }
       const exceeded = checks.find(
-        (c) => c.alreadyBought + c.quantity > DAILY_PURCHASE_LIMIT_NO_STOCK
+        (c) => (c.alreadyBought ?? 0) + c.quantity > DAILY_PURCHASE_LIMIT_NO_STOCK
       )
       if (exceeded) {
         const product = products.find((p) => p.id === exceeded.productId)
         const remaining = Math.max(
           0,
-          DAILY_PURCHASE_LIMIT_NO_STOCK - exceeded.alreadyBought
+          DAILY_PURCHASE_LIMIT_NO_STOCK - (exceeded.alreadyBought ?? 0)
         )
         return NextResponse.json(
           {
@@ -979,18 +1093,25 @@ export async function POST(request: NextRequest) {
             p_quantity: quantity,
             p_reservation_group: reservationGroup,
           })
-          return { line, ok: Boolean(reserved), isPreOrder: true }
+          // A página mostra as vagas que sobram no lote: muda a cada reserva.
+          return { line, ok: Boolean(reserved), isPreOrder: true, stockControlled: Boolean(reserved) }
         }
 
         // A unidade sai de onde o estoque é controlado: a combinação, se
-        // ela tem estoque próprio; senão a cor; senão o produto.
-        const ok = await takeStock(db, {
+        // ela tem estoque próprio; senão a cor; senão o produto. Desconto e
+        // linha no diário são uma transação só (`reserve_store_stock`).
+        const reservation = await reserveStock(db, reservationGroup, {
           productId: product.id,
           variantId: variant?.id ?? null,
           skuId: selection.stockSource === "sku" ? selection.sku!.id : null,
           quantity,
         })
-        return { line, ok, isPreOrder: false }
+        return {
+          line,
+          ok: reservation.ok,
+          isPreOrder: false,
+          stockControlled: reservation.ok && reservation.remaining !== null,
+        }
       })
     )
 
@@ -1027,31 +1148,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error }, { status: 409 })
     }
 
-    // Estoque reservado com sucesso: registra no diário ANTES de qualquer
-    // chamada ao gateway. A partir daqui, mesmo que o processo morra, o cron
-    // sabe que estas unidades foram descontadas sem pedido e as devolve.
-    // Falha ao gravar o diário não derruba a compra — ela só nos deixa sem a
-    // rede de segurança para este request, que é exatamente o comportamento
-    // que existia antes de o diário existir.
-    if (decrementedLines.length > 0) {
-      const { error: journalError } = await db
-        .from("store_stock_reservations")
-        .insert(
-          decrementedLines.map((line) => ({
-            reservation_group: reservationGroup,
-            product_id: line.productId,
-            variant_id: line.variantId,
-            ...(line.skuId ? { sku_id: line.skuId } : {}),
-            quantity: line.quantity,
-          }))
-        )
-      if (journalError) {
-        console.error(
-          "[checkout] falha ao registrar reserva de estoque no diário:",
-          journalError
-        )
-      }
-    }
+    // Estoque reservado e já no diário (mesma transação): daqui em diante,
+    // mesmo que o processo morra, o cron sabe que estas unidades foram
+    // descontadas sem pedido e as devolve.
+    //
+    // A página do produto é ISR: sem isto ela seguiria anunciando "Em
+    // estoque: N unidades" (ou o botão de comprar de um item que acabou) até
+    // a próxima revalidação. Só o que tem estoque controlado — produto sem
+    // controle não muda nada na página ao ser comprado.
+    revalidateStoreProducts(
+      decrementResults.filter((result) => result.stockControlled).map((result) => result.line.product.slug)
+    )
 
     let totalCents = 0
     const orderItems = []
@@ -1116,9 +1223,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Uma leitura só do perfil: o endereço de cobrança (cartão) vem junto.
     const { data: profile } = await db
       .from("user_profiles")
-      .select("full_name, cpf, asaas_customer_id")
+      .select("full_name, cpf, asaas_customer_id, phone, postal_code, street, number, complement, neighborhood, city, state")
       .eq("id", user.id)
       .single()
     let payerName: string | null = profile?.full_name ?? null
@@ -1129,8 +1237,8 @@ export async function POST(request: NextRequest) {
 
     // Perfil sem nome/CPF: o próprio checkout aceita esses dados no corpo
     // da requisição (a tela mostra os campos quando o perfil está
-    // incompleto) e completa o cadastro aqui — não existe uma tela separada
-    // de "editar perfil" para isso hoje. O corpo também chega com o perfil
+    // incompleto) e completa o cadastro aqui, sem mandar a pessoa para Minha
+    // conta (Dados de compra) no meio da compra. O corpo também chega com o perfil
     // já completo quando o usuário clica em "Editar" no card de dados da
     // cobrança: nesse caso o que ele digitou vale mais que o que está salvo.
     const payerInfoSubmitted =
@@ -1175,6 +1283,78 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Limite por CLIENTE (`max_per_customer`, lançamento disputado): a conta
+    // OU o CPF do pagador. Só dá para conferir aqui, onde o CPF existe; as
+    // unidades desta compra já estão reservadas e voltam se ela for recusada.
+    // O CPF entra no pedido como impressão digital (HMAC), nunca em claro.
+    const payerFingerprint = payerDocumentFingerprint(payerDocument)
+    const customerLimits = complementCharge
+      ? ({ ok: true, available: true, limits: new Map<string, number>() } as const)
+      : await getCustomerLimits(validatedLines.map((line) => line.product.id))
+    if (!customerLimits.ok) {
+      await revertDecrements(db, decrementedLines, reservationGroup)
+      return NextResponse.json(
+        { error: "Não foi possível conferir o limite de compra agora. Tente novamente em instantes." },
+        { status: 503 }
+      )
+    }
+    // Só grava a coluna quando a migration que a cria já rodou.
+    const payerColumns = customerLimits.available && payerFingerprint ? { payer_document_hash: payerFingerprint } : {}
+
+    if (customerLimits.limits.size > 0) {
+      // A trava por conta não cobre duas CONTAS com o mesmo CPF no mesmo
+      // segundo: esta cobre, até o pedido existir (solta no `finally`).
+      if (payerFingerprint) {
+        payerLease = await acquireLease(`store_checkout_payer:${payerFingerprint}`, CHECKOUT_LEASE_SECONDS)
+        if (!payerLease.acquired) {
+          await revertDecrements(db, decrementedLines, reservationGroup)
+          return NextResponse.json(
+            payerLease.reason === "error"
+              ? { error: "Não foi possível iniciar a compra agora. Tente novamente em instantes." }
+              : { error: "Já existe uma compra em andamento com este CPF. Aguarde alguns segundos e tente de novo.", code: CHECKOUT_IN_PROGRESS_CODE },
+            { status: payerLease.reason === "error" ? 503 : 409 }
+          )
+        }
+      }
+
+      const limitedIds = [...customerLimits.limits.keys()]
+      const owned = await getCustomerProductQuantities({
+        productIds: limitedIds,
+        userId: user.id,
+        payerFingerprint,
+        isSandbox: isActiveGatewaySandbox(),
+      })
+      if (!owned) {
+        await revertDecrements(db, decrementedLines, reservationGroup)
+        return NextResponse.json(
+          { error: "Não foi possível conferir o limite de compra agora. Tente novamente em instantes." },
+          { status: 503 }
+        )
+      }
+
+      for (const productId of limitedIds) {
+        const max = customerLimits.limits.get(productId)!
+        const requested = validatedLines
+          .filter((line) => line.product.id === productId)
+          .reduce((sum, line) => sum + line.quantity, 0)
+        const already = owned.get(productId) ?? 0
+        if (already + requested <= max) continue
+
+        await revertDecrements(db, decrementedLines, reservationGroup)
+        const name = products.find((p) => p.id === productId)?.name ?? "este produto"
+        const remaining = Math.max(0, max - already)
+        return NextResponse.json(
+          {
+            error:
+              remaining > 0
+                ? `"${name}" tem limite de ${max} por cliente, e você já tem ${already} em pedidos. Dá para levar mais ${remaining}.`
+                : `"${name}" tem limite de ${max} por cliente, e você já atingiu esse limite (pedidos pagos ou aguardando pagamento contam).`,
+          },
+          { status: 400 }
+        )
+      }
+    }
+
     // Auto-indicação pelo CPF: só dá para checar aqui, onde o documento do
     // pagador finalmente existe. A compra segue normalmente — apenas deixa de
     // ser atribuída, mesma decisão do bloqueio por `user_id`.
@@ -1208,13 +1388,7 @@ export async function POST(request: NextRequest) {
     // não precisa) — checa e, se faltar, aceita os dados no próprio corpo do
     // checkout (mesmo padrão de payerInfoSchema acima) e completa o perfil.
     if (paymentMethod === "credit_card") {
-      const { data: addressProfile } = await db
-        .from("user_profiles")
-        .select(
-          "phone, postal_code, street, number, complement, neighborhood, city, state"
-        )
-        .eq("id", user.id)
-        .single()
+      const addressProfile = profile
 
       const hasCompleteAddress = Boolean(
         addressProfile?.phone &&
@@ -1394,6 +1568,7 @@ export async function POST(request: NextRequest) {
         .insert({
           ...shippingColumns,
           ...complementColumns,
+          ...payerColumns,
           payment_gateway: "mercadopago",
           items: orderItems,
           total_cents: cardTotalCents,
@@ -1409,6 +1584,7 @@ export async function POST(request: NextRequest) {
           // pendente e a nova tentativa vai por `/checkout/card`.
           pix_expires_at: new Date(Date.now() + expirationMinutes * 60_000).toISOString(),
           is_sandbox: isActiveGatewaySandbox(),
+          user_id: user.id,
           metadata: { user_id: user.id },
           affiliate_id: affiliateForOrder?.affiliateId ?? null,
           affiliate_code: affiliateForOrder?.affiliateCode ?? null,
@@ -1425,7 +1601,7 @@ export async function POST(request: NextRequest) {
       // O pedido passa a segurar o estoque. Baixar o diário só depois da
       // cobrança faria o cron (15 min) e a expiração do pedido devolverem a
       // mesma unidade duas vezes se a Function morresse no meio da chamada.
-      await confirmReservations(db, reservationGroup)
+      await confirmReservation()
 
       // Recusado: o pedido some e o estoque volta. O DELETE é condicional
       // (pendente, sem pagamento gravado), e só quem apagou devolve — se a
@@ -1500,6 +1676,129 @@ export async function POST(request: NextRequest) {
         // pagamento aprovado sem pedido.
         return keepPending()
       }
+    }
+
+    // -----------------------------------------------------------------
+    // InfinitePay (cartão, `STORE_CARD_GATEWAY=infinitepay`)
+    // -----------------------------------------------------------------
+    // Checkout hospedado: o pedido nasce pendente com o link e o cliente paga
+    // na página da InfinitePay, que o devolve para `/checkout/card`. Quem
+    // libera é `applyInfinitePayPayment` (retorno e webhook), sempre depois
+    // do `payment_check`.
+    //
+    // Ordem inversa à da Asaas: o pedido é gravado ANTES de o link existir.
+    // Link criado sem pedido gravado é pagável e não tem o que liberar — e a
+    // InfinitePay não tem API para cancelar link nem para estornar.
+    if (chargeGateway === "infinitepay") {
+      const settings = await getStoreSettings()
+      const cardTotalCents = computeCardTotalCents(
+        orderItems.map((item) => ({
+          priceCents: item.price_cents,
+          quantity: item.quantity,
+          singlePrice: item.single_price,
+        })),
+        settings.cardSurchargePercent
+      )
+      const orderId = randomUUID()
+
+      const { error: insertError } = await db.from("store_orders").insert({
+        ...shippingColumns,
+        ...complementColumns,
+        ...payerColumns,
+        id: orderId,
+        payment_gateway: "infinitepay",
+        items: orderItems,
+        total_cents: cardTotalCents,
+        pix_price_cents: totalCents,
+        card_surcharge_percent: settings.cardSurchargePercent,
+        status: "pending",
+        payment_method: "credit_card",
+        customer_email: customerEmail,
+        customer_name: payerName,
+        // Prazo da LOJA, lido pelo cron de expiração (ver o ramo de cartão da
+        // Asaas abaixo para o porquê do nome). O link da InfinitePay NÃO
+        // expira junto: pagamento depois disso vira aviso de estorno manual.
+        pix_expires_at: new Date(Date.now() + expirationMinutes * 60_000).toISOString(),
+        is_sandbox: isActiveGatewaySandbox(),
+        user_id: user.id,
+        metadata: { user_id: user.id },
+        affiliate_id: affiliateForOrder?.affiliateId ?? null,
+        affiliate_code: affiliateForOrder?.affiliateCode ?? null,
+      })
+      if (insertError) {
+        await revertDecrements(db, decrementedLines, reservationGroup)
+        const { body, status } = dbErrorResponse(insertError, "Não foi possível registrar o pedido.")
+        return NextResponse.json(body, { status })
+      }
+      await confirmReservation()
+
+      let checkoutUrl: string
+      try {
+        const link = await createInfinitePayCheckoutLink({
+          orderId,
+          totalCents: cardTotalCents,
+          items: orderItems.map((item) => ({
+            description: item.name,
+            quantity: item.quantity,
+            unitPriceCents: computeItemCardPriceCents(item.price_cents, settings.cardSurchargePercent, item.single_price),
+          })),
+          fallbackDescription: `Pedido #${orderNumber(orderId)} - Sunano`,
+          redirectUrl: `${SITE_URL}/checkout/card?orderId=${orderId}`,
+          webhookUrl: infinitePayWebhookUrl(SITE_URL),
+          customer: { name: payerName, email: customerEmail, phone: payerAddress?.phone ?? null },
+          // Entrega quando o pedido tem; senão o endereço do cadastro, que o
+          // cartão sempre exige (`payerAddress`).
+          address: shippingAddress
+            ? {
+                postalCode: shippingAddress.shippingPostalCode,
+                street: shippingAddress.shippingStreet,
+                neighborhood: shippingAddress.shippingNeighborhood,
+                number: shippingAddress.shippingNumber,
+                complement: shippingAddress.shippingComplement ?? null,
+              }
+            : payerAddress
+              ? {
+                  postalCode: payerAddress.postalCode,
+                  street: payerAddress.street,
+                  neighborhood: payerAddress.neighborhood,
+                  number: payerAddress.number,
+                  complement: payerAddress.complement ?? null,
+                }
+              : null,
+        })
+        checkoutUrl = link.url
+      } catch (linkError) {
+        console.error("[checkout] InfinitePay createInfinitePayCheckoutLink falhou:", linkError)
+        // Sem link, ninguém pode pagar este pedido: some, e o estoque volta.
+        // DELETE condicional: só quem apagou devolve.
+        const { data: deleted } = await db
+          .from("store_orders")
+          .delete()
+          .eq("id", orderId)
+          .eq("status", "pending")
+          .is("infinitepay_transaction_nsu", null)
+          .select("id")
+        if (deleted?.length) await revertDecrements(db, decrementedLines)
+        return NextResponse.json(
+          { error: "Não foi possível iniciar o pagamento com cartão. Tente novamente ou use PIX." },
+          { status: 402 }
+        )
+      }
+
+      const { error: linkSaveError } = await db
+        .from("store_orders")
+        .update({ infinitepay_checkout_url: checkoutUrl })
+        .eq("id", orderId)
+      if (linkSaveError) {
+        // O cliente segue para o link mesmo assim; só a volta a ele por
+        // `/checkout/card` fica sem o botão.
+        console.error("[checkout] InfinitePay: falha ao gravar o link no pedido:", orderId, linkSaveError)
+      }
+
+      await notifyOrderStatusChange({ userId: user.id, orderId, status: "pending" })
+      notifyDiscordOrderEventInBackground({ orderId, status: "pending", actor: "checkout" })
+
+      return NextResponse.json({ orderId, checkoutUrl })
     }
 
     // -----------------------------------------------------------------
@@ -1599,11 +1898,13 @@ export async function POST(request: NextRequest) {
           ...stripeInsert,
           ...shippingColumns,
           ...complementColumns,
+          ...payerColumns,
           items: orderItems,
           status: "pending",
           customer_email: customerEmail,
           customer_name: payerName,
           is_sandbox: isSandbox,
+          user_id: user.id,
           metadata: { user_id: user.id },
           affiliate_id: affiliateForOrder?.affiliateId ?? null,
           affiliate_code: affiliateForOrder?.affiliateCode ?? null,
@@ -1622,7 +1923,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(body, { status })
       }
 
-      await confirmReservations(db, reservationGroup)
+      await confirmReservation()
       await notifyOrderStatusChange({ userId: user.id, orderId: order.id, status: "pending" })
       notifyDiscordOrderEventInBackground({ orderId: order.id, status: "pending", actor: "checkout" })
 
@@ -1735,6 +2036,7 @@ export async function POST(request: NextRequest) {
           ...orderInsert,
           ...shippingColumns,
           ...complementColumns,
+          ...payerColumns,
           items: orderItems,
           total_cents: cardTotalCents,
           status: "pending",
@@ -1746,6 +2048,7 @@ export async function POST(request: NextRequest) {
           // runtime — sem gravar, um pedido de sandbox fica indistinguível de
           // um real depois que o deploy vira produção.
           is_sandbox: isActiveGatewaySandbox(),
+          user_id: user.id,
           metadata: { user_id: user.id },
           affiliate_id: affiliateForOrder?.affiliateId ?? null,
           affiliate_code: affiliateForOrder?.affiliateCode ?? null,
@@ -1762,7 +2065,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(body, { status })
       }
 
-      await confirmReservations(db, reservationGroup)
+      await confirmReservation()
 
       await notifyOrderStatusChange({
         userId: user.id,
@@ -1835,6 +2138,7 @@ export async function POST(request: NextRequest) {
         ...orderInsert,
         ...shippingColumns,
         ...complementColumns,
+        ...payerColumns,
         items: orderItems,
         total_cents: totalCents,
         status: "pending",
@@ -1842,6 +2146,7 @@ export async function POST(request: NextRequest) {
         customer_email: customerEmail,
         customer_name: payerName,
         is_sandbox: isActiveGatewaySandbox(),
+        user_id: user.id,
         metadata: { user_id: user.id },
         affiliate_id: affiliateForOrder?.affiliateId ?? null,
         affiliate_code: affiliateForOrder?.affiliateCode ?? null,
@@ -1858,7 +2163,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(body, { status })
     }
 
-    await confirmReservations(db, reservationGroup)
+    await confirmReservation()
 
     await notifyOrderStatusChange({
       userId: user.id,
@@ -1881,7 +2186,11 @@ export async function POST(request: NextRequest) {
     })
   } catch (err) {
     console.error("Checkout error:", err)
-    if (decrementedLines.length > 0) {
+    // Sempre pelo grupo, mesmo sem `decrementedLines`: um carrinho só de
+    // pré-venda também deixou linha no diário (`reserve_preorder`), e ela
+    // seguraria a vaga do lote por 15 min até o cron. Depois de confirmada,
+    // a reserva é do pedido (ver `reservationConfirmed`).
+    if (!reservationConfirmed) {
       await revertDecrements(db, decrementedLines, reservationGroup)
     }
     const { body, status } = dbErrorResponse(
@@ -1889,5 +2198,8 @@ export async function POST(request: NextRequest) {
       "Não foi possível finalizar a compra. Tente novamente."
     )
     return NextResponse.json(body, { status })
+  } finally {
+    await payerLease?.release()
+    await checkoutLease?.release()
   }
 }

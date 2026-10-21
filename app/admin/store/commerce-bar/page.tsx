@@ -323,7 +323,7 @@ export default function AdminStoreCommerceBarPage() {
             </p>
             {!cardEnabled && (
               <p className="mt-1 text-[11px] text-amber-400">
-                A Loja está só com PIX: benefícios de cartão (parcelas, &quot;sem juros&quot;) ficam ocultos e
+                A Loja está só com PIX: benefícios de cartão (parcelas, crédito) ficam ocultos e
                 &quot;PIX com desconto&quot; vira só PIX. Voltam sozinhos quando o cartão for religado.
               </p>
             )}

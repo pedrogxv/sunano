@@ -41,7 +41,9 @@ export function SupportFab() {
       href={href}
       aria-label={label}
       title={label}
-      className="fixed bottom-[calc(1rem_+_env(safe-area-inset-bottom))] right-4 z-40 flex size-12 items-center justify-center gap-2 rounded-full border border-border bg-card text-sm font-semibold text-foreground shadow-[0_12px_28px_-10px_rgba(0,0,0,0.85)] transition-all hover:bg-muted md:bottom-6 md:right-6 md:h-11 md:w-auto md:px-4"
+      // `--mobile-bottom-bar-h`: barra fixa de rodapé (a de compra da página de
+      // produto) está na tela; o botão sobe acima dela em vez de cobri-la.
+      className="fixed bottom-[calc(1rem_+_env(safe-area-inset-bottom)_+_var(--mobile-bottom-bar-h,0px))] right-4 z-40 flex size-12 items-center justify-center gap-2 rounded-full border border-border bg-card text-sm font-semibold text-foreground shadow-[0_12px_28px_-10px_rgba(0,0,0,0.85)] transition-all hover:bg-muted md:bottom-[calc(1.5rem_+_var(--mobile-bottom-bar-h,0px))] md:right-6 md:h-11 md:w-auto md:px-4"
     >
       <LifeBuoy className="size-[18px] md:size-4" />
       <span className="hidden md:inline">{t.auth.support}</span>

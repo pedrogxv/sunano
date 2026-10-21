@@ -45,6 +45,12 @@ const updateProductSchema = z.object({
   condition_notes: z.string().trim().max(1000).nullable().optional(),
   sale_type: z.enum(["pre_order", "ready_stock", "normal"]).optional(),
   preorder_limit: z.number().int().min(0).nullable().optional(),
+  /**
+   * Teto de unidades deste produto por CLIENTE (CPF do pagador ou conta),
+   * somando todos os pedidos não cancelados. null = sem limite. Para
+   * lançamento disputado: várias contas com o mesmo CPF contam juntas.
+   */
+  max_per_customer: z.number().int().min(1).max(999).nullable().optional(),
   is_active: z.boolean().optional(),
   is_sold_out: z.boolean().optional(),
   /** false = serviço/digital: nunca pede endereço de entrega. */

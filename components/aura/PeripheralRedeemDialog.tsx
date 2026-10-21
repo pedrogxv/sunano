@@ -22,7 +22,7 @@ import {
   toShippingResidenceType,
   type ShippingForm,
 } from "@/components/store/ShippingAddressFields"
-import { formatCepInput, formatCpfInput, formatPhoneInput } from "@/components/store/CheckoutPayerCard"
+import { formatCepInput, formatCpfInput, formatPhoneInput } from "@/lib/br-format"
 
 
 export type PrefillShipping = {

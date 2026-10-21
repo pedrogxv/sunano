@@ -1,5 +1,6 @@
 import "server-only"
 
+import { isInternationalPhone } from "@/lib/br-format"
 import { PIX_EXPIRATION_MINUTES } from "@/lib/server/repositories/orders-repository"
 
 /**
@@ -201,13 +202,16 @@ export interface AsaasCustomer {
  * vez.
  */
 export async function findOrCreateCustomer(params: FindOrCreateCustomerParams): Promise<AsaasCustomer> {
+  // A Asaas só valida telefone brasileiro: o de fora ("+81...") derrubaria o
+  // cadastro inteiro, então não vai.
+  const phone = params.phone && !isInternationalPhone(params.phone) ? params.phone : null
   const existing = await asaasFetch<{
     data: (AsaasCustomer & { phone?: string; address?: string; notificationDisabled?: boolean })[]
   }>(`/customers?cpfCnpj=${encodeURIComponent(params.cpfCnpj)}`)
   if (existing.data.length > 0) {
     const customer = existing.data[0]
     const needsAddressUpdate =
-      params.phone && params.address && (!customer.phone || !customer.address)
+      phone && params.address && (!customer.phone || !customer.address)
     // Cadastro antigo, criado antes de desligarmos a mensageria: continua
     // gerando R$ 0,99 por cobrança até alguém corrigir. Como já estamos na
     // rota do checkout com o customer em mãos, corrige aqui — é a única
@@ -222,7 +226,7 @@ export async function findOrCreateCustomer(params: FindOrCreateCustomerParams): 
           // Asaas, então o cadastro existente é preservado.
           name: sanitizeAsaasText(params.name, "Cliente"),
           email: params.email ?? undefined,
-          phone: params.phone ?? undefined,
+          phone: phone ?? undefined,
           postalCode: params.postalCode ?? undefined,
           address: params.address ?? undefined,
           addressNumber: params.addressNumber ?? undefined,
@@ -243,7 +247,7 @@ export async function findOrCreateCustomer(params: FindOrCreateCustomerParams): 
       name: sanitizeAsaasText(params.name, "Cliente"),
       cpfCnpj: params.cpfCnpj,
       email: params.email ?? undefined,
-      phone: params.phone ?? undefined,
+      phone: phone ?? undefined,
       postalCode: params.postalCode ?? undefined,
       address: params.address ?? undefined,
       addressNumber: params.addressNumber ?? undefined,

@@ -1,23 +1,28 @@
 import type { Metadata } from "next"
-import { notFound } from "next/navigation"
 import { ShoppingBag } from "lucide-react"
-import { getStoreProductDetail, getStoreFilterOptions } from "@/lib/server/repositories/store-repository"
-import { getReviewAggregate } from "@/lib/server/repositories/store-reviews-repository"
-import { JsonLd } from "@/components/seo/JsonLd"
-import { ProductDetailContent } from "@/components/store/ProductDetailContent"
+import { getStoreProductDetail } from "@/lib/server/repositories/store-repository"
 import { ComingSoon } from "@/components/store/ComingSoon"
+import { StoreProductPageBody } from "@/components/store/StoreProductPageBody"
 import {
-  isStoreBrowsingBlocked,
+  isStoreBrowsingBlockedForCachedRoute,
   storeMaintenanceMetadata,
 } from "@/lib/server/auth/store-maintenance-gate"
 import { getStoreLaunchAt } from "@/lib/store-maintenance"
-import { hasFreeShipping } from "@/lib/store-shipping"
-import { effectivePreorderStatus } from "@/lib/store-preorder"
 import { buildDescription, buildMetadata } from "@/lib/seo"
-import { getCategoryLabel } from "@/lib/store-category-icons"
-import { SITE_URL } from "@/lib/site-url"
 
 export const revalidate = 120
+
+// Sem isto o `revalidate` acima não valia: rota com segmento dinâmico e sem
+// `generateStaticParams` é renderizada a CADA request. Medido em produção em
+// 21/10/2026: `no-store`, MISS, 1,2–2,5 s por visita — a página mais visitada
+// num lançamento consultava o banco uma vez por visitante. Lista vazia = cada
+// produto é gerado na primeira visita e depois sai do cache (mesma correção
+// de `/loja/categoria/[categoria]`). Quem invalida: o admin ao salvar
+// (`revalidateStorefront`) e o checkout a cada compra que mexe no estoque
+// (`revalidateStoreProducts`).
+export function generateStaticParams() {
+  return []
+}
 
 interface PageProps {
   params: Promise<{ slug: string }>
@@ -90,9 +95,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 export default async function ProductPage({ params }: PageProps) {
-  // Só quem tem a liberação individual do "pacote Loja"
-  // (user_profiles.store_access) ignora a manutenção e continua vendo tudo.
-  if (await isStoreBrowsingBlocked()) {
+  // A página é a mesma para todo visitante (ISR), então não lê cookie: com a
+  // Loja em manutenção, ela mostra "Coming soon" a todo mundo. Quem atravessa
+  // a manutenção (WEB MASTER ou `store_access`) é servido pela cópia dinâmica
+  // `app/loja/acesso-equipe/produto/[slug]`, por rewrite do proxy, sem mudar a
+  // URL. Ver `isStoreBrowsingBlockedForCachedRoute`.
+  if (isStoreBrowsingBlockedForCachedRoute()) {
     return (
       <ComingSoon
         icon={ShoppingBag}
@@ -105,160 +113,5 @@ export default async function ProductPage({ params }: PageProps) {
   }
 
   const { slug } = await params
-  const detail = await getStoreProductDetail(slug)
-  if (!detail) notFound()
-
-  // O card "Em destaque" do menu vem de `filterOptions.menuHighlights`: a
-  // página não busca mais 24 produtos só para alimentá-lo.
-  const [filterOptions, reviewAggregate] = await Promise.all([
-    getStoreFilterOptions("store"),
-    // Já existia no repositório e alimentava só a UI — é o que habilita as
-    // estrelas no resultado de busca.
-    getReviewAggregate(detail.product.id),
-  ])
-
-  const { product } = detail
-  const url = `${SITE_URL}/loja/${slug}`
-  const priceCents = product.promo_price_cents ?? product.price_cents
-
-  /**
-   * JSON-LD Product: é o que habilita o resultado rico da busca (preço,
-   * disponibilidade e condição direto na SERP). Sem ele o produto concorre
-   * como link de texto puro contra marketplaces que enviam esse schema.
-   */
-  const productJsonLd = {
-    "@context": "https://schema.org",
-    "@type": "Product",
-    "@id": url,
-    name: product.name,
-    description: buildDescription(product.description, product.name, {
-      context: `Disponível na Loja Sunano.`,
-    }),
-    // Absolutas: o Google descarta imagem relativa no schema.
-    image: product.images.map((image) => new URL(image, SITE_URL).toString()),
-    // Código de SKU quando o produto simples tem um; senão o id, que já era
-    // o identificador estável que o Merchant Center via.
-    sku: product.sku ?? product.id,
-    ...(product.category ? { category: product.category } : {}),
-    itemCondition:
-      product.condition === "new"
-        ? "https://schema.org/NewCondition"
-        : "https://schema.org/UsedCondition",
-    /**
-     * `aggregateRating` é o que troca o link de texto por estrelas na SERP —
-     * o maior ganho de CTR disponível numa página de produto. Só entra com
-     * review de verdade: o Google trata agregado com `reviewCount: 0` como
-     * schema inválido e pode derrubar o rich result da página inteira.
-     */
-    ...(reviewAggregate.count > 0
-      ? {
-          aggregateRating: {
-            "@type": "AggregateRating",
-            ratingValue: reviewAggregate.avgRating.toFixed(1),
-            reviewCount: reviewAggregate.count,
-            bestRating: 5,
-            worstRating: 1,
-          },
-        }
-      : {}),
-    offers: {
-      "@type": "Offer",
-      url,
-      priceCurrency: "BRL",
-      price: (priceCents / 100).toFixed(2),
-      // `priceValidUntil` fica de fora de propósito: a query do produto não
-      // traz data de alteração, e derivá-la do relógio deixaria o render impuro
-      // (a página é ISR — o mesmo conteúdo geraria HTML diferente a cada
-      // revalidação). O campo é opcional; data inventada é pior que ausente.
-      availability: product.is_sold_out
-        ? "https://schema.org/OutOfStock"
-        : product.preorder
-          ? // Lote fechado, cheio ou "em breve" não é reservável: anunciar
-            // PreOrder ali levaria a pessoa da busca a um botão que não existe.
-            effectivePreorderStatus(product.preorder, false) === "open"
-            ? "https://schema.org/PreOrder"
-            : "https://schema.org/OutOfStock"
-          : "https://schema.org/InStock",
-      itemCondition:
-        product.condition === "new"
-          ? "https://schema.org/NewCondition"
-          : "https://schema.org/UsedCondition",
-      seller: { "@id": `${SITE_URL}/#organization` },
-      /**
-       * Frete e devolução: sem os dois o Merchant Center marca a oferta como
-       * incompleta e o item perde elegibilidade nos resultados de compra.
-       * A política referenciada é a mesma publicada em /trocas-e-devolucoes.
-       */
-      shippingDetails: {
-        "@type": "OfferShippingDetails",
-        shippingDestination: {
-          "@type": "DefinedRegion",
-          addressCountry: "BR",
-        },
-        // Frete grátis é o que o checkout cobra (nada), não promoção: ver
-        // lib/store-shipping.ts. O prazo fica de fora: o schema pede
-        // manuseio e trânsito separados, e só sabemos o total.
-        ...(hasFreeShipping(product)
-          ? { shippingRate: { "@type": "MonetaryAmount", value: 0, currency: "BRL" } }
-          : {}),
-      },
-      hasMerchantReturnPolicy: {
-        "@type": "MerchantReturnPolicy",
-        applicableCountry: "BR",
-        returnPolicyCategory: "https://schema.org/MerchantReturnFiniteReturnWindow",
-        // 7 dias corridos é o direito de arrependimento do CDC (art. 49),
-        // que é o prazo publicado em /trocas-e-devolucoes.
-        merchantReturnDays: 7,
-        returnMethod: "https://schema.org/ReturnByMail",
-        returnFees: "https://schema.org/FreeReturn",
-        merchantReturnLink: `${SITE_URL}/trocas-e-devolucoes`,
-      },
-    },
-  }
-
-  /**
-   * JSON-LD BreadcrumbList: espelha a trilha visual do topo da página. Com
-   * ele o Google troca a URL crua do resultado por "Loja > Categoria >
-   * Marca", que é o mesmo caminho que o usuário vê ao chegar.
-   */
-  const breadcrumbItems = [
-    { name: "Loja", item: `${SITE_URL}/loja` },
-    ...(product.category
-      ? [
-          {
-            name: getCategoryLabel(product.category),
-            item: `${SITE_URL}/loja/categoria/${encodeURIComponent(product.category)}`,
-          },
-        ]
-      : []),
-    ...(product.brand
-      ? [{ name: product.brand, item: `${SITE_URL}/loja/marca/${encodeURIComponent(product.brand)}` }]
-      : []),
-    { name: product.name, item: url },
-  ]
-
-  const breadcrumbJsonLd = {
-    "@context": "https://schema.org",
-    "@type": "BreadcrumbList",
-    itemListElement: breadcrumbItems.map((entry, index) => ({
-      "@type": "ListItem",
-      position: index + 1,
-      name: entry.name,
-      item: entry.item,
-    })),
-  }
-
-  return (
-    <>
-      {/* Sem schema de Product no complemento: a oferta diria o preço de
-          tabela (R$ 6), que nunca é o que se paga. */}
-      {!product.is_payment_complement && <JsonLd data={productJsonLd} />}
-      <JsonLd data={breadcrumbJsonLd} />
-      <ProductDetailContent
-        {...detail}
-        filterOptions={filterOptions}
-        rating={reviewAggregate.count > 0 ? { average: reviewAggregate.avgRating, count: reviewAggregate.count } : null}
-      />
-    </>
-  )
+  return <StoreProductPageBody slug={slug} />
 }

@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import { buildMetadata } from "@/lib/seo"
 import { StoreBypassNotice } from "@/components/store/StoreBypassNotice"
+import { CheckoutBotProtection } from "@/components/store/CheckoutBotProtection"
 
 // `page.tsx` desta rota é "use client", e Client Component não pode exportar
 // `metadata` — daí este layout. Cobre /checkout e as telas de pagamento (card, pix) — fluxo de compra, fora do índice.
@@ -15,6 +16,7 @@ export default function RouteLayout({ children }: { children: React.ReactNode })
   return (
     <>
       <StoreBypassNotice />
+      <CheckoutBotProtection />
       {children}
     </>
   )

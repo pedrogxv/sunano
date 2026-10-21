@@ -70,7 +70,7 @@ function PixCheckoutContent() {
   const [order, setOrder] = useState<OrderStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
-  // O cron de expiração roda a cada 15 min, então o pedido pode continuar
+  // O cron de expiração roda a cada 5 min, então o pedido pode continuar
   // `pending` na API depois do prazo vencido. A contagem regressiva zerando
   // já basta pra tratar a tela como expirada — o servidor confirma depois.
   const [locallyExpired, setLocallyExpired] = useState(false)

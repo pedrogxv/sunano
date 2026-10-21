@@ -7,8 +7,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { BR_STATES } from "@/lib/br-states"
-import { formatCepInput, formatCpfInput, formatPhoneInput } from "@/components/store/CheckoutPayerCard"
+import { formatCepInput, formatCpfInput, formatPhoneInput, isInternationalPhone } from "@/lib/br-format"
 import { isValidCPF } from "@/lib/pix-key"
+import type { PurchaseProfile } from "@/lib/purchase-profile"
 
 export type ShippingResidenceType = "house" | "apartment"
 
@@ -123,6 +124,54 @@ export function isShippingFormTouched(form: ShippingForm): boolean {
   return (Object.keys(form) as (keyof ShippingForm)[])
     .filter((key) => key !== "complement")
     .some((key) => form[key].trim() !== "")
+}
+
+/**
+ * Perfil salvo → formulário de entrega.
+ *
+ * `fallbackToPayer`: sem entrega salva, usa a cobrança como palpite (quase
+ * sempre o mesmo lugar). Serve ao checkout, que só pré-preenche; Minha conta
+ * não usa, porque lá o formulário mostra o que ESTÁ salvo, e a cobrança
+ * aparecendo como entrega pareceria um endereço que não existe.
+ */
+export function shippingFormFromProfile(
+  profile: PurchaseProfile | null | undefined,
+  { fallbackToPayer }: { fallbackToPayer: boolean }
+): ShippingForm {
+  if (!profile) return EMPTY_SHIPPING_FORM
+  const { shipping, payer } = profile
+  if (shipping.postalCode || !fallbackToPayer) {
+    return {
+      recipient: shipping.recipient ?? "",
+      postalCode: shipping.postalCode ? formatCepInput(shipping.postalCode) : "",
+      residenceType: toShippingResidenceType(shipping.residenceType),
+      street: shipping.street ?? "",
+      number: shipping.number ?? "",
+      complement: shipping.complement ?? "",
+      neighborhood: shipping.neighborhood ?? "",
+      city: shipping.city ?? "",
+      state: shipping.state ?? "",
+      cpf: formatCpfInput(shipping.cpf ?? ""),
+      phone: shipping.phone ? formatPhoneInput(shipping.phone) : "",
+      birthDate: isoToBirthDateInput(shipping.birthDate),
+    }
+  }
+  // Sem entrega salva, o CPF da cobrança acompanha o nome da cobrança: o par
+  // continua sendo da mesma pessoa.
+  return {
+    ...EMPTY_SHIPPING_FORM,
+    recipient: payer.fullName ?? "",
+    postalCode: payer.postalCode ? formatCepInput(payer.postalCode) : "",
+    street: payer.street ?? "",
+    number: payer.number ?? "",
+    complement: payer.complement ?? "",
+    neighborhood: payer.neighborhood ?? "",
+    city: payer.city ?? "",
+    state: payer.state ?? "",
+    cpf: formatCpfInput(payer.cpf ?? ""),
+    // Celular da entrega é brasileiro: o de cobrança de fora não serve de palpite
+    phone: payer.phone && !isInternationalPhone(payer.phone) ? formatPhoneInput(payer.phone) : "",
+  }
 }
 
 /** Corpo pronto para as rotas de checkout e de endereço do pedido (mesmo contrato nos dois). */

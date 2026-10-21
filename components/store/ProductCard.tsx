@@ -392,8 +392,8 @@ function StandardProductCard(props: ProductCardProps) {
               {cardEnabled && (
                 <p className={cn("text-[#7a7a7a]", showcase ? "text-[12px]" : "text-[10px]")}>
                   {singlePrice
-                    ? `Mesmo preço no cartão${cardMaxInstallments > 1 ? `, em até ${cardMaxInstallments}x sem juros` : ""}`
-                    : `ou ${formatBRL(computeItemCardPriceCents(effectivePriceCents, cardSurchargePercent, false))} no cartão${cardMaxInstallments > 1 ? ` em até ${cardMaxInstallments}x sem juros` : ""}`}
+                    ? `Mesmo preço no cartão${cardMaxInstallments > 1 ? `, em até ${cardMaxInstallments}x` : ""}`
+                    : `ou ${formatBRL(computeItemCardPriceCents(effectivePriceCents, cardSurchargePercent, false))} no cartão${cardMaxInstallments > 1 ? `, em até ${cardMaxInstallments}x` : ""}`}
                 </p>
               )}
               {singlePrice && (

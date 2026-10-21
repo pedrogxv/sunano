@@ -1,3 +1,5 @@
+import { withBotId } from "botid/next/config"
+
 const isDev = process.env.NODE_ENV !== "production"
 
 // Next.js precisa de 'unsafe-inline' para os scripts de bootstrap/hydration
@@ -134,4 +136,6 @@ const nextConfig = {
 	},
 }
 
-export default nextConfig
+// BotID: reescreve o caminho do script de desafio para a Vercel, no mesmo
+// domínio (cabe no `script-src 'self'` da CSP). Ver lib/server/bot-check.ts.
+export default withBotId(nextConfig)

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ExternalLink, Minus, Plus, Rocket, ShoppingCart, Trophy, Zap } from "lucide-react"
@@ -18,6 +18,7 @@ import { saleWindowPriceAfter } from "@/lib/store-sale-window"
 import { hasFreeShipping } from "@/lib/store-shipping"
 import { PREORDER_CTA_LABEL, PREORDER_STATUS_HINT, PREORDER_STATUS_LABEL, preorderRemaining } from "@/lib/store-preorder"
 import { purchaseAuraFor } from "@/lib/store-purchase-aura"
+import { cartLineMaxQuantity } from "@/lib/store-cart-limits"
 import { getColorSwatchStyle } from "@/lib/color-swatch"
 import type { LinkedPeripheralRef, StoreProductDetailResult, StoreFilterOptions } from "@/lib/server/repositories/store-repository"
 import { ProductReviews } from "@/components/store/ProductReviews"
@@ -33,6 +34,7 @@ import { FormattedText } from "@/components/ui/formatted-text"
 import { StoreCategoryNav } from "@/components/store/StoreCategoryNav"
 import { ProductBreadcrumb } from "@/components/store/ProductBreadcrumb"
 import { AffiliateShareButton } from "@/components/affiliates/AffiliateShareButton"
+import { ProductStickyBuyBar } from "@/components/store/ProductStickyBuyBar"
 
 function LinkedPeripheralCard({ peripheral }: { peripheral: LinkedPeripheralRef }) {
   return (
@@ -90,6 +92,8 @@ export function ProductDetailContent({ filterOptions, rating, ...detail }: Produ
   const { cardSurchargePercent, cardMaxInstallments, cardEnabled } = useStoreSettings()
   const [qty, setQty] = useState(1)
   const [added, setAdded] = useState(false)
+  // Bloco de compra principal: a barra fixa do celular aparece quando ele sai da tela.
+  const buyBlockRef = useRef<HTMLDivElement>(null)
 
   // Cor, opções, SKU, preço, estoque e foto da combinação escolhida: a mesma
   // resolução do checkout (lib/store-sku.ts). Trocar de Mini para Max muda
@@ -106,9 +110,15 @@ export function ProductDetailContent({ filterOptions, rating, ...detail }: Produ
   const pixDiscountPercent = singlePrice ? 0 : cardSurchargePercent
   const freeShipping = hasFreeShipping(product)
 
-  // Teto da quantidade: o estoque da combinação, ou o que sobra no lote.
+  // Teto da quantidade: o estoque da combinação (ou o que sobra no lote), e
+  // nunca mais que o checkout aceita numa linha (`cartLineMaxQuantity`). Sem
+  // controle de estoque o "+" subia sem fim e o servidor recusava no "Pagar".
   const lotRemaining = preorder ? preorderRemaining(preorder) : null
-  const maxQty = isPreOrder ? lotRemaining : selection.stock
+  const maxQty = cartLineMaxQuantity({
+    stock: isPreOrder ? lotRemaining : selection.stock,
+    sale_type: product.sale_type,
+    maxPerCustomer: product.max_per_customer,
+  })
 
   // Fotos: a da combinação primeiro, depois as da cor (ou as do produto, se a
   // cor não tem fotos próprias).
@@ -125,7 +135,7 @@ export function ProductDetailContent({ filterOptions, rating, ...detail }: Produ
   function addCurrentToCart() {
     const item = pick.toCartItem()
     if (!item) return false
-    for (let i = 0; i < qty; i++) add(item)
+    add(item, qty)
     return true
   }
 
@@ -187,7 +197,7 @@ export function ProductDetailContent({ filterOptions, rating, ...detail }: Produ
   return (
     <>
       <StoreCategoryNav data={filterOptions} activeCategory={product.category} />
-      <div className="mx-auto max-w-7xl px-4 pb-12 pt-5 md:px-6 lg:pb-16">
+      <div className="mx-auto max-w-7xl px-4 pb-28 pt-5 md:px-6 lg:pb-16">
         <ProductBreadcrumb productName={product.name} category={product.category} brand={product.brand} />
 
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1.08fr)_minmax(0,1fr)] lg:items-start lg:gap-12">
@@ -300,8 +310,7 @@ export function ProductDetailContent({ filterOptions, rating, ...detail }: Produ
                   Preço único: o mesmo no PIX e no cartão
                   {cardMaxInstallments > 1 && (
                     <>
-                      , ou em até <span className="font-semibold text-foreground">{cardMaxInstallments}x de {formatBRL(Math.ceil(cardPriceCents / cardMaxInstallments))}</span>{" "}
-                      sem juros
+                      , em até <span className="font-semibold text-foreground">{cardMaxInstallments}x</span>
                     </>
                   )}
                 </p>
@@ -312,20 +321,13 @@ export function ProductDetailContent({ filterOptions, rating, ...detail }: Produ
                       {pixDiscountPercent}% de desconto à vista no PIX
                     </p>
                   )}
-                  {/* Com parcelamento, só a parcela: o total do cartão ao lado
-                      do preço do PIX virava um segundo preço disputando o
-                      olhar. Sem parcelas, o total é a única informação. */}
+                  {/* Sem valor de parcela: os juros do parcelamento são do
+                      comprador e variam com o número de parcelas (tabela do
+                      gateway), então "Nx de R$ X" seria um valor que o
+                      checkout não cobra. Quem mostra a parcela é o checkout. */}
                   <p className="mt-2 text-sm text-muted-foreground">
-                    {cardMaxInstallments > 1 ? (
-                      <>
-                        ou no cartão em até <span className="font-semibold text-foreground">{cardMaxInstallments}x de {formatBRL(Math.ceil(cardPriceCents / cardMaxInstallments))}</span>{" "}
-                        sem juros
-                      </>
-                    ) : (
-                      <>
-                        ou <span className="font-semibold text-foreground">{formatBRL(cardPriceCents)}</span> no cartão
-                      </>
-                    )}
+                    ou <span className="font-semibold text-foreground">{formatBRL(cardPriceCents)}</span> no cartão
+                    {cardMaxInstallments > 1 && <>, em até {cardMaxInstallments}x</>}
                   </p>
                 </>
               )}
@@ -434,6 +436,13 @@ export function ProductDetailContent({ filterOptions, rating, ...detail }: Produ
               </p>
             )}
 
+            {/* Avisado antes do "Comprar": descobrir o limite no checkout é atrito. */}
+            {product.max_per_customer !== null && !unavailable && (
+              <p className="text-sm text-muted-foreground">
+                Limite de {product.max_per_customer} {product.max_per_customer === 1 ? "unidade" : "unidades"} por cliente
+              </p>
+            )}
+
             {unavailable ? (
               /* Esgotado (ou lote fechado) continua visível e navegável: a
                  seleção acima segue trocando fotos, preço e SKU normalmente;
@@ -451,14 +460,15 @@ export function ProductDetailContent({ filterOptions, rating, ...detail }: Produ
                 )}
               </div>
             ) : (
-              <div className="space-y-3">
+              <div ref={buyBlockRef} className="space-y-3">
                 <div className="flex items-center gap-3">
                   <div className="flex shrink-0 items-center rounded-xl border border-border">
                     <button
                       type="button"
                       onClick={() => setQty((q) => Math.max(1, q - 1))}
+                      disabled={qty <= 1}
                       aria-label="Diminuir quantidade"
-                      className="flex size-[50px] items-center justify-center text-muted-foreground hover:text-foreground"
+                      className="flex size-[50px] items-center justify-center text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       <Minus className="size-3.5" />
                     </button>
@@ -467,9 +477,10 @@ export function ProductDetailContent({ filterOptions, rating, ...detail }: Produ
                     </span>
                     <button
                       type="button"
-                      onClick={() => setQty((q) => (maxQty === null ? q + 1 : Math.min(maxQty, q + 1)))}
+                      onClick={() => setQty((q) => Math.min(maxQty, q + 1))}
+                      disabled={qty >= maxQty}
                       aria-label="Aumentar quantidade"
-                      className="flex size-[50px] items-center justify-center text-muted-foreground hover:text-foreground"
+                      className="flex size-[50px] items-center justify-center text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       <Plus className="size-3.5" />
                     </button>
@@ -571,6 +582,20 @@ export function ProductDetailContent({ filterOptions, rating, ...detail }: Produ
           </section>
         )}
       </div>
+
+      {/* Só quando dá para comprar: esgotado/lote fechado não tem o que oferecer
+          no rodapé (o "avise-me" mora no bloco de compra). */}
+      {!complement && !unavailable && (
+        <ProductStickyBuyBar
+          targetRef={buyBlockRef}
+          productName={product.name}
+          priceCents={effectiveCents}
+          showPixHint={cardEnabled && !singlePrice}
+          preOrder={isPreOrder}
+          ctaLabel={isPreOrder ? PREORDER_CTA_LABEL : "Comprar agora"}
+          onBuy={handleBuyNow}
+        />
+      )}
     </>
   )
 }

@@ -3,6 +3,7 @@ import "server-only"
 import { createHash } from "crypto"
 
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
+import { isMissingDbFunction } from "@/lib/server/repositories/_shared"
 
 /**
  * Rate limiting baseado na tabela `rate_limit_events`.
@@ -88,8 +89,47 @@ export function getClientIpIdentifier(request: Request) {
   return createHash("sha256").update(`${getRateLimitSalt()}:ip:${ip}`).digest("hex")
 }
 
-/** Verifica e registra uma tentativa para a janela de tempo informada. */
-export async function checkRateLimit({
+/**
+ * Verifica e registra uma tentativa para a janela de tempo informada.
+ *
+ * Contar e registrar acontecem numa transação só (`consume_rate_limit`,
+ * serializada por balde). Antes eram duas idas ao banco, e requisições
+ * simultâneas liam todas a mesma contagem: num teste com 50 em paralelo e teto
+ * 5, passaram 37. Era o teto de tentativas de cartão (a defesa contra teste de
+ * cartão roubado) e o de criação de pedido que cediam a uma rajada.
+ */
+export async function checkRateLimit(params: RateLimitParams): Promise<RateLimitResult> {
+  const { action, identifier, maxAttempts, windowSeconds, onError = "open" } = params
+  const supabase = createSupabaseAdminClient()
+
+  const { data, error } = await supabase.rpc("consume_rate_limit", {
+    p_action: action,
+    p_identifier: identifier,
+    p_max_attempts: maxAttempts,
+    p_window_seconds: windowSeconds,
+  })
+
+  if (isMissingDbFunction(error)) return checkRateLimitLegacy(params)
+
+  if (error || !data) {
+    console.error(`[rate-limit] consulta falhou (action=${action}, política=${onError}):`, error?.message)
+    if (onError === "closed") {
+      return { allowed: false, retryAfterSeconds: 60 }
+    }
+    return { allowed: true }
+  }
+
+  if (!data.allowed) {
+    return { allowed: false, retryAfterSeconds: data.retry_after_seconds ?? windowSeconds }
+  }
+  return { allowed: true, attemptId: data.attempt_id ?? null }
+}
+
+/**
+ * Caminho anterior (contar e depois inserir), só enquanto a migration
+ * 20270101000000 não estiver aplicada. Remover depois.
+ */
+async function checkRateLimitLegacy({
   action,
   identifier,
   maxAttempts,

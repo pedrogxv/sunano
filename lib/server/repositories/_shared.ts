@@ -99,3 +99,16 @@ export function totalFromRangeError(error: { code?: string; details?: string | n
   const match = /only (\d+) rows?/.exec(error.details ?? "")
   return match ? Number(match[1]) : 0
 }
+
+/**
+ * A função SQL chamada por `.rpc()` não existe (ainda) no banco: PostgREST
+ * `PGRST202` ("Could not find the function ... in the schema cache") ou
+ * Postgres `42883`.
+ *
+ * É o caso de código publicado ANTES da migration que cria a função. Quem
+ * troca um caminho antigo por uma RPC nova usa isto para cair no caminho
+ * antigo em vez de derrubar a rota até alguém rodar `supabase db push`.
+ */
+export function isMissingDbFunction(error: { code?: string } | null | undefined): boolean {
+  return error?.code === "PGRST202" || error?.code === "42883"
+}

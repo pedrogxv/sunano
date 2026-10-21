@@ -1,5 +1,7 @@
 import "server-only"
 
+import { after } from "next/server"
+
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import {
   createOrderThread,
@@ -58,12 +60,21 @@ type ThreadRow = {
  * Origem do evento, só para a assinatura do card ("via …"). Deixa óbvio no
  * canal se quem mexeu foi o gateway, o cron ou uma pessoa.
  */
-export type DiscordOrderActor = "webhook-asaas" | "webhook-stripe" | "webhook-mercadopago" | "admin" | "cron" | "checkout" | "cliente"
+export type DiscordOrderActor =
+  | "webhook-asaas"
+  | "webhook-stripe"
+  | "webhook-mercadopago"
+  | "webhook-infinitepay"
+  | "admin"
+  | "cron"
+  | "checkout"
+  | "cliente"
 
 const ACTOR_LABEL: Record<DiscordOrderActor, string> = {
   "webhook-asaas": "webhook Asaas",
   "webhook-stripe": "webhook Stripe",
   "webhook-mercadopago": "webhook Mercado Pago",
+  "webhook-infinitepay": "webhook InfinitePay",
   admin: "painel do admin",
   cron: "rotina automática",
   checkout: "checkout da loja",
@@ -339,18 +350,25 @@ export async function notifyDiscordOrderEvent(
 }
 
 /**
- * Versão fire-and-forget para caminhos sensíveis a latência (webhook e
- * checkout). Retorna imediatamente; o `catch` existe só porque uma promise
- * rejeitada sem tratamento derruba o processo no Node.
+ * Versão em segundo plano para caminhos sensíveis a latência (checkout).
+ * Retorna imediatamente e publica DEPOIS da resposta, por `after()`.
  *
- * Cuidado: em serverless a função pode encerrar antes da promise resolver.
- * Use apenas onde a resposta rápida importa mais que a garantia de entrega —
- * nos webhooks da Asaas o `await` é preferível (eles toleram bem o tempo).
+ * Era um `void promise`: em serverless a instância pode ser congelada assim
+ * que a resposta sai, e a thread do pedido simplesmente não nascia. `after()`
+ * mantém a Function viva até a publicação terminar (dentro do `maxDuration`
+ * da rota). Fora de uma requisição (`after` lança), cai no `void` de antes.
  */
 export function notifyDiscordOrderEventInBackground(params: NotifyDiscordOrderParams): void {
-  void notifyDiscordOrderEvent(params).catch((err) =>
-    console.error("[discord-orders-repository] background:", err)
-  )
+  const publish = () =>
+    notifyDiscordOrderEvent(params).then(
+      () => undefined,
+      (err) => console.error("[discord-orders-repository] background:", err)
+    )
+  try {
+    after(publish)
+  } catch {
+    void publish()
+  }
 }
 
 /** Rótulo PT-BR de um status — reexportado para telas e scripts de teste. */

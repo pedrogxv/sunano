@@ -9,6 +9,7 @@ import {
   Handshake,
   KeyRound,
   Link2,
+  ReceiptText,
   Shield,
   SlidersHorizontal,
 } from "lucide-react"
@@ -21,6 +22,7 @@ import { cn } from "@/lib/utils"
 import { LinkedAccountsTab } from "./LinkedAccountsTab"
 import { PreferencesTab } from "./PreferencesTab"
 import { PrivacidadeTab } from "./PrivacidadeTab"
+import { PurchaseDataTab } from "./PurchaseDataTab"
 import { SecurityTab } from "./SecurityTab"
 import { SubscriptionTab } from "./SubscriptionTab"
 
@@ -30,7 +32,7 @@ interface AccountSectionProps {
   lgpdConsentVersion: string | null
 }
 
-type SectionId = "seguranca" | "conexoes" | "assinatura" | "preferencias" | "privacidade" | "afiliados"
+type SectionId = "seguranca" | "conexoes" | "compras" | "assinatura" | "preferencias" | "privacidade" | "afiliados"
 
 /**
  * Selo de estado no rosto do card. `tone` é o que dá leitura periférica: o
@@ -62,6 +64,7 @@ type StatusContext = {
 const SECTIONS_ORDER: SectionId[] = [
   "seguranca",
   "conexoes",
+  "compras",
   "assinatura",
   "preferencias",
   "privacidade",
@@ -104,6 +107,14 @@ const SECTION_DEFS: Record<SectionId, SectionDef> = {
         tone: n === total ? "good" : "neutral",
       }
     },
+  },
+  compras: {
+    id: "compras",
+    label: "Dados de compra",
+    Icon: ReceiptText,
+    tagline: "Telefone, CPF e endereços usados nas compras.",
+    description: "Dados da cobrança e endereço de entrega, os mesmos que aparecem no checkout.",
+    status: () => null,
   },
   assinatura: {
     id: "assinatura",
@@ -390,6 +401,8 @@ function SectionBody({
       return <SecurityTab email={email} onFactorsChange={onStateChange} />
     case "conexoes":
       return <LinkedAccountsTab onIdentitiesChange={onStateChange} />
+    case "compras":
+      return <PurchaseDataTab />
     case "assinatura":
       return <SubscriptionTab />
     case "preferencias":

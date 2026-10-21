@@ -84,7 +84,7 @@ import { formatBRL } from "@/lib/format"
 import { orderNumber } from "@/lib/order-number"
 import { ORDER_STATUS_GROUPS, orderStatusLabel, type OrderStatusGroup } from "@/lib/order-status"
 import { STORE_CARRIERS, findStoreCarrier, type StoreCarrier } from "@/lib/store-carriers"
-import { formatCpfInput } from "@/components/store/CheckoutPayerCard"
+import { formatCpfInput } from "@/lib/br-format"
 import { SHIPPING_RESIDENCE_TYPE_LABELS, isoToBirthDateInput } from "@/components/store/ShippingAddressFields"
 import { serviceFormLines } from "@/lib/store-service-form"
 import { ServiceFormAnswerValue } from "@/components/store/ServiceFormAnswerValue"
@@ -149,6 +149,9 @@ type AdminOrder = {
   stripe_session_id: string | null
   payment_gateway: AdminOrderRow["payment_gateway"]
   mercadopago_payment_id: AdminOrderRow["mercadopago_payment_id"]
+  infinitepay_transaction_nsu: AdminOrderRow["infinitepay_transaction_nsu"]
+  infinitepay_receipt_url: AdminOrderRow["infinitepay_receipt_url"]
+  infinitepay_unapplied: AdminOrderRow["infinitepay_unapplied"]
   card_review: AdminOrderRow["card_review"]
   fraud_warning: AdminOrderRow["fraud_warning"]
   chargeback: AdminOrderRow["chargeback"]
@@ -1283,6 +1286,8 @@ function OrderManageDialog({
   const [refundValue, setRefundValue] = useState("")
   const [refundReason, setRefundReason] = useState("")
   const [refunding, setRefunding] = useState(false)
+  // InfinitePay: o admin confirma que já estornou no app (não há API).
+  const [refundManualConfirmed, setRefundManualConfirmed] = useState(false)
 
   const [cancelOpen, setCancelOpen] = useState(false)
   const [cancelReason, setCancelReason] = useState("")
@@ -1304,6 +1309,7 @@ function OrderManageDialog({
     setRefundOpen(false)
     setRefundValue("")
     setRefundReason("")
+    setRefundManualConfirmed(false)
     setCancelOpen(false)
     setCancelReason("")
     setManualOpen(false)
@@ -1322,7 +1328,10 @@ function OrderManageDialog({
   // Pedido de Aura não tem cobrança em dinheiro — não há o que estornar pelo gateway.
   const canRefund = !isAuraOrder && REFUNDABLE_STATUSES.includes(order.status) && remainingCents > 0
   // Cobrança no gateway que o painel sabe estornar: Asaas, Stripe ou Mercado Pago.
-  const hasGatewayCharge = Boolean(order.asaas_payment_id || order.stripe_payment_intent_id || order.mercadopago_payment_id)
+  const hasGatewayCharge = Boolean(
+    order.asaas_payment_id || order.stripe_payment_intent_id || order.mercadopago_payment_id || order.infinitepay_transaction_nsu
+  )
+  const manualGatewayRefund = Boolean(order.infinitepay_transaction_nsu)
   const canRegisterManual = !isAuraOrder && MANUAL_PAYABLE_STATUSES.includes(order.status)
 
   async function handleAdvance() {
@@ -1431,7 +1440,12 @@ function OrderManageDialog({
       const res = await fetch(`/api/admin/store/orders/${order.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "refund", valueCents, reason: refundReason.trim() || undefined }),
+        body: JSON.stringify({
+          action: "refund",
+          valueCents,
+          reason: refundReason.trim() || undefined,
+          ...(manualGatewayRefund ? { manualConfirmed: refundManualConfirmed } : {}),
+        }),
       })
       const data = (await res.json().catch(() => ({}))) as { error?: string }
       if (!res.ok) throw new Error(data.error ?? "Erro ao estornar pedido")
@@ -1448,6 +1462,7 @@ function OrderManageDialog({
       setRefundOpen(false)
       setRefundValue("")
       setRefundReason("")
+      setRefundManualConfirmed(false)
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao estornar pedido"
       toast.error("Erro ao estornar pedido", { description: message })
@@ -1611,6 +1626,27 @@ function OrderManageDialog({
                 <p className="text-foreground">
                   O banco avisou que esta compra pode ser fraude ({formatDateTime(order.fraud_warning.detected_at)}).
                   Pedido não enviado é estornado sozinho; se já saiu, tente segurar a entrega.
+                </p>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {order.infinitepay_unapplied && (
+            <Alert className="border-red-500/40 bg-red-500/10">
+              <AlertCircle className="size-4 text-red-400" />
+              <AlertDescription className="space-y-1 text-xs">
+                <p className="font-bold text-red-400">Pagamento da InfinitePay sem pedido liberado</p>
+                <p className="text-foreground">
+                  {order.infinitepay_unapplied.reason} Estorne {formatBRL(order.infinitepay_unapplied.paid_amount_cents)} no app da
+                  InfinitePay (transação <span className="font-mono">{order.infinitepay_unapplied.transaction_nsu}</span>)
+                  {order.infinitepay_unapplied.receipt_url && (
+                    <>
+                      {" · "}
+                      <a href={order.infinitepay_unapplied.receipt_url} target="_blank" rel="noreferrer" className="underline">
+                        comprovante
+                      </a>
+                    </>
+                  )}
                 </p>
               </AlertDescription>
             </Alert>
@@ -2170,6 +2206,24 @@ function OrderManageDialog({
                 </Alert>
               )}
 
+              {manualGatewayRefund && (
+                <Alert className="border-sky-500/30 bg-sky-500/10 py-2">
+                  <AlertCircle className="size-3.5 text-sky-400" />
+                  <AlertDescription className="text-xs text-sky-300">
+                    A InfinitePay não estorna pelo site. Estorne no app da InfinitePay (transação{" "}
+                    <span className="font-mono">{order.infinitepay_transaction_nsu}</span>) e depois registre aqui
+                    {order.infinitepay_receipt_url && (
+                      <>
+                        {" · "}
+                        <a href={order.infinitepay_receipt_url} target="_blank" rel="noreferrer" className="underline">
+                          comprovante
+                        </a>
+                      </>
+                    )}
+                  </AlertDescription>
+                </Alert>
+              )}
+
               {order.asaas_payment_id && (
                 <Alert className="border-sky-500/30 bg-sky-500/10 py-2">
                   <AlertCircle className="size-3.5 text-sky-400" />
@@ -2218,6 +2272,17 @@ function OrderManageDialog({
                       rows={2}
                     />
                   </div>
+                  {manualGatewayRefund && (
+                    <label className="flex items-start gap-2 text-xs text-foreground">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5"
+                        checked={refundManualConfirmed}
+                        onChange={(e) => setRefundManualConfirmed(e.target.checked)}
+                      />
+                      Já estornei este valor no app da InfinitePay
+                    </label>
+                  )}
                   <div className="flex gap-2">
                     <Button
                       variant="outline"
@@ -2231,7 +2296,7 @@ function OrderManageDialog({
                       variant="destructive"
                       className="flex-1 gap-2"
                       onClick={handleRefund}
-                      disabled={refunding}
+                      disabled={refunding || (manualGatewayRefund && !refundManualConfirmed)}
                     >
                       {refunding ? "Estornando..." : "Confirmar estorno"}
                     </Button>

@@ -1,6 +1,7 @@
 "use client"
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react"
+import { cartLineMaxQuantity } from "@/lib/store-cart-limits"
 
 export interface CartVariantOption {
   groupId: string
@@ -34,12 +35,18 @@ export interface CartItem {
    * valor certo para a tela.
    */
   singlePrice?: boolean
+  /**
+   * Teto do produto por cliente (lançamento disputado). Opcional pelo mesmo
+   * motivo de `singlePrice`; o checkout confere o acumulado da pessoa.
+   */
+  maxPerCustomer?: number | null
 }
 
 interface CartContextValue {
   items: CartItem[]
   count: number
-  add: (item: Omit<CartItem, "quantity">) => void
+  /** Soma `quantity` (padrão 1) à linha, respeitando o teto dela (`cartLineMaxQuantity`). */
+  add: (item: Omit<CartItem, "quantity">, quantity?: number) => void
   remove: (productId: string, variantId: string | null, optionIds?: string[]) => void
   increment: (productId: string, variantId: string | null, optionIds?: string[]) => void
   decrement: (productId: string, variantId: string | null, optionIds?: string[]) => void
@@ -150,19 +157,23 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("storage", onStorage)
   }, [])
 
-  const add = useCallback((item: Omit<CartItem, "quantity">) => {
+  const add = useCallback((item: Omit<CartItem, "quantity">, quantity = 1) => {
     setItems((prev) => {
       const optionIds = item.variantOptions.map((o) => o.optionId)
       const existing = prev.find((i) => isSameLine(i, item.productId, item.variantId, optionIds))
+      // Teto da linha: estoque, ou o limite que o checkout aplica a produto
+      // sem controle de estoque (ver `lib/store-cart-limits.ts`). Antes o
+      // carrinho deixava subir sem limite e o servidor recusava no "Pagar".
+      const max = cartLineMaxQuantity(item)
+      const units = Math.max(1, Math.floor(quantity))
       if (existing) {
-        // Respeita o limite de estoque — stock null = sem controle, nunca trava aqui
-        // (o limite diário para esses casos é aplicado no checkout, não no cliente).
-        const nextQty = item.stock === null ? existing.quantity + 1 : Math.min(existing.quantity + 1, item.stock)
+        const nextQty = Math.min(existing.quantity + units, max)
         return prev.map((i) =>
-          isSameLine(i, item.productId, item.variantId, optionIds) ? { ...i, quantity: nextQty } : i
+          isSameLine(i, item.productId, item.variantId, optionIds) ? { ...i, quantity: nextQty, stock: item.stock, maxPerCustomer: item.maxPerCustomer } : i
         )
       }
-      return [...prev, { ...item, quantity: 1 }]
+      if (max < 1) return prev
+      return [...prev, { ...item, quantity: Math.min(units, max) }]
     })
   }, [])
 
@@ -173,7 +184,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const increment = useCallback((productId: string, variantId: string | null, optionIds: string[] = []) => {
     setItems((prev) =>
       prev.map((i) =>
-        isSameLine(i, productId, variantId, optionIds) && (i.stock === null || i.quantity < i.stock)
+        isSameLine(i, productId, variantId, optionIds) && i.quantity < cartLineMaxQuantity(i)
           ? { ...i, quantity: i.quantity + 1 }
           : i
       )

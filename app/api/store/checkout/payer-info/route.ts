@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { getRequestUser, isImpersonating } from "@/lib/server/auth/current-user"
 import { storeCardFormOnSite, storeCardGateway } from "@/lib/server/payments/gateway"
 import { PAYMENT_GATEWAY_LABEL } from "@/lib/payment-gateways"
+import { getPurchaseProfile } from "@/lib/server/repositories/purchase-profile-repository"
 
 /**
  * Diz ao checkout, ANTES de tentar gerar o PIX/cartão, se falta nome/CPF (ou,
@@ -37,41 +37,31 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  const db = createSupabaseAdminClient()
-  const { data: profile } = await db
-    .from("user_profiles")
-    .select(
-      "full_name, cpf, phone, postal_code, street, number, complement, neighborhood, city, state, shipping_recipient, shipping_cpf, shipping_birth_date, shipping_residence_type, shipping_phone, shipping_postal_code, shipping_street, shipping_number, shipping_complement, shipping_neighborhood, shipping_city, shipping_state"
-    )
-    .eq("id", user.id)
-    .single()
+  // Mesmo leitor de Minha conta (`/api/profile/purchase-data`): as duas telas
+  // editam os mesmos campos e não podem montar cada uma o seu select.
+  const profile = await getPurchaseProfile(user.id)
+  if (!profile) {
+    return NextResponse.json({ error: "Não foi possível carregar seus dados." }, { status: 500 })
+  }
+  const { payer } = profile
 
   const hasCompleteAddressInfo = Boolean(
-    profile?.phone &&
-      profile?.postal_code &&
-      profile?.street &&
-      profile?.number &&
-      profile?.neighborhood &&
-      profile?.city &&
-      profile?.state
+    payer.phone &&
+      payer.postalCode &&
+      payer.street &&
+      payer.number &&
+      payer.neighborhood &&
+      payer.city &&
+      payer.state
   )
 
   return NextResponse.json({
     // COBRANÇA: é o endereço que vai para o customer da Asaas no cartão.
     // Não é sobrescrito por uma entrega — comprar para presentear não muda
     // o endereço do titular.
-    fullName: profile?.full_name ?? null,
-    cpf: profile?.cpf ?? null,
+    payer,
     email: user.email ?? null,
-    phone: profile?.phone ?? null,
-    postalCode: profile?.postal_code ?? null,
-    street: profile?.street ?? null,
-    number: profile?.number ?? null,
-    complement: profile?.complement ?? null,
-    neighborhood: profile?.neighborhood ?? null,
-    city: profile?.city ?? null,
-    state: profile?.state ?? null,
-    hasCompletePayerInfo: Boolean(profile?.full_name && profile?.cpf),
+    hasCompletePayerInfo: Boolean(payer.fullName && payer.cpf),
     hasCompleteAddressInfo,
     // Quem cobra o CARTÃO: só ele aparece no texto do checkout (o PIX é
     // igual em qualquer gateway). `cardFormOnSite` = o cartão é digitado no
@@ -83,19 +73,6 @@ export async function GET(request: NextRequest) {
     cardGateway: storeCardGateway(),
     // ENTREGA: última usada, só para pré-preencher o card. O que vale para
     // despachar é sempre o snapshot no pedido.
-    shipping: {
-      recipient: profile?.shipping_recipient ?? null,
-      cpf: profile?.shipping_cpf ?? null,
-      birthDate: profile?.shipping_birth_date ?? null,
-      residenceType: profile?.shipping_residence_type ?? null,
-      phone: profile?.shipping_phone ?? null,
-      postalCode: profile?.shipping_postal_code ?? null,
-      street: profile?.shipping_street ?? null,
-      number: profile?.shipping_number ?? null,
-      complement: profile?.shipping_complement ?? null,
-      neighborhood: profile?.shipping_neighborhood ?? null,
-      city: profile?.shipping_city ?? null,
-      state: profile?.shipping_state ?? null,
-    },
+    shipping: profile.shipping,
   })
 }

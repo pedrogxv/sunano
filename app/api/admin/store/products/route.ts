@@ -34,6 +34,12 @@ const createProductSchema = z.object({
   sale_type: z.enum(["pre_order", "ready_stock", "normal"]).optional().default("normal"),
   /** Teto de reservas de pré-venda; null = sem teto. Só usado quando sale_type = pre_order. */
   preorder_limit: z.number().int().min(0).nullable().optional(),
+  /**
+   * Teto de unidades deste produto por CLIENTE (CPF do pagador ou conta),
+   * somando todos os pedidos não cancelados. null = sem limite. Para
+   * lançamento disputado: várias contas com o mesmo CPF contam juntas.
+   */
+  max_per_customer: z.number().int().min(1).max(999).nullable().optional(),
   is_active: z.boolean().optional().default(true),
   is_sold_out: z.boolean().optional().default(false),
   // false = serviço/digital: o checkout não pede endereço e o pedido não
@@ -136,7 +142,7 @@ export async function POST(request: NextRequest) {
   }
   const {
     name, description, price_cents, promo_price_cents, stock, images, category, brand, condition,
-    condition_notes, sale_type, preorder_limit, is_active, is_sold_out, features, video_url,
+    condition_notes, sale_type, preorder_limit, max_per_customer, is_active, is_sold_out, features, video_url,
     requires_shipping, card_badge, card_highlights, service_form_fields,
     sku, preorder_batch_name, preorder_ships_at, preorder_status, is_launch,
     sale_window_ends_at, sale_window_end_action, sale_window_end_price_cents,
@@ -195,6 +201,7 @@ export async function POST(request: NextRequest) {
       condition_notes: condition_notes ?? null,
       sale_type,
       preorder_limit: sale_type === "pre_order" ? preorder_limit ?? null : null,
+      max_per_customer: max_per_customer ?? null,
       is_active,
       is_sold_out,
       requires_shipping,

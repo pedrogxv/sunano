@@ -53,6 +53,8 @@ export type UserOrder = {
   complement: OrderComplementSummary
   /** Este pedido é o pagamento de complemento do pedido indicado. */
   complement_for: { order_id: string; order_number: string } | null
+  /** Prazo da loja para pagar um pedido `pending`. */
+  payment_expires_at: string | null
 }
 
 /**

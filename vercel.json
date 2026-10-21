@@ -7,7 +7,7 @@
     },
     {
       "path": "/api/cron/expire-pending-orders",
-      "schedule": "*/15 * * * *"
+      "schedule": "*/5 * * * *"
     },
     {
       "path": "/api/cron/vip-expiration",

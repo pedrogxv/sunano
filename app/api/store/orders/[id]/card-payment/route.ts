@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { getRequestUser, isImpersonating } from "@/lib/server/auth/current-user"
 import { checkRateLimit, getClientIpIdentifier } from "@/lib/server/rate-limit"
+import { rejectIfBot } from "@/lib/server/bot-check"
 import { isUuid } from "@/lib/server/repositories/_shared"
 import {
   getStripeCardOrderForOwner,
@@ -14,6 +15,7 @@ import {
   type MercadoPagoCardOrderForOwner,
 } from "@/lib/server/repositories/mercadopago-orders-repository"
 import { MercadoPagoError } from "@/lib/server/integrations/mercadopago"
+import { getInfinitePayCardOrderForOwner } from "@/lib/server/repositories/infinitepay-orders-repository"
 import { mercadoPagoCardSchema } from "@/lib/server/validation/mercadopago-card"
 import { getStoreSettings } from "@/lib/server/repositories/store-settings-repository"
 import { storeCardMaxInstallments } from "@/lib/server/payments/gateway"
@@ -70,6 +72,18 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   const user = await getRequestUser(request)
   if (!user) return NextResponse.json({ error: "Faça login para continuar." }, { status: 401 })
+
+  // InfinitePay: o cartão é pago na página dela. A tela só precisa do link
+  // para o cliente voltar a ele enquanto o pedido está pendente.
+  const ipOrder = await getInfinitePayCardOrderForOwner(id, user.id)
+  if (ipOrder) {
+    return NextResponse.json({
+      gateway: "infinitepay",
+      state: (ipOrder.status === "pending" ? "ready" : "closed") satisfies CardPaymentState,
+      amountCents: ipOrder.totalCents,
+      checkoutUrl: ipOrder.status === "pending" ? ipOrder.checkoutUrl : null,
+    })
+  }
 
   // Mercado Pago: não há estado de pagamento a consultar fora do pedido (o
   // pagamento só existe depois do POST, e sai aprovado ou recusado na hora).
@@ -154,6 +168,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     onError: "closed",
   })
   if (!ipLimit.allowed) return tooMany()
+
+  // Teste de cartão roubado é automação: o BotID (Basic) barra o script antes
+  // de gastar uma tentativa no gateway. Ver `rejectIfBot`.
+  const botBlocked = await rejectIfBot("card-payment")
+  if (botBlocked) return botBlocked
 
   const user = await getRequestUser(request)
   if (!user) return NextResponse.json({ error: "Faça login para continuar." }, { status: 401 })

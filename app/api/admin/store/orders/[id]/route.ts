@@ -36,6 +36,8 @@ const patchSchema = z.discriminatedUnion("action", [
     action: z.literal("refund"),
     valueCents: z.number().int().positive().optional(),
     reason: z.string().trim().max(300).optional(),
+    // InfinitePay: o admin já estornou no app dela (não há API de estorno).
+    manualConfirmed: z.boolean().optional(),
   }),
   z.object({
     action: z.literal("cancel"),
@@ -134,7 +136,11 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
           auth.profile.id
         )
       : parsed.data.action === "refund"
-        ? await refundOrder(id, { valueCents: parsed.data.valueCents, reason: parsed.data.reason }, auth.profile.id)
+        ? await refundOrder(
+            id,
+            { valueCents: parsed.data.valueCents, reason: parsed.data.reason, manualConfirmed: parsed.data.manualConfirmed },
+            auth.profile.id
+          )
         : await cancelOrder(id, { reason: parsed.data.reason }, auth.profile.id)
 
   if (!result.ok) {

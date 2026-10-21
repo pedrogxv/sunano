@@ -4,7 +4,7 @@ import { isValidBannerLink } from "@/lib/banner-link"
  * Barra comercial da Loja (módulo puro: vitrine, painel e rota usam o mesmo).
  *
  * Fica logo abaixo do menu da Loja, em todas as páginas de /loja. Dois modos:
- * - benefícios: frases curtas com ícone (PIX com desconto, Até 6x sem juros…);
+ * - benefícios: frases curtas com ícone (PIX com desconto, Parcele no cartão…);
  * - campanha: um aviso só, com link ("Beast X V2 em pré-venda · Ver produto").
  *   Fora do período da campanha a barra volta sozinha aos benefícios.
  */
@@ -81,7 +81,7 @@ export type StoreCommerceBarConfig = {
 
 export const DEFAULT_COMMERCE_BENEFITS: StoreCommerceBenefit[] = [
   { icon: "pix", text: "PIX com desconto", link: null },
-  { icon: "card", text: "Até 6x sem juros", link: null },
+  { icon: "card", text: "Parcele no cartão", link: null },
   // O checkout não cobra frete (lib/store-shipping.ts): "calculado no
   // carrinho" contradizia o "Frete grátis" do card e da página do produto.
   { icon: "truck", text: "Frete grátis para todo o Brasil", link: null },

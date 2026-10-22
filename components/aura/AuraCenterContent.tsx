@@ -409,7 +409,7 @@ export function AuraCenterContent({
 
         <div className={cn("flex flex-col gap-2 rounded-2xl border p-5", CARD_SURFACE)}>
           <div className="flex items-center gap-2 text-muted-foreground">
-            <AuraIcon size="lg" tone="inherit" outline />
+            <AuraIcon size="lg" tone="inherit" />
             <span className="text-xs font-semibold uppercase tracking-wider">Próxima aura liberada</span>
           </div>
           {usage.limitReached && usage.nextSlotAt ? (

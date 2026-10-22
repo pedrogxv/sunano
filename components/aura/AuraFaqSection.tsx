@@ -85,7 +85,7 @@ export function AuraFaqSection({ streak, isVip, youtubeEnabled = false, hideHead
         {/* Boost — números concretos do usuário, não só a regra genérica */}
         <div className="px-4 pt-4 pb-1 sm:px-5">
           <div className="flex items-center gap-2 pb-1">
-            <AuraIcon outline />
+            <AuraIcon />
             <span className="text-xs font-bold uppercase tracking-wider text-amber-400">Boost ativo</span>
           </div>
           <div className="space-y-3 pb-4 text-sm text-muted-foreground">

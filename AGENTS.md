@@ -177,6 +177,11 @@ Regras:
   `text-primary` achando que era "a cor de destaque" fez a chama sumir.
 - **Preço é `AuraAmount`, não ícone + número montados na mão.** Era assim que
   uma tela mostrava o SVG e a de ao lado o emoji, com espaçamento diferente.
+- **Um símbolo, duas versões: chapada (`AuraIcon`) ou viva (`AuraFlame`).**
+  Não existe chama de contorno: o `outline` foi removido porque o card
+  deslogado da sidebar desenhava o CONTORNO enquanto o logado mostrava a
+  chama acesa, e o site voltou a ter dois símbolos. A entrada da Central de
+  Aura na sidebar usa `AuraFlame` nos dois estados (logado e deslogado).
 - **`glow` é exceção, não padrão.** O pulso existe para o ícone que a tela
   quer que puxe o olho; se tudo pulsa, nada pulsa. O halo exige o wrapper
   `AuraIconHolder` (é o `::before` dele que desenha).

@@ -74,11 +74,6 @@ export interface AuraIconProps {
   size?: AuraIconSize
   tone?: AuraIconTone
   /**
-   * Chama VAZADA (só contorno), para quando ela é rótulo e não valor — ex.:
-   * "Próxima aura liberada". O padrão é chapada: a Aura é uma chama cheia.
-   */
-  outline?: boolean
-  /**
    * Pulso + halo (`aura-stat-icon`). Só para o ícone que a tela quer que puxe
    * o olho — se tudo pulsa, nada pulsa. O halo atrás exige o wrapper
    * `aura-stat-icon-holder`, que `AuraIconHolder` fornece.
@@ -91,7 +86,6 @@ export interface AuraIconProps {
 export function AuraIcon({
   size = "md",
   tone = "brand",
-  outline = false,
   glow = false,
   className,
   "aria-hidden": ariaHidden = true,
@@ -111,7 +105,7 @@ export function AuraIcon({
         stroke="currentColor"
         strokeWidth={1.2}
         strokeLinejoin="round"
-        fill={outline ? "none" : "currentColor"}
+        fill="currentColor"
       />
     </svg>
   )

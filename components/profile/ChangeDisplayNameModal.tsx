@@ -264,7 +264,7 @@ export function ChangeDisplayNameModal({
           {!status.onCooldown && !unavailable && (
             <Button type="button" onClick={handleConfirm} disabled={!canConfirm}>
               {submitting && <Loader2 className="size-3.5 animate-spin" />}
-              <AuraIcon tone="inherit" outline />
+              <AuraIcon tone="inherit" />
               Confirmar ({cost.toLocaleString("pt-BR")} Aura)
             </Button>
           )}

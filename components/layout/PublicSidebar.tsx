@@ -20,7 +20,7 @@ import {
   Trophy,
   Users,
 } from "lucide-react"
-import { AuraIcon } from "@/components/ui/AuraIcon"
+import { AuraFlame } from "@/components/ui/AuraFlame"
 import { useEffect, useState } from "react"
 
 import { Skeleton } from "@/components/ui/skeleton"
@@ -339,11 +339,9 @@ export function PublicSidebar() {
                   : "nav-fire-holder border border-orange-500/40 bg-orange-500/10 hover:border-orange-500/60 hover:bg-orange-500/20"
               )}
             >
-              <AuraIcon
-                tone="inherit"
-                outline={!isActive("/aura")}
-                className={cn("size-[18px] shrink-0", !isActive("/aura") && "nav-fire-icon")}
-              />
+              {/* A MESMA chama viva do card logado (`AuraMissionsBadge`):
+                  deslogado e logado não podem mostrar dois símbolos. */}
+              <AuraFlame size="lg" className="shrink-0" />
               <span className={cn(isCollapsed && "hidden", !isActive("/aura") && "nav-fire-text")}>
                 Central de Aura
               </span>

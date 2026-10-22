@@ -33,6 +33,8 @@ export type AuthContextUser = {
   hasSupportTicket: boolean
   /** Quantos tickets abertos estão aguardando resposta do usuário — alimenta o ponto amber no sino e em "Meus Tickets". */
   supportTicketsAwaitingMe: number
+  /** Pedidos esperando o usuário (endereço faltando ou resposta da equipe) — badge de "Meus Pedidos" na TopBar. */
+  ordersNeedingAttention: number
   /**
    * VIP ativo agora (já considera expiração) — alimenta a tag roxa no
    * dropdown da topbar e o "Seja VIP" da sidebar.
@@ -171,6 +173,7 @@ type MeResponse = {
   } | null
   hasSupportTicket?: boolean
   supportTicketsAwaitingMe?: number
+  ordersNeedingAttention?: number
   hasForumPost?: boolean
   accountTier?: string | null
   vipExpiresAt?: string | null
@@ -193,7 +196,7 @@ type MeResponse = {
  * lib/client/auth-snapshot.ts sobre por que isso ainda não é possível).
  */
 export function buildAuthUser(data: MeResponse): AuthContextUser | null {
-  const { user, userProfile, adminProfile, hasSupportTicket, supportTicketsAwaitingMe, hasForumPost, accountTier, vipExpiresAt, subscriptionStatus, canUseStore, storeMaintenanceBypass, equippedFrameUrl, equippedFrameSlug, isFounder, longestStreak, frameOptOut } = data
+  const { user, userProfile, adminProfile, hasSupportTicket, supportTicketsAwaitingMe, ordersNeedingAttention, hasForumPost, accountTier, vipExpiresAt, subscriptionStatus, canUseStore, storeMaintenanceBypass, equippedFrameUrl, equippedFrameSlug, isFounder, longestStreak, frameOptOut } = data
   if (!user) return null
 
   return {
@@ -211,6 +214,7 @@ export function buildAuthUser(data: MeResponse): AuthContextUser | null {
     storeMaintenanceBypass: Boolean(storeMaintenanceBypass),
     hasSupportTicket: Boolean(hasSupportTicket),
     supportTicketsAwaitingMe: supportTicketsAwaitingMe ?? 0,
+    ordersNeedingAttention: ordersNeedingAttention ?? 0,
     isVip: isVipActive(accountTier, vipExpiresAt),
     accountTier: accountTier ?? null,
     vipExpiresAt: vipExpiresAt ?? null,

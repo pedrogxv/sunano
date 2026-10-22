@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { RouteLink } from "@/components/ui/route-link"
-import { Bookmark, Crown, Handshake, LayoutDashboard, LifeBuoy, LogIn, LogOut, MoreVertical, PackageSearch, QrCode, Settings, ShieldCheck, User } from "lucide-react"
+import { Bookmark, ChevronRight, Crown, Handshake, LayoutDashboard, LifeBuoy, LogIn, LogOut, MoreVertical, PackageSearch, QrCode, Settings, ShieldCheck } from "lucide-react"
 
 import { useState } from "react"
 
@@ -13,8 +13,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -27,6 +25,48 @@ import { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
 import { isVipSubscriptionEnabled } from "@/lib/vip-signup"
 import { vipCtaLabel, vipCtaShortLabel } from "@/lib/vip-status"
+
+/**
+ * Atalho da grade do menu: ícone em pastilha e rótulo curto embaixo. TODO
+ * destino do menu é um ladrilho (inclusive Tickets, Afiliados e Admin): a
+ * lista de linhas embaixo da grade dava ao menu dois idiomas visuais.
+ * `title` leva o nome completo, já que o rótulo é a versão curta.
+ */
+function QuickTile({
+  href,
+  icon: Icon,
+  label,
+  title,
+  attention = false,
+}: {
+  href: string
+  icon: React.ElementType
+  label: string
+  title?: string
+  /** Ponto pulsante no canto: algo ali espera a pessoa (ex.: ticket respondido). */
+  attention?: boolean
+}) {
+  return (
+    <DropdownMenuItem asChild className="p-0 focus:bg-transparent">
+      <RouteLink
+        href={href}
+        title={title}
+        className="group relative flex min-h-[4.25rem] flex-col items-center justify-center gap-1.5 rounded-xl bg-muted/30 px-1 py-2.5 text-center transition-all hover:-translate-y-px hover:bg-muted/60 focus:bg-muted/60 focus:text-foreground"
+      >
+        {attention && (
+          <span className="absolute right-2 top-2 flex size-2">
+            <span className="absolute inline-flex size-full animate-ping rounded-full bg-amber-500 opacity-60 motion-reduce:hidden" />
+            <span className="relative size-2 rounded-full bg-amber-500" />
+          </span>
+        )}
+        <span className="flex size-8 items-center justify-center text-muted-foreground transition-colors group-hover:text-foreground group-focus:text-foreground">
+          <Icon className="size-4" />
+        </span>
+        <span className="w-full truncate text-xs font-medium text-foreground">{label}</span>
+      </RouteLink>
+    </DropdownMenuItem>
+  )
+}
 
 interface AuthUserProps {
   isCollapsed?: boolean
@@ -54,6 +94,7 @@ export function AuthUser({ isCollapsed = false, variant = "admin", layout = "sid
   // avatar e no selo VIP que o snapshot existe para remover.
   const ready = !pending
   const isAdmin = authUser?.isAdmin ?? false
+  const isVip = authUser?.vip.isVip ?? false
   // Afiliados acompanha a manutenção da Loja (ver lib/server/auth/affiliate-access.ts).
   // Resolvido no servidor (ver /api/auth/me): manutenção desligada ou
   // liberação individual do "pacote Loja". Ler a env aqui não funcionaria —
@@ -191,38 +232,57 @@ export function AuthUser({ isCollapsed = false, variant = "admin", layout = "sid
         side={layout === "topbar" ? "bottom" : "top"}
         align="end"
         sideOffset={8}
-        className="w-56 border-border bg-popover text-foreground shadow-xl"
+        collisionPadding={12}
+        // Largura fixa no desktop, mas nunca maior que a tela do celular; a
+        // altura acompanha o espaço livre do Radix para o menu rolar em vez
+        // de sair cortado em telas baixas (celular deitado).
+        className="w-[min(20rem,calc(100vw-1.5rem))] max-h-[var(--radix-dropdown-menu-content-available-height)] overflow-y-auto overscroll-contain rounded-2xl border-border bg-popover p-0 text-foreground shadow-2xl shadow-black/50"
       >
-        <DropdownMenuLabel className="p-0 font-normal">
-          <div className="flex items-center gap-2.5 px-2 py-2.5">
-            <ProfileAvatar
-              name={user.name}
-              avatarUrl={user.avatar || null}
-              size="sm"
-              frame={sessionFrame}
-            />
-            <div className="flex min-w-0 flex-col">
-              <span className="truncate text-sm font-medium text-foreground">{user.name}</span>
-              <span className="truncate text-xs text-muted-foreground">{user.email}</span>
-            </div>
-          </div>
-          {authUser?.vip.isVip ? (
+        {/* Cabeçalho: a identidade é o próprio atalho para a vitrine pública,
+            então "Meu Perfil" deixou de ser uma linha solta da lista. */}
+        <div className="relative overflow-hidden">
+          <div
+            aria-hidden
+            className={cn(
+              "pointer-events-none absolute -right-12 -top-20 size-48 rounded-full blur-3xl",
+              isVip ? "bg-[var(--vip-accent-soft)] opacity-60" : "bg-foreground/[0.07]"
+            )}
+          />
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,var(--color-foreground)_1px,transparent_0)] bg-[length:14px_14px] opacity-[0.04]"
+          />
+          <DropdownMenuItem asChild className="relative m-1.5 rounded-xl p-2.5 focus:bg-foreground/[0.06] focus:text-foreground">
+            <RouteLink href={myProfileHref} className="group flex items-center gap-3">
+              <ProfileAvatar name={user.name} avatarUrl={user.avatar || null} size="lg" frame={sessionFrame} />
+              <div className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate font-display text-base font-bold leading-tight">{user.name}</span>
+                <span className="truncate text-xs text-muted-foreground">{user.email}</span>
+                <span className="mt-1 flex items-center gap-0.5 text-[11px] font-semibold text-muted-foreground transition-colors group-hover:text-foreground group-focus:text-foreground">
+                  {t.auth.viewProfile}
+                  <ChevronRight className="size-3 transition-transform group-hover:translate-x-0.5" />
+                </span>
+              </div>
+            </RouteLink>
+          </DropdownMenuItem>
+
+          {isVip ? (
             // Segue VIP (o período pago vale até o fim). Se cancelou dentro
             // dele, o selo vem acompanhado do convite a REATIVAR — mesmo
             // verbo da aba de assinatura, porque é a mesma ação e ela não
             // cobra nada agora. O rótulo sai de `vipCtaShortLabel`, nunca
             // escrito à mão aqui: era assim que este menu dizia "RENOVAR"
             // enquanto /conta dizia "Reativar assinatura".
-            <div className="flex items-center gap-2 px-2 pb-1.5">
-              <div className="flex items-center gap-1">
-                <Crown className="size-3 vip-badge-crown" style={{ color: "var(--vip-accent)" }} />
-                <span className="vip-badge-text text-[10px] font-bold uppercase tracking-wide">VIP</span>
-              </div>
-              {authUser.vip.canReactivate && isVipSubscriptionEnabled() && (
+            <div className="relative mx-3 mb-3 flex items-center gap-2.5 rounded-xl bg-[linear-gradient(110deg,oklch(0.75_0.19_320/0.16),transparent_70%)] px-3 py-2">
+              <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-[oklch(0.75_0.19_320/0.18)]">
+                <Crown className="size-3.5 vip-badge-crown" style={{ color: "var(--vip-accent)" }} />
+              </span>
+              <span className="vip-badge-text flex-1 text-xs font-bold uppercase tracking-wider">Membro VIP</span>
+              {authUser?.vip.canReactivate && isVipSubscriptionEnabled() && (
                 <button
                   type="button"
                   onClick={() => setVipUpsellOpen(true)}
-                  className="text-[10px] font-bold uppercase tracking-wide underline underline-offset-2 transition-opacity hover:opacity-80"
+                  className="shrink-0 rounded-full bg-[oklch(0.75_0.19_320/0.18)] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide transition-colors hover:bg-[oklch(0.75_0.19_320/0.28)]"
                   style={{ color: "var(--vip-accent)" }}
                 >
                   {vipCtaShortLabel(authUser.vip)}
@@ -230,158 +290,94 @@ export function AuthUser({ isCollapsed = false, variant = "admin", layout = "sid
               )}
             </div>
           ) : isVipSubscriptionEnabled() ? (
-            <button
-              type="button"
-              onClick={() => setVipUpsellOpen(true)}
-              className="flex items-center gap-1 px-2 pb-1.5 text-[10px] font-bold uppercase tracking-wide transition-opacity hover:opacity-80"
-              style={{ color: "var(--vip-accent)" }}
+            <DropdownMenuItem
+              onSelect={() => setVipUpsellOpen(true)}
+              className="group relative mx-3 mb-3 gap-2.5 overflow-hidden rounded-xl bg-[linear-gradient(110deg,oklch(0.75_0.19_320/0.2),oklch(0.75_0.19_320/0.04)_75%)] px-3 py-2.5 focus:bg-[oklch(0.75_0.19_320/0.22)] focus:text-foreground"
             >
-              <Crown className="size-3" />
-              {authUser ? vipCtaLabel(authUser.vip) ?? "Seja VIP" : "Seja VIP"}
-            </button>
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[oklch(0.75_0.19_320/0.2)]">
+                <Crown className="size-4 vip-badge-crown" style={{ color: "var(--vip-accent)" }} />
+              </span>
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="vip-badge-text text-xs font-bold uppercase tracking-wider">
+                  {authUser ? vipCtaLabel(authUser.vip) ?? "Seja VIP" : "Seja VIP"}
+                </span>
+                <span className="truncate text-[11px] text-muted-foreground">Benefícios exclusivos e apoio ao site</span>
+              </span>
+              <ChevronRight
+                className="size-4 shrink-0 transition-transform group-hover:translate-x-0.5"
+                style={{ color: "var(--vip-accent)" }}
+              />
+            </DropdownMenuItem>
           ) : null}
-        </DropdownMenuLabel>
-
-        <DropdownMenuSeparator className="bg-border" />
+        </div>
 
         {variant === "public" && pendingOrder && (
-          <>
+          <div className="px-1.5 pb-1.5">
             <DropdownMenuItem asChild>
               <RouteLink
                 href={pendingPaymentHref(pendingOrder)}
-                className="flex cursor-pointer items-center gap-2.5 rounded-sm bg-amber-500/10 focus:bg-amber-500/20 focus:text-foreground"
+                className="flex cursor-pointer items-center gap-2.5 rounded-xl bg-amber-500/10 px-2.5 py-2 focus:bg-amber-500/20 focus:text-foreground"
               >
-                <QrCode className="size-4 shrink-0 text-amber-400" />
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/15">
+                  <QrCode className="size-4 text-amber-400" />
+                </span>
                 <div className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate text-sm font-medium text-foreground">Pedido aguardando pagamento</span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="truncate text-xs text-muted-foreground">
                     {formatBRL(pendingOrder.total_cents)} ·{" "}
                     {pendingOrder.payment_method === "credit_card" ? "concluir com cartão" : "concluir com PIX"}
                   </span>
                 </div>
               </RouteLink>
             </DropdownMenuItem>
-            <DropdownMenuSeparator className="bg-border" />
-          </>
+          </div>
         )}
 
-        {mobileExtraItems && (
-          <>
-            <div className="sm:hidden">{mobileExtraItems}</div>
-            <DropdownMenuSeparator className="bg-border sm:hidden" />
-          </>
-        )}
+        {mobileExtraItems && <div className="px-1.5 pb-1.5 sm:hidden">{mobileExtraItems}</div>}
 
-        {variant === "public" ? (
-          <>
-            <DropdownMenuItem asChild>
-              <RouteLink
-                href={myProfileHref}
-                className="flex cursor-pointer items-center gap-2 focus:bg-muted/40 focus:text-foreground"
-              >
-                <User className="size-4 text-muted-foreground" />
-                {t.auth.myProfile}
-              </RouteLink>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <RouteLink
-                href="/conta"
-                className="flex cursor-pointer items-center gap-2 focus:bg-muted/40 focus:text-foreground"
-              >
-                <ShieldCheck className="size-4 text-muted-foreground" />
-                {t.auth.accountSettings}
-              </RouteLink>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <RouteLink
-                href="/conta/pedidos"
-                className="flex cursor-pointer items-center gap-2 focus:bg-muted/40 focus:text-foreground"
-              >
-                <PackageSearch className="size-4 text-muted-foreground" />
-                {t.auth.myOrders}
-              </RouteLink>
-            </DropdownMenuItem>
-            {authUser?.hasSupportTicket && (
-              <DropdownMenuItem asChild>
-                <RouteLink
+        {/* Uma grade só, 3 por linha: os três destinos de sempre e, depois,
+            os condicionais (Tickets, Afiliados, Admin) no mesmo formato. */}
+        <div className="grid grid-cols-3 gap-1.5 px-2 pb-2">
+          {variant === "public" ? (
+            <>
+              <QuickTile href="/conta" icon={ShieldCheck} label={t.auth.accountShort} />
+              <QuickTile href="/conta/pedidos" icon={PackageSearch} label={t.auth.ordersShort} />
+              <QuickTile href="/forum/salvos" icon={Bookmark} label={t.auth.savedShort} />
+              {authUser?.hasSupportTicket && (
+                <QuickTile
                   href="/conta/suporte"
-                  className="flex cursor-pointer items-center gap-2 focus:bg-muted/40 focus:text-foreground"
-                >
-                  <LifeBuoy className="size-4 text-muted-foreground" />
-                  <span className="flex-1">{t.auth.myTickets}</span>
-                  {Boolean(authUser.supportTicketsAwaitingMe) && (
-                    <span className="size-2 shrink-0 rounded-full bg-amber-500" />
-                  )}
-                </RouteLink>
-              </DropdownMenuItem>
-            )}
-            <DropdownMenuItem asChild>
-              <RouteLink
-                href="/forum/salvos"
-                className="flex cursor-pointer items-center gap-2 focus:bg-muted/40 focus:text-foreground"
-              >
-                <Bookmark className="size-4 text-muted-foreground" />
-                {t.auth.savedPosts}
-              </RouteLink>
-            </DropdownMenuItem>
-            {showAffiliates && (
-              <DropdownMenuItem asChild>
-                <RouteLink
-                  href="/afiliados"
-                  className="flex cursor-pointer items-center gap-2 focus:bg-muted/40 focus:text-foreground"
-                >
-                  <Handshake className="size-4 text-muted-foreground" />
-                  {t.auth.affiliates}
-                </RouteLink>
-              </DropdownMenuItem>
-            )}
-            {isAdmin && (
-              <DropdownMenuItem asChild>
-                <RouteLink
-                  href="/admin"
-                  className="flex cursor-pointer items-center gap-2 focus:bg-muted/40 focus:text-foreground"
-                >
-                  <LayoutDashboard className="size-4 text-muted-foreground" />
-                  {t.auth.adminPanel}
-                </RouteLink>
-              </DropdownMenuItem>
-            )}
-          </>
-        ) : (
-          <>
-            <DropdownMenuItem asChild>
-              <RouteLink
-                href={myProfileHref}
-                className="flex cursor-pointer items-center gap-2 focus:bg-muted/40 focus:text-foreground"
-              >
-                <User className="size-4 text-muted-foreground" />
-                {t.auth.myProfile}
-              </RouteLink>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <RouteLink
-                href="/admin/settings"
-                className="flex cursor-pointer items-center gap-2 focus:bg-muted/40 focus:text-foreground"
-              >
-                <Settings className="size-4 text-muted-foreground" />
-                {t.auth.settings}
-              </RouteLink>
-            </DropdownMenuItem>
-          </>
-        )}
+                  icon={LifeBuoy}
+                  label={t.auth.ticketsShort}
+                  title={t.auth.myTickets}
+                  attention={Boolean(authUser.supportTicketsAwaitingMe)}
+                />
+              )}
+              {showAffiliates && (
+                <QuickTile href="/afiliados" icon={Handshake} label={t.auth.affiliatesShort} title={t.auth.affiliates} />
+              )}
+              {isAdmin && (
+                <QuickTile href="/admin" icon={LayoutDashboard} label={t.auth.adminShort} title={t.auth.adminPanel} />
+              )}
+            </>
+          ) : (
+            <QuickTile href="/admin/settings" icon={Settings} label={t.auth.settings} />
+          )}
+        </div>
 
-        <DropdownMenuSeparator className="bg-border" />
-
-        <DropdownMenuItem
-          className="cursor-pointer text-red-400 focus:bg-red-500/10 focus:text-red-300"
-          onSelect={async () => {
-            await signOutSafely()
-            window.location.href = "/login"
-          }}
-        >
-          <LogOut className="size-4" />
-          {t.auth.signOut}
-        </DropdownMenuItem>
+        {/* Sair sem divisória: separado pelo espaço e pelo tom, e só fica
+            vermelho no hover (é ação de saída, não destino). */}
+        <div className="px-2 pb-2">
+          <DropdownMenuItem
+            className="group justify-center gap-2 rounded-xl bg-muted/20 px-2.5 py-2 text-xs font-medium text-muted-foreground focus:bg-red-500/10 focus:text-red-300"
+            onSelect={async () => {
+              await signOutSafely()
+              window.location.href = "/login"
+            }}
+          >
+            <LogOut className="size-3.5 transition-transform group-focus:-translate-x-0.5" />
+            {t.auth.signOut}
+          </DropdownMenuItem>
+        </div>
       </DropdownMenuContent>
     </DropdownMenu>
     <VipUpsellModal open={vipUpsellOpen} onOpenChange={setVipUpsellOpen} />

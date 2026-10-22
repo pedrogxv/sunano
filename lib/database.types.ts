@@ -1982,6 +1982,7 @@ export type Database = {
           tracking_code: string | null
           carrier: string | null
           shipped_at: string | null
+          warehouse_arrived_at: string | null
           delivered_at: string | null
           refunded_cents: number
           refund_reason: string | null
@@ -2066,6 +2067,7 @@ export type Database = {
           tracking_code?: string | null
           carrier?: string | null
           shipped_at?: string | null
+          warehouse_arrived_at?: string | null
           delivered_at?: string | null
           refunded_cents?: number
           refund_reason?: string | null
@@ -2129,6 +2131,7 @@ export type Database = {
           tracking_code?: string | null
           carrier?: string | null
           shipped_at?: string | null
+          warehouse_arrived_at?: string | null
           delivered_at?: string | null
           refunded_cents?: number
           refund_reason?: string | null

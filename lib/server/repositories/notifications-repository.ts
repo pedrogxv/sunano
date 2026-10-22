@@ -2,7 +2,12 @@ import "server-only"
 
 import type { NotificationEntityType, NotificationType } from "@/lib/database.types"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
-import { orderStatusDescription, orderStatusLabel, type OrderStatusValue } from "@/lib/order-status"
+import {
+  ORDER_WAREHOUSE_DESCRIPTION,
+  orderStatusDescription,
+  orderStatusLabel,
+  type OrderStatusValue,
+} from "@/lib/order-status"
 import { STORE_REVIEW_AURA, STORE_REVIEW_WITH_PHOTO_AURA } from "@/lib/store-review-aura"
 
 /**
@@ -292,6 +297,29 @@ export async function notifyOrderTrackingUpdated(params: {
 
   if (error) {
     console.error("[notifications-repository] notifyOrderTrackingUpdated:", error)
+  }
+}
+
+/**
+ * Avisa o cliente que o produto chegou ao nosso armazém e é o próximo a ser
+ * postado. Mesmo contrato de `notifyOrderStatusChange`: best-effort, nunca lança.
+ */
+export async function notifyOrderWarehouseArrived(params: { userId: string; orderId: string }): Promise<void> {
+  const db = createSupabaseAdminClient()
+  const shortId = params.orderId.slice(0, 8).toUpperCase()
+
+  const { error } = await db.from("notifications").insert({
+    user_id: params.userId,
+    type: "order_status",
+    entity_type: "order",
+    entity_id: params.orderId,
+    link: "/conta/pedidos",
+    title: `Pedido #${shortId} chegou ao nosso armazém`,
+    body: ORDER_WAREHOUSE_DESCRIPTION,
+  })
+
+  if (error) {
+    console.error("[notifications-repository] notifyOrderWarehouseArrived:", error)
   }
 }
 

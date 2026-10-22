@@ -265,7 +265,7 @@ export function AvatarFrameSection({
               className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-[11px] font-bold text-foreground transition-colors hover:border-cyan-400/40 hover:text-cyan-300"
             >
               <Bird className="size-3" />
-              Ver tarefas de hoje
+              Ver missões diárias
             </a>
           )
         }
@@ -354,7 +354,7 @@ function FrameShowcase({
     >
       {/* `flex-1` na coluna de texto, e não só `min-w-0`: sem ela a coluna
           mede pelo conteúdo e empurra a ação para a linha de baixo quando o
-          subtítulo é longo — era o que descolava "Ver tarefas de hoje" do
+          subtítulo é longo — era o que descolava "Ver missões diárias" do
           cabeçalho de Ofensiva enquanto "Ver rankings" ficava à direita. */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1 space-y-0.5">

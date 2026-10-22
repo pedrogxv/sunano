@@ -11,6 +11,8 @@ import {
   Copy,
   ExternalLink,
   MapPin,
+  MessageCircle,
+  MessageSquare,
   Package,
   PackageCheck,
   QrCode,
@@ -28,6 +30,7 @@ import type { DateRange } from "react-day-picker"
 
 import { useCart } from "@/components/providers/cart-context"
 import { AccountPageHeader } from "@/components/account/AccountPageHeader"
+import { useAuthUser } from "@/components/providers/auth-context"
 import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
@@ -76,6 +79,8 @@ import { isServiceFormEditable, serviceFormLines } from "@/lib/store-service-for
 import { ServiceFormAnswerValue } from "@/components/store/ServiceFormAnswerValue"
 import { OrderComplementNotice } from "@/components/store/OrderComplementNotice"
 import { OrderTimeline } from "@/components/store/OrderTimeline"
+import { OrderChatDialog } from "@/components/store/OrderChatDialog"
+import { OrderGuideButton } from "@/components/store/OrderGuide"
 import { PendingStoreReviews, usePendingStoreReviews } from "@/components/store/PendingStoreReviews"
 import { StoreReviewForm } from "@/components/store/StoreReviewForm"
 // `import type` é apagado no build: não puxa `server-only` para o bundle.
@@ -440,6 +445,7 @@ function OrderCard({
   onDelivered,
   onEditShipping,
   onEditServiceForm,
+  onOpenChat,
 }: {
   order: UserOrder
   /** Anúncio "Complemento de Pagamento", para o passo a passo do que falta pagar. */
@@ -452,6 +458,8 @@ function OrderCard({
   onDelivered: () => void
   onEditShipping: (order: UserOrder) => void
   onEditServiceForm: (order: UserOrder) => void
+  /** "Chat com a loja" de um pedido ainda sem conversa aberta: abre a primeira mensagem. */
+  onOpenChat: (order: UserOrder) => void
 }) {
   const toReview = isOrderCompleted(order)
     ? [...new Set(order.items.map((i) => i.id).filter((id): id is string => Boolean(id)))]
@@ -463,6 +471,7 @@ function OrderCard({
   const missingAddress = isMissingShippingAddress(order)
   const missingServiceForm = isMissingServiceForm(order)
   const owesComplement = order.complement.pendingCents > 0 || order.complement.awaitingPaymentOrderId !== null
+  const awaitingReplyTicketId = order.awaiting_reply_ticket_id
 
   return (
     <div
@@ -470,7 +479,9 @@ function OrderCard({
         "group relative overflow-hidden rounded-xl border bg-muted/20 transition-colors",
         missingAddress || missingServiceForm
           ? "border-amber-500/40"
-          : owesComplement
+          : awaitingReplyTicketId
+            ? "border-sky-500/40"
+            : owesComplement
             ? "border-violet-500/40"
             : "border-border hover:border-border/80"
       )}
@@ -521,7 +532,7 @@ function OrderCard({
               STATUS_STYLE[order.status]
             )}
           >
-            {orderStatusLabel(order.status, order.requires_shipping_address)}
+            {orderStatusLabel(order.status, order.requires_shipping_address, Boolean(order.warehouse_arrived_at))}
           </span>
           {isAuraOrder(order) && (
             <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-400">
@@ -533,9 +544,35 @@ function OrderCard({
         </div>
       </button>
 
-      {/* Trilho de progresso — some nos estados sem jornada (cancelado etc.). */}
-      <div className="px-4 pb-3 pl-5">
-        <OrderTimeline order={order} />
+      {/* Trilho de progresso — some nos estados sem jornada (cancelado etc.) —
+          e, ao lado, o chat com a loja SOBRE ESTE pedido. Com conversa aberta o
+          botão leva a ela; sem, abre a primeira mensagem já vinculada. */}
+      <div className="flex flex-col gap-3 px-4 pb-3 pl-5 sm:flex-row sm:items-center">
+        <OrderTimeline order={order} className="min-w-0 flex-1" />
+        {order.chat_ticket_id ? (
+          <Button
+            asChild
+            size="sm"
+            variant="outline"
+            className="h-8 shrink-0 gap-1.5 self-end border-emerald-500/30 text-xs text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300 sm:self-auto"
+          >
+            <RouteLink href={`/conta/suporte/${order.chat_ticket_id}`}>
+              <MessageCircle className="size-3.5" />
+              Abrir chat
+            </RouteLink>
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => onOpenChat(order)}
+            className="h-8 shrink-0 gap-1.5 self-end text-xs sm:self-auto"
+          >
+            <MessageCircle className="size-3.5" />
+            Chat com a loja
+          </Button>
+        )}
       </div>
 
       {/* Aviso de endereço faltando: dentro do card do pedido em questão, não
@@ -578,6 +615,28 @@ function OrderCard({
           >
             <ClipboardList className="size-3.5" />
             Preencher informações
+          </Button>
+        </div>
+      )}
+
+      {/* A equipe respondeu na conversa do pedido e espera a pessoa. É o mesmo
+          sinal que acende o badge de "Meus Pedidos" na TopBar: sem ele aqui,
+          o badge mandava para uma página que não dizia o que ver. */}
+      {awaitingReplyTicketId && (
+        <div className="flex flex-col gap-2 border-t border-sky-500/25 bg-sky-500/10 px-4 py-2.5 pl-5 sm:flex-row sm:items-center sm:justify-between">
+          <p className="flex items-start gap-1.5 text-[11px] text-sky-300">
+            <MessageSquare className="mt-px size-3.5 shrink-0" />
+            <span>A equipe respondeu na conversa deste pedido</span>
+          </p>
+          <Button
+            asChild
+            size="sm"
+            className="h-7 shrink-0 gap-1.5 bg-sky-500 text-xs font-semibold text-black hover:bg-sky-400"
+          >
+            <RouteLink href={`/conta/suporte/${awaitingReplyTicketId}`}>
+              <MessageSquare className="size-3.5" />
+              Ver conversa
+            </RouteLink>
           </Button>
         </div>
       )}
@@ -809,7 +868,7 @@ function OrderDetailsDialog({
   const receiptUrl = isPaid && !auraOrder ? order?.asaas_receipt_url ?? null : null
   const carrierTracking = storeCarrierTracking(order?.carrier, order?.tracking_code)
   const statusDescription = order
-    ? orderStatusDescription(order.status, order.requires_shipping_address)
+    ? orderStatusDescription(order.status, order.requires_shipping_address, Boolean(order.warehouse_arrived_at))
     : null
   const showPix =
     order?.status === "pending" &&
@@ -832,7 +891,7 @@ function OrderDetailsDialog({
             <div className="space-y-3 rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5">
               <div className="flex items-center justify-between">
                 <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold", STATUS_STYLE[order.status])}>
-                  {orderStatusLabel(order.status, order.requires_shipping_address)}
+                  {orderStatusLabel(order.status, order.requires_shipping_address, Boolean(order.warehouse_arrived_at))}
                 </span>
                 <OrderPriceLabel order={order} />
               </div>
@@ -1129,6 +1188,10 @@ function OrderCardSkeleton() {
 
 export default function PedidosPage() {
   const { profile, loading: profileLoading, error: profileError, reload: reloadProfile } = useOwnProfile()
+  // O badge de "Meus Pedidos" na TopBar vem da sessão, que só se reconsulta
+  // quando o cookie muda: depois de informar o endereço, recarrega à mão,
+  // senão o badge continuava aceso com a pendência já resolvida.
+  const { refresh: refreshAuth } = useAuthUser()
   const [statusFilter, setStatusFilter] = useState<UserOrder["status"] | "all">("all")
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
@@ -1172,6 +1235,7 @@ export default function PedidosPage() {
   }
   // Pedido cujo endereço de entrega está sendo informado/corrigido.
   const [shippingOrder, setShippingOrder] = useState<UserOrder | null>(null)
+  const [chatOrder, setChatOrder] = useState<UserOrder | null>(null)
   // Pedido de serviço cujo formulário pós-compra está sendo preenchido/corrigido.
   const [serviceFormOrder, setServiceFormOrder] = useState<UserOrder | null>(null)
 
@@ -1230,7 +1294,9 @@ export default function PedidosPage() {
 
   return (
     <div className="pb-16">
-      <AccountPageHeader profile={profile} />
+      {/* No lugar do "Ver perfil público": aqui a pessoa veio pelos pedidos, e
+          o guia de como funciona uma compra da Loja vale para todos eles. */}
+      <AccountPageHeader profile={profile} action={<OrderGuideButton />} />
 
       <div className="mx-auto max-w-4xl px-2 py-8 sm:px-4 md:px-6">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
@@ -1388,6 +1454,7 @@ export default function PedidosPage() {
                   onDelivered={handleDelivered}
                   onEditShipping={setShippingOrder}
                   onEditServiceForm={setServiceFormOrder}
+                  onOpenChat={setChatOrder}
                 />
               ))}
             </div>
@@ -1461,8 +1528,13 @@ export default function PedidosPage() {
         existing={shippingOrder?.shipping_address ?? null}
         open={shippingOrder !== null}
         onOpenChange={(open) => !open && setShippingOrder(null)}
-        onSaved={refetch}
+        onSaved={() => {
+          refetch()
+          refreshAuth()
+        }}
       />
+
+      <OrderChatDialog order={chatOrder} onOpenChange={(open) => !open && setChatOrder(null)} />
 
       <StoreReviewForm
         target={reviewTarget}

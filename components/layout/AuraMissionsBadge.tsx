@@ -20,7 +20,6 @@ import {
   DAILY_MISSION_KEYS,
   DAILY_MISSION_REWARDS,
   EMPTY_DAILY_MISSIONS,
-  auraLevelProgress,
   countCompletedMissions,
   formatAchievementCount,
   type DailyMissionKey,
@@ -115,8 +114,8 @@ function MissionRing({ completed, total, done }: { completed: number; total: num
 }
 
 /**
- * Painel de Aura no rodapé da sidebar pública: saldo, nível da conta (trilha
- * "Aura farmada", ver `auraLevelProgress`) e missões do dia. É a entrada da
+ * Painel de Aura no rodapé da sidebar pública: saldo e missões do dia (o
+ * nível da conta fica só na Central, no card "Aura atual"). É a entrada da
  * Central de Aura; o saldo saiu da TopBar para cá.
  *
  * O card inteiro é o link para `/aura`. Passar o mouse (desktop) abre ao lado
@@ -262,7 +261,6 @@ export function AuraMissionsBadge({
   const completed = countCompletedMissions(missions)
   const allDone = completed === DAILY_MISSION_KEYS.length
   const frozen = usage.limitReached
-  const level = auraLevelProgress(usage.totalEarned)
 
   // Só mouse de verdade abre o painel. No toque o navegador emula um
   // `mouseenter` antes do clique, e o painel abria ao lado da gaveta do
@@ -283,7 +281,7 @@ export function AuraMissionsBadge({
             setOpen(false)
             onNavigate?.()
           }}
-          aria-label={`Central de Aura: ${usage.balance} de Aura, nível ${level.level}, ${completed}/${DAILY_MISSION_KEYS.length} missões diárias`}
+          aria-label={`Central de Aura: ${usage.balance} de Aura, ${completed}/${DAILY_MISSION_KEYS.length} missões diárias`}
           onPointerEnter={openOnHover}
           onPointerLeave={closeOnHover}
           className={cn(
@@ -315,34 +313,16 @@ export function AuraMissionsBadge({
               </div>
 
               {/* O saldo é o herói do card: chama VIVA (não o `AuraIcon`
-                  chapado), com fagulhas, e o hover no card atiça o fogo. */}
-              <span className="mt-1.5 flex items-end gap-2 font-display text-2xl font-bold leading-none tabular-nums text-foreground">
+                  chapado), com fagulhas, e o hover no card atiça o fogo. O
+                  número queima junto (`.aura-title-text`, a brasa correndo do
+                  título da Central). O nível mora na Central, não aqui. */}
+              <span className="mt-1.5 flex items-end gap-2 font-display text-2xl font-bold leading-none tabular-nums">
                 <AuraFlame size="lg" sparks className="size-7" />
-                {usage.balance.toLocaleString("pt-BR")}
+                <span className="aura-title-text">{usage.balance.toLocaleString("pt-BR")}</span>
               </span>
 
-              <div className="mt-3">
-                <div className="flex items-baseline justify-between gap-2 text-[11px]">
-                  <span className="truncate font-semibold text-foreground">
-                    Nível {level.level}
-                    {level.name && <span className="font-normal text-muted-foreground"> · {level.name}</span>}
-                  </span>
-                  <span className="shrink-0 tabular-nums text-muted-foreground">
-                    {level.nextThreshold === null
-                      ? "Máximo"
-                      : `${formatAchievementCount(usage.totalEarned)}/${formatAchievementCount(level.nextThreshold)}`}
-                  </span>
-                </div>
-                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className={cn("h-full rounded-full transition-[width] duration-500", AURA_BRAND_FILL_CLASS)}
-                    style={{ width: `${Math.round(level.ratio * 100)}%` }}
-                  />
-                </div>
-              </div>
-
-              <div className="mt-2.5 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
-                <span>Missões de hoje</span>
+              <div className="mt-3 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                <span>Missões diárias</span>
                 <span className={cn("font-semibold tabular-nums", allDone ? "text-emerald-400" : "text-foreground")}>
                   {completed}/{DAILY_MISSION_KEYS.length}
                 </span>
@@ -374,7 +354,7 @@ export function AuraMissionsBadge({
             <MissionRing completed={completed} total={DAILY_MISSION_KEYS.length} done={allDone} />
             <div className="min-w-0 flex-1">
               <p className="font-display text-base font-bold leading-tight">
-                {allDone ? "Missões completas" : "Missões de hoje"}
+                {allDone ? "Missões completas" : "Missões diárias"}
               </p>
               <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
                 <Clock className="size-3 shrink-0" />

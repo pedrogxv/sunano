@@ -10,6 +10,7 @@ import { ptBR } from "date-fns/locale"
 import { ImagePlus, Loader2, Package, ShoppingBag, Star, X } from "lucide-react"
 
 import { AccountPageHeader } from "@/components/account/AccountPageHeader"
+import { useAuthUser } from "@/components/providers/auth-context"
 import { ProfileLoadError } from "@/components/account/ProfileLoadError"
 import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { Button } from "@/components/ui/button"
@@ -99,6 +100,7 @@ export default function TicketDetailPage() {
   const ticketId = params.id
   const { profile, loading: profileLoading, error: profileError, reload: reloadProfile } = useOwnProfile()
   const { ticket, messages, loading, notFound, reload } = useSupportTicket(ticketId)
+  const { refresh: refreshAuth } = useAuthUser()
 
   const [body, setBody] = useState("")
   const [imageUrls, setImageUrls] = useState<string[]>([])
@@ -152,6 +154,9 @@ export default function TicketDetailPage() {
       setBody("")
       setImageUrls([])
       reload()
+      // Responder passa a vez para a equipe: apaga o ponto do sino/suporte e
+      // o badge de "Meus Pedidos", que vêm da sessão e não se reconsultam sozinhos.
+      refreshAuth()
     } catch {
       toast.error("Não foi possível enviar a mensagem.")
     } finally {

@@ -15,6 +15,8 @@ export type StoreAuditAction =
   | "order.advance"
   /** Troca do código de rastreio de um pedido já enviado. */
   | "order.tracking_update"
+  /** Marco "chegou ao armazém" marcado ou desfeito. */
+  | "order.warehouse_arrival"
   | "order.refund"
   /** Estorno disparado pelo sistema (aviso de fraude do emissor), sem admin. */
   | "order.refund_automatic"

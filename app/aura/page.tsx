@@ -3,6 +3,7 @@ import { Suspense } from "react"
 import {
   getUserAuraBalance,
   getUserAuraRank,
+  getUserAuraTotalEarned,
   getUserAuraUsage,
 } from "@/lib/server/repositories/aura-repository"
 import { getDailyMissionsToday, getUserStreak } from "@/lib/server/repositories/achievements-repository"
@@ -56,6 +57,7 @@ export default async function AuraCenterPage() {
     founderItemId,
     streakFrameItemIds,
     trust,
+    totalEarned,
   ] = await Promise.all([
     userId ? getUserAuraBalance(userId) : Promise.resolve(0),
     userId ? getUserAuraRank(userId) : Promise.resolve(null),
@@ -117,6 +119,9 @@ export default async function AuraCenterPage() {
           canRedeemPhysical: canRedeemPhysicalItem(TRUST_BASE_SCORE, "active"),
           tester: testerEligibility(TRUST_BASE_SCORE, "active"),
         }),
+    // Nível da conta (trilha "Aura farmada"): sai do total histórico, não do
+    // saldo — gastar Aura na loja não pode derrubar o nível.
+    userId ? getUserAuraTotalEarned(userId) : Promise.resolve(0),
   ])
 
   return (
@@ -125,6 +130,7 @@ export default async function AuraCenterPage() {
         isLoggedIn={Boolean(userId)}
         balance={balance}
         rank={rank}
+        totalEarned={totalEarned}
         streak={streak}
         usage={usage}
         items={items}

@@ -102,7 +102,7 @@ export function AuraFaqSection({ streak, isVip, youtubeEnabled = false, hideHead
                     ganho{isVip ? " (já incluindo o bônus VIP)" : ""}.
                   </>
                 ) : (
-                  " Complete as 3 tarefas de hoje para começar a sua."
+                  " Complete as 3 missões diárias para começar a sua."
                 )
               ) : null}
             </p>
@@ -112,7 +112,7 @@ export function AuraFaqSection({ streak, isVip, youtubeEnabled = false, hideHead
               {showPersonalBoost && !isVip && " Ative na loja abaixo."}
             </p>
             <p className="text-xs">
-              O boost nunca se aplica às tarefas diárias, ao bônus de +10 por completá-las, nem às conquistas: esses
+              O boost nunca se aplica às missões diárias, ao bônus de +10 por completá-las, nem às conquistas: esses
               valores são sempre fixos.
             </p>
           </div>
@@ -162,7 +162,7 @@ export function AuraFaqSection({ streak, isVip, youtubeEnabled = false, hideHead
           </div>
           <p className="pt-3 text-xs text-muted-foreground">
             Isso é sobre suas reações dadas, não sobre a Aura que você recebe; o limite não afeta quanto você ganha
-            ao postar, comentar ou avaliar. As tarefas diárias reiniciam à meia-noite UTC (21h em Brasília).{" "}
+            ao postar, comentar ou avaliar. As missões diárias reiniciam à meia-noite UTC (21h em Brasília).{" "}
             <Link href="/informacoes/trust-factor" className="text-primary hover:underline">
               Entenda o Trust Factor
             </Link>

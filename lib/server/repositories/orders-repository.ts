@@ -3,7 +3,11 @@ import "server-only"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import type { Database } from "@/lib/database.types"
 import { getUserProfiles } from "@/lib/server/repositories/users-repository"
-import { notifyOrderStatusChange, notifyOrderTrackingUpdated } from "@/lib/server/repositories/notifications-repository"
+import {
+  notifyOrderStatusChange,
+  notifyOrderTrackingUpdated,
+  notifyOrderWarehouseArrived,
+} from "@/lib/server/repositories/notifications-repository"
 import { notifyDiscordOrderEvent } from "@/lib/server/repositories/discord-orders-repository"
 import { sendOrderEmail } from "@/lib/server/repositories/order-emails-repository"
 import { syncCommissionForRefund } from "@/lib/server/repositories/affiliates-repository"
@@ -552,6 +556,8 @@ export type UserOrderSummary = {
   pix_qr_code_base64: string | null
   tracking_code: string | null
   carrier: string | null
+  /** Quando o produto chegou ao armazém (marco dentro de `paid`). Null = ainda não chegou. */
+  warehouse_arrived_at: string | null
   shipping_address: OrderShippingAddress | null
   /** false = pedido de serviço/digital: não pede endereço em lugar nenhum. */
   requires_shipping_address: boolean
@@ -569,7 +575,7 @@ export type UserOrderSummary = {
 export type OrderComplementTarget = { order_id: string; order_number: string }
 
 const ORDER_COLUMNS =
-  "id, status, total_cents, items, created_at, payment_method, aura_cost_paid, asaas_payment_id, asaas_receipt_url, stripe_payment_intent_id, metadata, pix_expires_at, pix_copy_paste, pix_qr_code_base64, tracking_code, carrier, service_form_answers, complement_due_cents, complement_note, complement_for_order_id, " +
+  "id, status, total_cents, items, created_at, payment_method, aura_cost_paid, asaas_payment_id, asaas_receipt_url, stripe_payment_intent_id, metadata, pix_expires_at, pix_copy_paste, pix_qr_code_base64, tracking_code, carrier, warehouse_arrived_at, service_form_answers, complement_due_cents, complement_note, complement_for_order_id, " +
   SHIPPING_COLUMNS
 
 type ComplementColumns = {
@@ -825,6 +831,7 @@ export type AdminOrderRow = {
   customer_email: string | null
   tracking_code: string | null
   carrier: string | null
+  warehouse_arrived_at: string | null
   shipped_at: string | null
   delivered_at: string | null
   refunded_cents: number
@@ -881,7 +888,7 @@ export type AdminOrderRow = {
 }
 
 const ADMIN_ORDER_COLUMNS =
-  "id, status, total_cents, pix_price_cents, items, created_at, updated_at, payment_method, aura_cost_paid, customer_name, customer_email, metadata, tracking_code, carrier, shipped_at, delivered_at, refunded_cents, refund_reason, refunded_at, asaas_payment_id, stripe_payment_intent_id, stripe_session_id, payment_gateway, mercadopago_payment_id, infinitepay_transaction_nsu, infinitepay_receipt_url, is_sandbox, service_form_answers, complement_due_cents, complement_note, complement_for_order_id, " +
+  "id, status, total_cents, pix_price_cents, items, created_at, updated_at, payment_method, aura_cost_paid, customer_name, customer_email, metadata, tracking_code, carrier, warehouse_arrived_at, shipped_at, delivered_at, refunded_cents, refund_reason, refunded_at, asaas_payment_id, stripe_payment_intent_id, stripe_session_id, payment_gateway, mercadopago_payment_id, infinitepay_transaction_nsu, infinitepay_receipt_url, is_sandbox, service_form_answers, complement_due_cents, complement_note, complement_for_order_id, " +
   SHIPPING_COLUMNS
 
 type AdminOrderRawRow = {
@@ -899,6 +906,7 @@ type AdminOrderRawRow = {
   metadata: Record<string, unknown> | null
   tracking_code: string | null
   carrier: string | null
+  warehouse_arrived_at: string | null
   shipped_at: string | null
   delivered_at: string | null
   refunded_cents: number
@@ -1033,6 +1041,7 @@ export async function listOrdersForAdmin(filters?: {
       customer_email: row.customer_email,
       tracking_code: row.tracking_code,
       carrier: row.carrier,
+      warehouse_arrived_at: row.warehouse_arrived_at ?? null,
       shipped_at: row.shipped_at,
       delivered_at: row.delivered_at,
       refunded_cents: row.refunded_cents,
@@ -1485,6 +1494,89 @@ export async function updateOrderTracking(
       entityId: id,
       before: { trackingCode: existing.tracking_code ?? null, carrier: existing.carrier ?? null },
       after: { trackingCode, carrier },
+    })
+  }
+
+  return { ok: true }
+}
+
+/**
+ * Marca (ou desmarca) que o produto chegou ao nosso armazém — a etapa entre
+ * "Pedido feito" e "Enviado". Não é status: é o marco `warehouse_arrived_at`
+ * dentro de `paid` (ver migration 20270102000000).
+ *
+ * Só em `paid` de item físico: antes disso falta pagar ou o endereço, e depois
+ * de `shipped` a data vira histórico. O status entra no filtro do UPDATE para
+ * um envio marcado no meio não ser atropelado. Desmarcar existe para o clique
+ * errado e não avisa ninguém.
+ */
+export async function markOrderWarehouseArrived(
+  id: string,
+  arrived: boolean,
+  adminId?: string | null
+): Promise<RepositoryResult> {
+  const db = createSupabaseAdminClient()
+
+  const { data: existing } = await db
+    .from("store_orders")
+    .select("id, status, metadata, requires_shipping_address, warehouse_arrived_at")
+    .eq("id", id)
+    .maybeSingle()
+
+  if (!existing) {
+    return { ok: false, error: "Pedido não encontrado.", status: 404 }
+  }
+  if (existing.requires_shipping_address === false) {
+    return { ok: false, error: "Este pedido não tem entrega: não passa pelo armazém.", status: 400 }
+  }
+  if (existing.status !== "paid") {
+    return {
+      ok: false,
+      error: "Só é possível marcar a chegada ao armazém com o pedido em \"Pedido feito\".",
+      status: 400,
+    }
+  }
+  if (Boolean(existing.warehouse_arrived_at) === arrived) {
+    return { ok: true }
+  }
+
+  const arrivedAt = arrived ? new Date().toISOString() : null
+  const { data: updated, error } = await db
+    .from("store_orders")
+    .update({ warehouse_arrived_at: arrivedAt })
+    .eq("id", id)
+    .eq("status", "paid")
+    .select("id")
+    .maybeSingle()
+
+  if (error) {
+    return { ok: false, error: "Não foi possível atualizar o pedido.", status: 400 }
+  }
+  if (!updated) {
+    return { ok: false, error: "O pedido mudou de status enquanto você editava. Recarregue a página.", status: 409 }
+  }
+
+  if (arrived) {
+    const ownerId = orderOwnerId(existing.metadata as Record<string, unknown> | null)
+    if (ownerId) await notifyOrderWarehouseArrived({ userId: ownerId, orderId: id })
+  }
+
+  await notifyDiscordOrderEvent({
+    orderId: id,
+    status: "paid",
+    actor: "admin",
+    eventKey: `warehouse:${arrivedAt ?? "undo"}`,
+    note: arrived ? "Produto chegou ao armazém" : "Chegada ao armazém desfeita",
+  })
+
+  if (adminId) {
+    await logAdminAction({
+      adminId,
+      action: "order.warehouse_arrival",
+      entityType: "store_order",
+      entityId: id,
+      before: { warehouseArrivedAt: existing.warehouse_arrived_at ?? null },
+      after: { warehouseArrivedAt: arrivedAt },
     })
   }
 

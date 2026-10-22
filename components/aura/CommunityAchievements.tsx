@@ -13,7 +13,7 @@ import { DiscordMembershipButton } from "@/components/auth/DiscordMembershipButt
  * `AchievementsGrid`) e resgatáveis uma única vez. Antes eram dois cards
  * grandes soltos (`YoutubeSubscriptionCard`/`DiscordMembershipCard`), o que
  * repetia moldura, cor e explicação duas vezes seguidas. Aqui viram linhas
- * de uma lista só, no mesmo formato de "Tarefas de hoje" logo acima.
+ * de uma lista só, no mesmo formato de "Missões diárias" ao lado.
  *
  * Aglutinado no UX, separado no fluxo: cada linha mantém o próprio OAuth
  * (scopes e callbacks distintos, ver os dois botões), a própria cor de marca

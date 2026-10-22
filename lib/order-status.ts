@@ -8,6 +8,10 @@
  * endereço é "Aguardando dados de entrega", pago com endereço é "Pedido
  * feito". Nenhum dos dois é clicado pelo admin.
  *
+ * Dentro de "Pedido feito" há um marco, não um status: `warehouse_arrived_at`
+ * (migration 20270102000000), que o admin marca quando o produto chega ao
+ * armazém. Rótulo e descrição recebem esse marco para dizerem "No armazém".
+ *
  * Serviço/digital não tem armazém nem pacote: `paid` é só "Pago" e
  * `delivered` é "Concluído".
  */
@@ -32,6 +36,12 @@ export const ORDER_STATUS_LABEL: Record<OrderStatusValue, string> = {
   refunded: "Reembolsado",
   expired: "Expirado",
 }
+
+/** Rótulo do marco "chegou ao armazém" dentro de `paid`. */
+export const ORDER_WAREHOUSE_LABEL = "No armazém"
+
+export const ORDER_WAREHOUSE_DESCRIPTION =
+  "Seu produto chegou ao nosso armazém. Estamos conferindo tudo e ele é o próximo a ser enviado."
 
 const SERVICE_LABEL: Partial<Record<OrderStatusValue, string>> = {
   paid: "Pago",
@@ -68,7 +78,12 @@ export function parseOrderStatusGroup(value: string | null | undefined): OrderSt
     : "all"
 }
 
-export function orderStatusLabel(status: OrderStatusValue, requiresShipping = true): string {
+export function orderStatusLabel(
+  status: OrderStatusValue,
+  requiresShipping = true,
+  warehouseArrived = false
+): string {
+  if (status === "paid" && requiresShipping && warehouseArrived) return ORDER_WAREHOUSE_LABEL
   return (!requiresShipping && SERVICE_LABEL[status]) || ORDER_STATUS_LABEL[status] || status
 }
 
@@ -78,7 +93,8 @@ export function orderStatusLabel(status: OrderStatusValue, requiresShipping = tr
  */
 export function orderStatusDescription(
   status: OrderStatusValue,
-  requiresShipping = true
+  requiresShipping = true,
+  warehouseArrived = false
 ): string | null {
   if (!requiresShipping) {
     return status === "paid" ? "Pagamento confirmado. Vamos combinar o atendimento pelo chamado de suporte." : null
@@ -87,6 +103,7 @@ export function orderStatusDescription(
     case "awaiting_shipping_info":
       return "Pagamento confirmado. Falta você informar o endereço de entrega para podermos enviar."
     case "paid":
+      if (warehouseArrived) return ORDER_WAREHOUSE_DESCRIPTION
       return "Pedido feito. Estamos esperando o produto chegar ao nosso armazém para enviar."
     case "shipped":
       return "Seu pedido está a caminho. Quando chegar, confirme o recebimento por aqui."

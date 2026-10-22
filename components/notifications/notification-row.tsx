@@ -1,5 +1,4 @@
 import { RouteLink } from "@/components/ui/route-link"
-import { formatDistanceToNow } from "date-fns"
 import type { Locale } from "date-fns"
 import {
   AtSign,
@@ -201,6 +200,64 @@ export function supportStatusLabel(status: string | null, t: ReturnType<typeof u
   }
 }
 
+/**
+ * Abas do sino. Cada tipo cai em UMA; `null` só aparece em "Todas" (aviso do
+ * sistema fala de tudo). Tipo novo sem entrada aqui não quebra nada: some só
+ * das abas, segue em "Todas".
+ */
+export type NotificationFilter = "orders" | "support" | "community" | "aura"
+
+export const NOTIFICATION_FILTER: Record<NotificationType, NotificationFilter | null> = {
+  aura_received: "aura",
+  rank_frame: "aura",
+  post_comment: "community",
+  comment_reply: "community",
+  new_follower: "community",
+  mention: "community",
+  new_post: "community",
+  peripheral_request_status: "community",
+  peripheral_request_new: "community",
+  order_status: "orders",
+  order_paid: "orders",
+  store_restock: "orders",
+  affiliate_payout: "orders",
+  support_reply: "support",
+  support_new_ticket: "support",
+  support_user_reply: "support",
+  support_status: "support",
+  system: null,
+}
+
+export type NotificationDayGroup = "today" | "yesterday" | "week" | "older"
+
+/** Fatia de tempo de uma notificação, pelo dia do calendário local (não por 24h corridas). */
+export function notificationDayGroup(createdAt: string, now = new Date()): NotificationDayGroup {
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const at = new Date(createdAt).getTime()
+  const day = 86_400_000
+  if (at >= startOfToday) return "today"
+  if (at >= startOfToday - day) return "yesterday"
+  if (at >= startOfToday - 6 * day) return "week"
+  return "older"
+}
+
+/**
+ * Hora curta do canto da linha ("há 2 h", "ontem", "12 de out."). A frase
+ * longa do date-fns ("há cerca de 2 horas") quebrava em duas linhas no sino e
+ * competia com a mensagem; a exata fica no `title`.
+ */
+export function shortNotificationTime(createdAt: string, localeCode: string, now = Date.now()): string {
+  const at = new Date(createdAt)
+  const diffSec = Math.round((at.getTime() - now) / 1000)
+  const abs = Math.abs(diffSec)
+  const rtf = new Intl.RelativeTimeFormat(localeCode, { style: "narrow", numeric: "auto" })
+  if (abs < 60) return rtf.format(0, "second")
+  if (abs < 3600) return rtf.format(Math.round(diffSec / 60), "minute")
+  if (abs < 86_400) return rtf.format(Math.round(diffSec / 3600), "hour")
+  if (abs < 7 * 86_400) return rtf.format(Math.round(diffSec / 86_400), "day")
+  return at.toLocaleDateString(localeCode, { day: "numeric", month: "short" })
+}
+
 export type NotificationRowProps = {
   notification: Notification
   t: ReturnType<typeof useT>
@@ -253,35 +310,49 @@ export function NotificationRow({
               : null
 
   const href = notificationHref(n)
+  const unread = isNew || !n.isRead
+  const localeCode = dateLocale.code ?? "pt-BR"
 
   const row = (
-    <div className="flex items-start gap-2.5">
-      <span
-        className={cn(
-          "mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg",
-          ICON_TONE[n.type]
+    <div className="flex items-start gap-3">
+      <span className="relative mt-0.5 shrink-0">
+        <span
+          className={cn(
+            "flex size-9 items-center justify-center rounded-xl",
+            ICON_TONE[n.type] ?? "bg-muted text-muted-foreground"
+          )}
+        >
+          <Icon
+            className={cn("size-4", n.type === "aura_received" && "nav-fire-icon")}
+            {...(n.type === "aura_received" ? { fill: "currentColor", strokeWidth: 1.5 } : {})}
+          />
+        </span>
+        {/* Não lida: ponto preso no ícone, como num app de mensagens. Do lado
+            direito ele brigava com a hora e os botões. */}
+        {unread && (
+          <span className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-violet-500 ring-2 ring-popover" />
         )}
-      >
-        <Icon
-          className={cn("size-[14px]", n.type === "aura_received" && "nav-fire-icon")}
-          {...(n.type === "aura_received" ? { fill: "currentColor", strokeWidth: 1.5 } : {})}
-        />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-sm leading-snug text-foreground">{message}</p>
+        <p className={cn("text-[13px] leading-snug", unread ? "font-medium text-foreground" : "text-foreground/85")}>
+          {message}
+        </p>
         {preview && (
           <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{preview}</p>
         )}
-        <span className="mt-0.5 block text-[11px] text-muted-foreground/80">
-          {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true, locale: dateLocale })}
-        </span>
       </div>
-      {(isNew || !n.isRead) && <span className="mt-2 size-1.5 shrink-0 rounded-full bg-violet-500" />}
+      <time
+        dateTime={n.createdAt}
+        title={new Date(n.createdAt).toLocaleString(localeCode)}
+        className="mt-0.5 shrink-0 text-[11px] tabular-nums text-muted-foreground/80 transition-opacity [@media(hover:hover)]:group-hover:opacity-0"
+      >
+        {shortNotificationTime(n.createdAt, localeCode)}
+      </time>
     </div>
   )
 
   return (
-    <li className={cn("group relative", isNew && "bg-violet-500/[0.06]")}>
+    <li className="group relative">
       {href ? (
         <RouteLink
           href={href}
@@ -295,32 +366,97 @@ export function NotificationRow({
             // já rola sozinho ao montar, lendo a hash da URL (`useScrollHighlight`).
             window.setTimeout(() => requestScrollToCommentHash(hash), 60)
           }}
-          className="block px-3 py-2.5 pr-16 transition-colors hover:bg-muted/40"
+          className={cn(
+            "block rounded-xl px-2.5 py-2.5 transition-colors hover:bg-muted/50",
+            isNew && "bg-violet-500/[0.07]"
+          )}
         >
           {row}
         </RouteLink>
       ) : (
-        <div className="px-3 py-2.5 pr-16">{row}</div>
+        <div className={cn("rounded-xl px-2.5 py-2.5", isNew && "bg-violet-500/[0.07]")}>{row}</div>
       )}
 
-      <div className="absolute right-1.5 top-1.5 flex items-center gap-0.5 opacity-0 transition-all focus-within:opacity-100 group-hover:opacity-100">
+      {/* Ações por cima da hora, que some no hover. Em tela de toque seguem
+          só pelo foco, como antes: abrir já marca tudo como lido. */}
+      <div className="absolute right-1.5 top-1.5 flex items-center gap-0.5 rounded-lg bg-muted opacity-0 shadow-sm transition-opacity focus-within:opacity-100 [@media(hover:hover)]:group-hover:opacity-100">
         <button
           type="button"
           aria-label={n.isRead ? t.notifications.markUnread : t.notifications.markRead}
+          title={n.isRead ? t.notifications.markUnread : t.notifications.markRead}
           onClick={() => onToggleRead(n)}
-          className="flex size-6 items-center justify-center rounded-md text-muted-foreground transition-all hover:bg-muted hover:text-foreground"
+          className="flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
           {n.isRead ? <Circle className="size-3.5" /> : <CircleCheck className="size-3.5" />}
         </button>
         <button
           type="button"
           aria-label={t.notifications.dismiss}
+          title={t.notifications.dismiss}
           onClick={() => onDismiss(n.id)}
-          className="flex size-6 items-center justify-center rounded-md text-muted-foreground transition-all hover:bg-muted hover:text-foreground"
+          className="flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
           <X className="size-3.5" />
         </button>
       </div>
     </li>
+  )
+}
+
+const DAY_GROUP_ORDER: NotificationDayGroup[] = ["today", "yesterday", "week", "older"]
+
+/**
+ * Lista agrupada por dia ("Hoje", "Ontem"...), a mesma no sino e no histórico.
+ * O rótulo do grupo é `sticky`: rolando o sino, a pessoa sempre sabe de quando
+ * é o que está lendo, sem a frase de tempo longa em cada linha.
+ */
+export function NotificationList({
+  items,
+  isNew,
+  stickyClassName = "bg-popover/95",
+  sticky = true,
+  ...rowProps
+}: Omit<NotificationRowProps, "notification" | "isNew"> & {
+  items: Notification[]
+  isNew: (n: Notification) => boolean
+  /** Fundo do rótulo fixo, igual ao do container (popover ou página). */
+  stickyClassName?: string
+  /** false na página: lá a TopBar fixa cobriria o rótulo. */
+  sticky?: boolean
+}) {
+  const { t } = rowProps
+  const labels: Record<NotificationDayGroup, string> = {
+    today: t.notifications.groupToday,
+    yesterday: t.notifications.groupYesterday,
+    week: t.notifications.groupWeek,
+    older: t.notifications.groupOlder,
+  }
+  const now = new Date()
+  const groups = new Map<NotificationDayGroup, Notification[]>()
+  for (const n of items) {
+    const key = notificationDayGroup(n.createdAt, now)
+    groups.set(key, [...(groups.get(key) ?? []), n])
+  }
+
+  return (
+    <div className="space-y-1">
+      {DAY_GROUP_ORDER.filter((key) => groups.has(key)).map((key) => (
+        <section key={key}>
+          <h3
+            className={cn(
+              "px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground",
+              sticky && ["sticky top-0 z-10 backdrop-blur-sm", stickyClassName]
+            )}
+          >
+            {labels[key]}
+          </h3>
+          <ul className="space-y-0.5 px-1.5">
+            {groups.get(key)!.map((n) => (
+              <NotificationRow key={n.id} notification={n} isNew={isNew(n)} {...rowProps} />
+            ))}
+          </ul>
+        </section>
+      ))}
+    </div>
   )
 }

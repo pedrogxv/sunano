@@ -37,6 +37,10 @@ export type UserOrder = {
   pix_qr_code_base64: string | null
   tracking_code: string | null
   carrier: string | null
+  /** Quando o produto chegou ao nosso armazém (marco dentro de `paid`). Null = ainda não chegou. */
+  warehouse_arrived_at: string | null
+  /** Conversa ABERTA deste pedido com a loja (a mais recente). Null = nenhuma: o chat abre uma. */
+  chat_ticket_id: string | null
   /**
    * Para onde o pedido vai. Null = ainda não informado — o cliente pulou o
    * endereço no checkout e precisa completar aqui antes do despacho.
@@ -55,6 +59,8 @@ export type UserOrder = {
   complement_for: { order_id: string; order_number: string } | null
   /** Prazo da loja para pagar um pedido `pending`. */
   payment_expires_at: string | null
+  /** Conversa do pedido em que a equipe respondeu e falta a vez do usuário. */
+  awaiting_reply_ticket_id: string | null
 }
 
 /**

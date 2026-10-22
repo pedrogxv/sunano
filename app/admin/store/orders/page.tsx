@@ -25,7 +25,9 @@ import {
   Search,
   Sparkles,
   Truck,
+  Undo2,
   User,
+  Warehouse,
   Wrench,
   X,
 } from "lucide-react"
@@ -139,6 +141,8 @@ type AdminOrder = {
   customer_cpf: string | null
   tracking_code: string | null
   carrier: string | null
+  /** Marco "chegou ao armazém" dentro de `paid`. Null = ainda não chegou. */
+  warehouse_arrived_at: string | null
   shipped_at: string | null
   delivered_at: string | null
   refunded_cents: number
@@ -369,10 +373,14 @@ function formatDateShort(value: string): string {
   return fromDateInputValue(value).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })
 }
 
-function StatusBadge({ order }: { order: Pick<AdminOrder, "status" | "requires_shipping_address"> }) {
+function StatusBadge({
+  order,
+}: {
+  order: Pick<AdminOrder, "status" | "requires_shipping_address" | "warehouse_arrived_at">
+}) {
   return (
     <Badge variant="secondary" className={cn("text-[10px]", STATUS_STYLE[order.status])}>
-      {orderStatusLabel(order.status, order.requires_shipping_address)}
+      {orderStatusLabel(order.status, order.requires_shipping_address, Boolean(order.warehouse_arrived_at))}
     </Badge>
   )
 }
@@ -1280,6 +1288,7 @@ function OrderManageDialog({
   const [trackingCode, setTrackingCode] = useState("")
   const [carrier, setCarrier] = useState<StoreCarrier | "">("")
   const [advancing, setAdvancing] = useState(false)
+  const [savingWarehouse, setSavingWarehouse] = useState(false)
   const [savingTracking, setSavingTracking] = useState(false)
 
   const [refundOpen, setRefundOpen] = useState(false)
@@ -1369,6 +1378,32 @@ function OrderManageDialog({
       toast.error("Erro ao atualizar pedido", { description: message })
     } finally {
       setAdvancing(false)
+    }
+  }
+
+  // "Chegou ao armazém" é marco dentro de "Pedido feito", não status: o
+  // cliente vê o passo aceso no trilho e recebe uma notificação.
+  async function handleWarehouse(arrived: boolean) {
+    if (!order) return
+    setSavingWarehouse(true)
+    try {
+      const res = await fetch(`/api/admin/store/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "warehouse_arrival", arrived }),
+      })
+      const data = (await res.json().catch(() => ({}))) as { error?: string }
+      if (!res.ok) throw new Error(data.error ?? "Erro ao atualizar pedido")
+
+      onOrderPatched(order.id, { warehouse_arrived_at: arrived ? new Date().toISOString() : null })
+      toast.success(arrived ? "Marcado como \"No armazém\"" : "Chegada ao armazém desfeita", {
+        description: arrived ? "O cliente foi avisado." : `#${orderNumber(order.id)}`,
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro ao atualizar pedido"
+      toast.error("Erro ao atualizar pedido", { description: message })
+    } finally {
+      setSavingWarehouse(false)
     }
   }
 
@@ -1982,6 +2017,49 @@ function OrderManageDialog({
                 Em alguns casos o código muda quando a encomenda chega ao Brasil. Ao trocar o código, o
                 cliente recebe uma notificação e um e-mail com o novo.
               </p>
+            </div>
+          )}
+
+          {/* Chegada ao armazém: etapa entre "Pedido feito" e "Enviado" no
+              trilho do cliente. Só antes do envio; depois vira histórico. */}
+          {order.status === "paid" && order.requires_shipping_address && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Armazém
+              </p>
+              {order.warehouse_arrived_at ? (
+                <div className="flex items-center justify-between gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2">
+                  <p className="flex items-center gap-1.5 text-xs text-emerald-400">
+                    <Warehouse className="size-3.5" />
+                    Chegou em {new Date(order.warehouse_arrived_at).toLocaleString("pt-BR")}
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 gap-1.5 text-xs"
+                    disabled={savingWarehouse}
+                    onClick={() => handleWarehouse(false)}
+                  >
+                    <Undo2 className="size-3.5" />
+                    Desfazer
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <Button
+                    variant="outline"
+                    className="w-full gap-2"
+                    disabled={savingWarehouse}
+                    onClick={() => handleWarehouse(true)}
+                  >
+                    <Warehouse className="size-4" />
+                    {savingWarehouse ? "Salvando..." : "Produto chegou ao armazém"}
+                  </Button>
+                  <p className="text-[11px] text-muted-foreground">
+                    Acende o passo &quot;No armazém&quot; no trilho do cliente e manda uma notificação.
+                  </p>
+                </>
+              )}
             </div>
           )}
 

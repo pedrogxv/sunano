@@ -11,7 +11,7 @@ import { useOwnProfile } from "@/lib/hooks/use-own-profile"
 import { useNotifications } from "@/lib/hooks/use-notifications"
 import { useLocale } from "@/components/providers/locale-context"
 import { useT } from "@/lib/use-t"
-import { NotificationRow } from "@/components/notifications/notification-row"
+import { NotificationList } from "@/components/notifications/notification-row"
 
 /** Página maior que o popover, sem necessidade do polling de 60s do sino. */
 const PAGE_SIZE = 30
@@ -59,20 +59,16 @@ export default function NotificacoesPage() {
             <p className="text-sm text-muted-foreground">{t.notifications.empty}</p>
           </div>
         ) : (
-          <div className="rounded-xl border border-border">
-            <ul className="divide-y divide-border">
-              {items.map((n) => (
-                <NotificationRow
-                  key={n.id}
-                  notification={n}
-                  t={t}
-                  dateLocale={dateLocale}
-                  isNew={false}
-                  onToggleRead={(item) => void toggleRead(item)}
-                  onDismiss={(id) => void dismiss(id)}
-                />
-              ))}
-            </ul>
+          <div className="rounded-2xl border border-border bg-card/40 pb-1.5">
+            <NotificationList
+              items={items}
+              isNew={() => false}
+              sticky={false}
+              t={t}
+              dateLocale={dateLocale}
+              onToggleRead={(item) => void toggleRead(item)}
+              onDismiss={(id) => void dismiss(id)}
+            />
 
             {hasMore && (
               <div className="p-2">

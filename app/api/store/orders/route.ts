@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getRequestUser } from "@/lib/server/auth/current-user"
 import { countMissingShippingByUser, listOrdersByUser, type OrderStatus } from "@/lib/server/repositories/orders-repository"
 import { getPaymentComplementProduct } from "@/lib/server/repositories/order-complement-repository"
+import { getOpenOrderTickets } from "@/lib/server/repositories/support-repository"
 
 const VALID_STATUSES: OrderStatus[] = [
   "pending",
@@ -51,8 +52,22 @@ export async function GET(request: NextRequest) {
     getPaymentComplementProduct(),
     withMissingCount ? countMissingShippingByUser(user.id) : Promise.resolve(0),
   ])
+  // Conversa aberta de cada pedido: o "Chat com a loja" do card reabre a
+  // mesma em vez de criar outra, e a que espera o usuário acende o aviso de
+  // resposta da equipe. Em lote, uma consulta para a página.
+  const orderTickets = await getOpenOrderTickets(
+    user.id,
+    orders.map((order) => order.id)
+  )
   return NextResponse.json({
-    orders,
+    orders: orders.map((order) => {
+      const ticket = orderTickets.get(order.id)
+      return {
+        ...order,
+        chat_ticket_id: ticket?.ticketId ?? null,
+        awaiting_reply_ticket_id: ticket?.waitingOnUser ? ticket.ticketId : null,
+      }
+    }),
     total,
     hasMore,
     missingShippingCount,

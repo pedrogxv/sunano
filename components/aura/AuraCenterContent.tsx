@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useState, type CSSProperties } from "react"
 import { toast } from "sonner"
 import { Bird, Check, ChevronRight, HelpCircle, MessageSquare, Snowflake, Sparkles, SquarePen, Trophy } from "lucide-react"
-import { AuraIcon } from "@/components/ui/AuraIcon"
+import { AURA_BRAND_FILL_CLASS, AuraAmount, AuraIcon } from "@/components/ui/AuraIcon"
 import { AuraFlame } from "@/components/ui/AuraFlame"
 
 import { AuraRankingModal } from "@/components/aura/AuraRankingModal"
@@ -18,6 +18,7 @@ import { useAuthUser } from "@/components/providers/auth-context"
 import { formatStreakMultiplier, streakHeatTier, STREAK_HEAT_STYLES } from "@/lib/streak-multiplier"
 import {
   DAILY_MISSION_REWARDS,
+  auraLevelProgress,
   countCompletedMissions,
   type DailyMissionKey,
   type DailyMissionsState,
@@ -78,6 +79,8 @@ interface AuraCenterContentProps {
   isLoggedIn: boolean
   balance: number
   rank: number | null
+  /** Total histórico ganho — de onde sai o nível (a sidebar só mostra o saldo). */
+  totalEarned: number
   streak: UserStreak
   usage: AuraUsage
   items: AuraItem[]
@@ -150,6 +153,7 @@ export function AuraCenterContent({
   isLoggedIn,
   balance,
   rank,
+  totalEarned,
   streak,
   usage,
   items,
@@ -196,6 +200,8 @@ export function AuraCenterContent({
   // um medidor que a pessoa precise decifrar. Os degraus acompanham os preços
   // reais do catálogo — a maior faixa começa perto do que custa um produto
   // físico, então ver a fogueira cheia coincide com poder resgatar algo.
+  const level = auraLevelProgress(totalEarned)
+
   const balanceHeat =
     currentBalance >= 50_000 ? "4" : currentBalance >= 10_000 ? "3" : currentBalance >= 1_000 ? "2" : "1"
   const [peripheralOwnerMap, setPeripheralOwnerMap] = useState(
@@ -354,6 +360,27 @@ export function AuraCenterContent({
               <span className="font-semibold text-foreground">#{rank}</span> no ranking
             </p>
           )}
+          {/* Nível da conta: morava no card da sidebar, que ficou só com o
+              saldo. Aqui ele tem espaço para o nome e a barra. */}
+          <div className="relative z-[1] mt-auto pt-1">
+            <div className="flex items-baseline justify-between gap-2 text-xs">
+              <span className="truncate font-semibold text-foreground">
+                Nível {level.level}
+                {level.name && <span className="font-normal text-muted-foreground"> · {level.name}</span>}
+              </span>
+              <span className="shrink-0 tabular-nums text-muted-foreground">
+                {level.nextThreshold === null
+                  ? "Máximo"
+                  : `${totalEarned.toLocaleString("pt-BR")}/${level.nextThreshold.toLocaleString("pt-BR")}`}
+              </span>
+            </div>
+            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
+              <div
+                className={cn("h-full rounded-full transition-[width] duration-500", AURA_BRAND_FILL_CLASS)}
+                style={{ width: `${Math.round(level.ratio * 100)}%` }}
+              />
+            </div>
+          </div>
         </div>
 
         {/* Ofensiva + multiplicador — os dois números vêm da mesma fonte
@@ -399,11 +426,11 @@ export function AuraCenterContent({
           <p className="text-xs text-muted-foreground">
             {streak.frozen
               ? streak.frozenUntil
-                ? `Escudo ativado: complete as 3 tarefas até ${new Date(`${streak.frozenUntil}T00:00:00`).toLocaleDateString("pt-BR")} para retomar a ofensiva.`
-                : "Escudo ativado: complete as 3 tarefas para retomar a ofensiva."
+                ? `Escudo ativado: complete as 3 missões até ${new Date(`${streak.frozenUntil}T00:00:00`).toLocaleDateString("pt-BR")} para retomar a ofensiva.`
+                : "Escudo ativado: complete as 3 missões para retomar a ofensiva."
               : streak.current > 0
                 ? <>Recorde: {streak.longest} dia{streak.longest === 1 ? "" : "s"}, bônus em todo ganho de Aura</>
-                : "Complete as 3 tarefas abaixo hoje para começar"}
+                : "Complete as 3 missões abaixo hoje para começar"}
           </p>
         </div>
 
@@ -626,15 +653,19 @@ export function AuraCenterContent({
         onEquipChange={setEquippedMiniBgId}
       />
 
-      {/* Tarefas diárias reais — mesmo estado de daily_missions, feito/pendente hoje.
+      {/* Missões diárias e conquistas da comunidade lado a lado: as duas são
+          "como ganhar Aura agora", e empilhadas a lista de missões esticava a
+          linha inteira e deixava a recompensa longe do texto. */}
+      <div className="grid items-start gap-8 lg:grid-cols-2 lg:gap-6">
+      {/* Missões diárias reais — mesmo estado de daily_missions, feito/pendente hoje.
 
-          `id="tarefas"`: alvo do botão "Ver tarefas de hoje" da vitrine de
+          `id="tarefas"`: alvo do botão "Ver missões diárias" da vitrine de
           Molduras de Ofensiva, que fica ACIMA nesta mesma página. Antes ele
           apontava para /conquistas, que não tem missão nenhuma — a pessoa
           clicava e caía numa tela sem o que o botão prometia. */}
       <div id="tarefas" className="scroll-mt-20 space-y-3">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="font-display text-lg font-bold text-foreground">Tarefas de hoje</h2>
+          <h2 className="font-display text-lg font-bold text-foreground">Missões diárias</h2>
           <span className="text-xs font-semibold text-muted-foreground">
             {countCompletedMissions(missions)}/{TASKS.length} concluídas
           </span>
@@ -695,7 +726,7 @@ export function AuraCenterContent({
               {missions.bonus_claimed ? <Check className="size-4" /> : <Trophy className="size-4" />}
             </span>
             <span className={cn("flex-1 text-sm", missions.bonus_claimed ? "text-muted-foreground" : "text-foreground")}>
-              Bônus por completar as 3 tarefas + avançar a ofensiva
+              Bônus por completar as 3 missões + avançar a ofensiva
             </span>
             <span
               className={cn(
@@ -710,7 +741,7 @@ export function AuraCenterContent({
       </div>
 
       {/* Conquistas especiais binárias (YouTube e Discord) — uma lista só, no
-          mesmo formato das tarefas acima. Cada uma continua com o próprio
+          mesmo formato das missões ao lado. Cada uma continua com o próprio
           OAuth e a própria cor; o que foi unificado é a apresentação. */}
       <CommunityAchievements
         youtubeEnabled={isYoutubeSubscriptionEnabled()}
@@ -720,6 +751,7 @@ export function AuraCenterContent({
         discordInviteUrl={discordInviteUrl}
         requireLogin={requireLogin}
       />
+      </div>
 
       {/* Programa de Indicação: outra forma de ganhar Aura fora do loop de
           posts/comentários, mesma família das conquistas acima. Só o resumo —

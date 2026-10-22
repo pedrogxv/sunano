@@ -8,6 +8,7 @@ import {
   MANUAL_PAYMENT_METHODS,
   advanceOrderStatus,
   cancelOrder,
+  markOrderWarehouseArrived,
   refundOrder,
   updateOrderTracking,
 } from "@/lib/server/repositories/orders-repository"
@@ -31,6 +32,11 @@ const patchSchema = z.discriminatedUnion("action", [
     action: z.literal("update_tracking"),
     trackingCode: z.string().trim().min(1, "Informe o código de rastreio.").max(120),
     carrier: z.enum(STORE_CARRIERS).optional(),
+  }),
+  // Marco "chegou ao armazém" dentro de "Pedido feito"; `false` desfaz.
+  z.object({
+    action: z.literal("warehouse_arrival"),
+    arrived: z.boolean(),
   }),
   z.object({
     action: z.literal("refund"),
@@ -111,6 +117,14 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const approved = await approveStripeCardReview(id, auth.profile.id)
     if (!approved.ok) {
       return NextResponse.json({ error: approved.error }, { status: approved.status })
+    }
+    return NextResponse.json({ ok: true })
+  }
+
+  if (parsed.data.action === "warehouse_arrival") {
+    const warehouse = await markOrderWarehouseArrived(id, parsed.data.arrived, auth.profile.id)
+    if (!warehouse.ok) {
+      return NextResponse.json({ error: warehouse.error }, { status: warehouse.status })
     }
     return NextResponse.json({ ok: true })
   }

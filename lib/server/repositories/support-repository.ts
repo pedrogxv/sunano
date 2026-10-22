@@ -842,6 +842,69 @@ export async function countMySupportTicketsAwaitingUser(userId: string): Promise
   return count ?? 0
 }
 
+/**
+ * Conversas de PEDIDO em que a equipe respondeu e falta a vez do usuário —
+ * entra no badge de "Meus Pedidos" na TopBar. Mesmo índice parcial de
+ * `countMySupportTicketsAwaitingUser`; o `order_id` só estreita o resultado.
+ */
+export async function countMyOrderTicketsAwaitingUser(userId: string): Promise<number> {
+  const db = createSupabaseAdminClient()
+  const { count, error } = await db
+    .from("support_tickets")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("status", "open")
+    .eq("waiting_on", "user")
+    .not("order_id", "is", null)
+
+  if (error) {
+    console.error("[support-repository] countMyOrderTicketsAwaitingUser:", error)
+    return 0
+  }
+  return count ?? 0
+}
+
+/**
+ * Para cada pedido da página, a conversa ABERTA com a loja (a mais recente,
+ * se houver mais de uma) e se ela espera resposta do usuário. Alimenta o
+ * botão "Chat com a loja" do card (abre a conversa existente em vez de criar
+ * outra) e o aviso de resposta da equipe. Em LOTE: uma consulta para a
+ * listagem inteira de "Meus Pedidos", nunca uma por card. Escopado por
+ * `user_id` além do `order_id`: o id do pedido vem da listagem do próprio
+ * usuário, mas o ticket tem dono próprio e é ele que decide.
+ */
+export async function getOpenOrderTickets(
+  userId: string,
+  orderIds: string[]
+): Promise<Map<string, { ticketId: string; waitingOnUser: boolean }>> {
+  const result = new Map<string, { ticketId: string; waitingOnUser: boolean }>()
+  if (orderIds.length === 0) return result
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("support_tickets")
+    .select("id, order_id, waiting_on")
+    .eq("user_id", userId)
+    .eq("status", "open")
+    .in("order_id", orderIds)
+    .order("last_message_at", { ascending: false })
+
+  if (error) {
+    console.error("[support-repository] getOpenOrderTickets:", error)
+    return result
+  }
+  // A que espera o usuário ganha da mais recente: o aviso de resposta não
+  // pode sumir só porque o mesmo pedido tem outra conversa mais nova.
+  for (const row of data ?? []) {
+    if (!row.order_id) continue
+    const waitingOnUser = row.waiting_on === "user"
+    const current = result.get(row.order_id)
+    if (!current || (waitingOnUser && !current.waitingOnUser)) {
+      result.set(row.order_id, { ticketId: row.id, waitingOnUser })
+    }
+  }
+  return result
+}
+
 export type SupportTicketStats = {
   open: number
   resolved: number

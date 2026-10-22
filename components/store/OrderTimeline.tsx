@@ -1,6 +1,6 @@
 "use client"
 
-import { CheckCircle2, CreditCard, MapPin, PackageCheck, Truck, Warehouse } from "lucide-react"
+import { CheckCircle2, ClipboardCheck, CreditCard, MapPin, PackageCheck, Truck, Warehouse } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import type { UserOrder } from "@/lib/hooks/use-user-orders"
@@ -11,7 +11,9 @@ import type { UserOrder } from "@/lib/hooks/use-user-orders"
  *
  * Os passos são a jornada real da loja, na mesma ordem de
  * `ORDER_FULFILLMENT_FLOW`: pagou, deu o endereço, pedido feito (esperando o
- * produto chegar ao armazém), enviado, entregue. Os dois do meio não são
+ * produto chegar ao armazém), chegou ao armazém, enviado, entregue. "No
+ * armazém" não é status: é o marco `warehouse_arrived_at` dentro de `paid`,
+ * que o admin marca. Endereço e pedido feito não são
  * cliques do admin: o banco decide pelo endereço
  * (`trg_store_orders_shipping_stage`), então o trilho nunca diz "falta
  * endereço" para quem já deu um.
@@ -23,7 +25,8 @@ import type { UserOrder } from "@/lib/hooks/use-user-orders"
 const PHYSICAL_STEPS = [
   { key: "payment", label: "Pagamento", icon: CreditCard },
   { key: "address", label: "Endereço", icon: MapPin },
-  { key: "placed", label: "Pedido feito", icon: Warehouse },
+  { key: "placed", label: "Pedido feito", icon: ClipboardCheck },
+  { key: "warehouse", label: "No armazém", icon: Warehouse },
   { key: "shipped", label: "Enviado", icon: Truck },
   { key: "delivered", label: "Entregue", icon: PackageCheck },
 ] as const
@@ -37,8 +40,9 @@ const SERVICE_STEPS = [
  * Índice do último passo concluído (-1 = nenhum), ou null quando o pedido
  * saiu do trilho feliz (cancelado, estornado, expirado).
  */
-function lastDoneIndex(status: UserOrder["status"], requiresShipping: boolean): number | null {
-  if (!requiresShipping) {
+function lastDoneIndex(order: UserOrder): number | null {
+  const { status } = order
+  if (!order.requires_shipping_address) {
     switch (status) {
       case "pending":
         return -1
@@ -58,11 +62,11 @@ function lastDoneIndex(status: UserOrder["status"], requiresShipping: boolean): 
     case "awaiting_shipping_info":
       return 0
     case "paid":
-      return 2
+      return order.warehouse_arrived_at ? 3 : 2
     case "shipped":
-      return 3
-    case "delivered":
       return 4
+    case "delivered":
+      return 5
     default:
       return null
   }
@@ -75,7 +79,7 @@ export function OrderTimeline({
   order: UserOrder
   className?: string
 }) {
-  const lastDone = lastDoneIndex(order.status, order.requires_shipping_address)
+  const lastDone = lastDoneIndex(order)
   if (lastDone === null) return null
 
   const steps = order.requires_shipping_address ? PHYSICAL_STEPS : SERVICE_STEPS

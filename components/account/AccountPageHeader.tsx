@@ -1,6 +1,7 @@
 "use client"
 
 import Image from "next/image"
+import type { ReactNode } from "react"
 import { RouteLink } from "@/components/ui/route-link"
 import { ExternalLink } from "lucide-react"
 
@@ -42,9 +43,15 @@ export function AccountPageHeader({
    * `max-w-4xl`.
    */
   width = "max-w-4xl",
+  /**
+   * Ação do canto direito no lugar do "Ver perfil público". Para a página
+   * cujo assunto não é o perfil (Meus Pedidos põe ali o guia da compra).
+   */
+  action,
 }: {
   profile: ProfileData
   width?: string
+  action?: ReactNode
 }) {
   const { user: authUser } = useAuthUser()
   const name = profile.display_name?.trim() || (profile.email?.split("@")[0] ?? "Usuário")
@@ -133,7 +140,7 @@ export function AccountPageHeader({
           <p className="truncate text-sm text-muted-foreground">{profile.email ?? "-"}</p>
         </div>
 
-        {publicProfileHref && (
+        {action ?? (publicProfileHref && (
           <RouteLink
             href={publicProfileHref}
             className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-border bg-background/60 px-3 py-2 text-xs font-medium text-muted-foreground backdrop-blur-sm transition-colors hover:bg-muted/60 hover:text-foreground"
@@ -141,7 +148,7 @@ export function AccountPageHeader({
             <ExternalLink className="size-3.5" />
             Ver perfil público
           </RouteLink>
-        )}
+        ))}
       </div>
     </header>
   )

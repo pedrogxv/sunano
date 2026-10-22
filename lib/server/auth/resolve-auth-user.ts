@@ -11,9 +11,11 @@ import {
   getUserProfileWithVipStatus,
 } from "@/lib/server/repositories/users-repository"
 import {
+  countMyOrderTicketsAwaitingUser,
   countMySupportTicketsAwaitingUser,
   hasAnySupportTicket,
 } from "@/lib/server/repositories/support-repository"
+import { countMissingShippingByUser } from "@/lib/server/repositories/orders-repository"
 import { hasForumPostsByUser } from "@/lib/server/repositories/forum-repository"
 import { ownsVipFounderFrame } from "@/lib/server/repositories/vip-founder-repository"
 import { getUserStreakPairsByUser } from "@/lib/server/repositories/achievements-repository"
@@ -40,6 +42,11 @@ export type AuthUserPayload = {
   } | null
   hasSupportTicket: boolean
   supportTicketsAwaitingMe: number
+  /**
+   * Pedidos esperando o usuário: pago sem endereço de entrega + conversa de
+   * pedido com resposta da equipe. Badge do atalho "Meus Pedidos" da TopBar.
+   */
+  ordersNeedingAttention: number
   hasForumPost: boolean
   accountTier: string | null
   vipExpiresAt: string | null
@@ -83,6 +90,7 @@ function anonymousPayload(): AuthUserPayload {
     adminProfile: null,
     hasSupportTicket: false,
     supportTicketsAwaitingMe: 0,
+    ordersNeedingAttention: 0,
     hasForumPost: false,
     accountTier: "common",
     vipExpiresAt: null,
@@ -158,6 +166,8 @@ export const resolveAuthUser = cache(async function resolveAuthUser(): Promise<A
     adminProfile,
     hasSupportTicket,
     supportTicketsAwaitingMe,
+    ordersMissingShipping,
+    orderTicketsAwaitingMe,
     hasForumPost,
     subscription,
     canUseStore,
@@ -170,6 +180,8 @@ export const resolveAuthUser = cache(async function resolveAuthUser(): Promise<A
     getAdminProfileSummary(user.id),
     hasAnySupportTicket(user.id),
     countMySupportTicketsAwaitingUser(user.id),
+    countMissingShippingByUser(user.id),
+    countMyOrderTicketsAwaitingUser(user.id),
     hasForumPostsByUser(user.id),
     // `resolveVipStatus` (lib/vip-status.ts) precisa do status da assinatura
     // para distinguir "nunca assinou" de "cancelou com período pago correndo"
@@ -197,6 +209,7 @@ export const resolveAuthUser = cache(async function resolveAuthUser(): Promise<A
     adminProfile,
     hasSupportTicket,
     supportTicketsAwaitingMe,
+    ordersNeedingAttention: ordersMissingShipping + orderTicketsAwaitingMe,
     hasForumPost,
     accountTier: profileAndVip.vip?.account_tier ?? "common",
     vipExpiresAt: profileAndVip.vip?.vip_expires_at ?? null,

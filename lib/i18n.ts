@@ -145,6 +145,22 @@ type Translations = {
     markRead: string
     markUnread: string
     markAllRead: string
+    /** Selo do cabeçalho do sino: o que chegou desde a última abertura. */
+    newOne: string
+    /** `{count}` = quantas chegaram desde a última abertura. */
+    newMany: string
+    emptyTitle: string
+    emptyHint: string
+    filterEmpty: string
+    filterAll: string
+    filterOrders: string
+    filterSupport: string
+    filterCommunity: string
+    filterAura: string
+    groupToday: string
+    groupYesterday: string
+    groupWeek: string
+    groupOlder: string
   }
   nav: {
     home: string
@@ -1043,6 +1059,8 @@ type Translations = {
     myProfile: string
     accountSettings: string
     myOrders: string
+    myOrdersPending: (count: number) => string
+    myOrdersAttention: string
     myTickets: string
     support: string
     supportAwaiting: string
@@ -1051,6 +1069,13 @@ type Translations = {
     adminPanel: string
     signOut: string
     settings: string
+    viewProfile: string
+    accountShort: string
+    ordersShort: string
+    savedShort: string
+    ticketsShort: string
+    affiliatesShort: string
+    adminShort: string
   }
   blog: {
     title: string
@@ -1230,6 +1255,20 @@ export const translations: Record<LocaleCode, Translations> = {
       markRead: "Marcar como lida",
       markUnread: "Marcar como não lida",
       markAllRead: "Marcar todas como lidas",
+      newOne: "1 nova",
+      newMany: "{count} novas",
+      emptyTitle: "Tudo em dia por aqui",
+      emptyHint: "Quando alguém interagir com você ou um pedido andar, aparece aqui",
+      filterEmpty: "Nada nesta categoria",
+      filterAll: "Todas",
+      filterOrders: "Pedidos",
+      filterSupport: "Suporte",
+      filterCommunity: "Comunidade",
+      filterAura: "Aura",
+      groupToday: "Hoje",
+      groupYesterday: "Ontem",
+      groupWeek: "Esta semana",
+      groupOlder: "Antes",
     },
     nav: {
       home: "Início",
@@ -2188,6 +2227,9 @@ export const translations: Record<LocaleCode, Translations> = {
       myProfile: "Meu Perfil",
       accountSettings: "Configurações da conta",
       myOrders: "Meus Pedidos",
+      myOrdersPending: (count: number) =>
+        count === 1 ? "1 pedido precisa de você" : `${count} pedidos precisam de você`,
+      myOrdersAttention: "Precisa de atenção",
       myTickets: "Meus Tickets",
       support: "Suporte",
       supportAwaiting: "Suporte: resposta nova no seu chamado",
@@ -2196,6 +2238,13 @@ export const translations: Record<LocaleCode, Translations> = {
       adminPanel: "Painel admin",
       signOut: "Sair",
       settings: "Configurações",
+      viewProfile: "Ver meu perfil",
+      accountShort: "Conta",
+      ordersShort: "Pedidos",
+      savedShort: "Salvos",
+      ticketsShort: "Tickets",
+      affiliatesShort: "Afiliados",
+      adminShort: "Admin",
     },
     blog: {
       title: "Guias",
@@ -2780,6 +2829,20 @@ export const translations: Record<LocaleCode, Translations> = {
       markRead: "Mark as read",
       markUnread: "Mark as unread",
       markAllRead: "Mark all as read",
+      newOne: "1 new",
+      newMany: "{count} new",
+      emptyTitle: "All caught up",
+      emptyHint: "When someone interacts with you or an order moves, it shows up here",
+      filterEmpty: "Nothing in this category",
+      filterAll: "All",
+      filterOrders: "Orders",
+      filterSupport: "Support",
+      filterCommunity: "Community",
+      filterAura: "Aura",
+      groupToday: "Today",
+      groupYesterday: "Yesterday",
+      groupWeek: "This week",
+      groupOlder: "Earlier",
     },
     nav: {
       home: "Home",
@@ -3738,6 +3801,9 @@ export const translations: Record<LocaleCode, Translations> = {
       myProfile: "My Profile",
       accountSettings: "Account settings",
       myOrders: "My Orders",
+      myOrdersPending: (count: number) =>
+        count === 1 ? "1 order needs you" : `${count} orders need you`,
+      myOrdersAttention: "Needs attention",
       myTickets: "My Tickets",
       support: "Support",
       supportAwaiting: "Support: new reply on your ticket",
@@ -3746,6 +3812,13 @@ export const translations: Record<LocaleCode, Translations> = {
       adminPanel: "Admin panel",
       signOut: "Sign out",
       settings: "Settings",
+      viewProfile: "View my profile",
+      accountShort: "Account",
+      ordersShort: "Orders",
+      savedShort: "Saved",
+      ticketsShort: "Tickets",
+      affiliatesShort: "Affiliates",
+      adminShort: "Admin",
     },
     blog: {
       title: "Reviews",

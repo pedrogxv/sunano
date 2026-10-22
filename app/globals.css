@@ -917,7 +917,69 @@ button,
   pointer-events: none;
 }
 
+/* Convite VIP da Home (components/home/AuraSpotlight.tsx → VipSupportCard).
+   Mesmo hue do --vip-accent, puxado para o roxo (295–320) para o card pesar
+   ao lado das vitrines de produto: fundo tingido, borda em gradiente (máscara,
+   nunca border-image — ignora o raio), halo e CTA preenchido com brilho que
+   passa de tempos em tempos. */
+.home-vip-card {
+  isolation: isolate;
+  background:
+    radial-gradient(120% 90% at 100% 0%, oklch(0.55 0.22 305 / 0.35), transparent 60%),
+    radial-gradient(90% 80% at 0% 100%, oklch(0.5 0.2 320 / 0.22), transparent 65%),
+    linear-gradient(160deg, oklch(0.22 0.07 305), oklch(0.16 0.04 310));
+  box-shadow: 0 10px 40px -12px oklch(0.6 0.24 305 / 0.45);
+}
+
+.home-vip-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, oklch(0.8 0.18 315), oklch(0.6 0.24 295 / 0.5) 45%, oklch(0.75 0.19 320 / 0.25) 70%, oklch(0.8 0.18 315));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.home-vip-cta {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, oklch(0.62 0.24 300), oklch(0.68 0.24 320));
+  color: white;
+  box-shadow: 0 6px 20px -6px oklch(0.62 0.26 305 / 0.7), inset 0 1px 0 oklch(1 0 0 / 0.25);
+  transition: transform 0.15s, box-shadow 0.15s, filter 0.15s;
+}
+
+.home-vip-cta:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 28px -6px oklch(0.62 0.26 305 / 0.85), inset 0 1px 0 oklch(1 0 0 / 0.3);
+}
+
+.home-vip-cta::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 35%, oklch(1 0 0 / 0.35) 50%, transparent 65%);
+  transform: translateX(-120%);
+  animation: home-vip-cta-sheen 4.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes home-vip-cta-sheen {
+  0%, 60%  { transform: translateX(-120%); }
+  85%, 100% { transform: translateX(120%); }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .home-vip-cta::after {
+    animation: none;
+    display: none;
+  }
   .vip-badge-text {
     animation: none;
     background-position: 35% 50%;

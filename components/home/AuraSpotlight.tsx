@@ -186,32 +186,34 @@ function VipSupportCard({
   const benefits = vipSubscriptionBenefits().slice(0, 3)
 
   return (
-    <div
-      className="relative flex flex-col overflow-hidden rounded-xl border p-4"
-      style={{ borderColor: "var(--vip-accent-soft)" }}
-    >
-      <div
-        className="pointer-events-none absolute -right-10 -top-12 size-40 rounded-full blur-3xl"
-        style={{ background: "var(--vip-accent-soft)", opacity: 0.25 }}
+    <div className="home-vip-card relative flex flex-col overflow-hidden rounded-xl p-4">
+      <Crown
+        aria-hidden
+        className="pointer-events-none absolute -bottom-6 -right-5 size-32 -rotate-12 opacity-[0.07]"
+        style={{ color: "var(--vip-accent)" }}
       />
 
-      <div className="relative flex items-center gap-2">
-        <Crown className="size-[18px] shrink-0 vip-badge-crown" style={{ color: "var(--vip-accent)" }} />
-        <h3 className="text-sm font-bold" style={{ color: "var(--vip-accent)" }}>
+      <div className="relative flex items-center gap-2.5">
+        <span
+          className="flex size-8 shrink-0 items-center justify-center rounded-lg"
+          style={{ background: "oklch(0.75 0.19 320 / 0.18)", boxShadow: "0 0 18px oklch(0.7 0.24 305 / 0.45)" }}
+        >
+          <Crown className="size-[18px] vip-badge-crown" style={{ color: "var(--vip-accent)" }} />
+        </span>
+        <h3 className="vip-badge-text text-base font-extrabold">
           {isVip ? "Obrigado por apoiar o site" : "Apoie o site, vire VIP"}
         </h3>
       </div>
 
       {isVip ? (
         <>
-          <p className="relative mt-2 text-xs leading-relaxed text-muted-foreground">
+          <p className="relative mt-2.5 text-xs leading-relaxed text-foreground/75">
             Seu VIP é o que mantém o site no ar e em constante melhoria. Aproveite: tudo que custa
             Aura sai 10% mais barato para você.
           </p>
           <RouteLink
             href="/aura"
-            className="relative mt-auto flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold transition-colors hover:bg-[var(--vip-accent-soft)]"
-            style={{ borderColor: "var(--vip-accent-soft)", color: "var(--vip-accent)" }}
+            className="home-vip-cta mt-auto flex items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-xs font-bold"
           >
             <Sparkles className="size-3.5" />
             Gastar minha Aura
@@ -219,13 +221,13 @@ function VipSupportCard({
         </>
       ) : (
         <>
-          <p className="relative mt-2 text-xs leading-relaxed text-muted-foreground">
+          <p className="relative mt-2.5 text-xs leading-relaxed text-foreground/75">
             {VIP_SUPPORT_MESSAGE}
           </p>
 
           <ul className="relative mt-3 space-y-1.5">
             {benefits.map((benefit) => (
-              <li key={benefit} className="flex items-start gap-1.5 text-[11px] leading-snug text-muted-foreground">
+              <li key={benefit} className="flex items-start gap-1.5 text-[11px] leading-snug text-foreground/80">
                 <Check className="mt-[1px] size-3 shrink-0" style={{ color: "var(--vip-accent)" }} />
                 <span className="line-clamp-2">{benefit}</span>
               </li>
@@ -237,8 +239,7 @@ function VipSupportCard({
               <button
                 type="button"
                 onClick={onOpenUpsell}
-                className="flex w-full items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold transition-colors hover:bg-[var(--vip-accent-soft)]"
-                style={{ borderColor: "var(--vip-accent-soft)", color: "var(--vip-accent)" }}
+                className="home-vip-cta flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-xs font-bold"
               >
                 <Crown className="size-3.5" />
                 {ctaLabel} · {formatBrlCents(VIP_PLANS.monthly.priceCents)}
@@ -250,8 +251,7 @@ function VipSupportCard({
               // para lá em vez de sumir.
               <RouteLink
                 href="/aura"
-                className="flex w-full items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold transition-colors hover:bg-[var(--vip-accent-soft)]"
-                style={{ borderColor: "var(--vip-accent-soft)", color: "var(--vip-accent)" }}
+                className="home-vip-cta flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-xs font-bold"
               >
                 <Crown className="size-3.5" />
                 Ver vantagens do VIP

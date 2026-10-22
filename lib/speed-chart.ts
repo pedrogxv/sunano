@@ -16,6 +16,17 @@
 
 export const SPEED_CHART_CATEGORIES = ["mousepad", "glasspad", "feet"] as const
 
+/**
+ * A aba ainda não está pronta para o público: fica visível só em `next dev`
+ * (localhost) e para admin, com um aviso de prévia. Para lançar, troque para
+ * `true` e o aviso some junto.
+ */
+export const SPEED_CHART_PUBLIC = false
+
+export function canSeeSpeedChart(isAdmin: boolean): boolean {
+  return SPEED_CHART_PUBLIC || isAdmin || process.env.NODE_ENV === "development"
+}
+
 export const SPEED_CHART_SPEED_KEY = "adminSpeedChartSpeed"
 export const SPEED_CHART_TEXTURE_KEY = "adminSpeedChartTexture"
 

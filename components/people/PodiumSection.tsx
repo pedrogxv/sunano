@@ -175,7 +175,7 @@ function PodiumCard({
 
           <Link
             href={profilePath(profile.display_slug)}
-            className={cn("flex flex-col items-center px-2", layout.avatarOffset)}
+            className={cn("flex w-full min-w-0 flex-col items-center px-1.5 sm:px-2", layout.avatarOffset)}
           >
             {/* O pódio NÃO dá moldura: o lugar já é dito pelo pedestal, pelo
                 número e pela coroa do 1º. O avatar mostra só a moldura que a

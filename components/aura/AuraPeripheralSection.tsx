@@ -95,12 +95,15 @@ export function AuraPeripheralSection({
           : "border-amber-500/25 bg-amber-500/[0.04]"
       )}>
         <div className="flex items-center gap-3 sm:gap-4">
-          <TrustSeal level={trust.level} status={trust.status} size="md" />
-          {!canRedeemAny && (
-            <>
-              <ArrowRight className="size-4 shrink-0 text-muted-foreground/50" />
-              <TrustSeal level={TRUST_PHYSICAL_REDEEM_LEVEL} size="md" />
-            </>
+          {/* Deslogado não tem faixa: o resumo padrão é a nota inicial
+              (Regular), e mostrá-la dizia ao visitante que a conta DELE
+              estava em Regular. Só o selo exigido. */}
+          {isLoggedIn && <TrustSeal level={trust.level} status={trust.status} size="md" />}
+          {isLoggedIn && !canRedeemAny && (
+            <ArrowRight className="size-4 shrink-0 text-muted-foreground/50" />
+          )}
+          {(!isLoggedIn || !canRedeemAny) && (
+            <TrustSeal level={TRUST_PHYSICAL_REDEEM_LEVEL} size="md" />
           )}
         </div>
 
@@ -111,7 +114,14 @@ export function AuraPeripheralSection({
               : `Resgate exige Trust Factor "${trustLevelLabel(TRUST_PHYSICAL_REDEEM_LEVEL)}"`}
           </p>
           <p className="text-xs leading-relaxed text-muted-foreground">
-            {canRedeemAny ? (
+            {!isLoggedIn ? (
+              <>
+                Os prêmios físicos são para contas na faixa{" "}
+                <strong className="text-foreground">{trustLevelLabel(TRUST_PHYSICAL_REDEEM_LEVEL)}</strong>{" "}
+                ou acima. O Trust Factor mede comportamento e integridade: sobe com participação
+                legítima e sem punições, e leva tempo de casa — não se compra nem se acelera com Aura.
+              </>
+            ) : canRedeemAny ? (
               <>
                 Sua conta está na faixa{" "}
                 <strong className="text-foreground">{trustLevelLabel(trust.level)}</strong> e sem

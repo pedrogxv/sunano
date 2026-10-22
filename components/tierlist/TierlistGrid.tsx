@@ -4,7 +4,8 @@ import { useMemo, useState } from "react"
 
 import { PeripheralCard } from "./PeripheralCard"
 import { SpeedChart } from "./SpeedChart"
-import { hasSpeedChart } from "@/lib/speed-chart"
+import { canSeeSpeedChart, hasSpeedChart, SPEED_CHART_PUBLIC } from "@/lib/speed-chart"
+import { useAuthUser } from "@/components/providers/auth-context"
 import { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
 import { TIER_THEMES, PRICE_BAND_THEMES } from "@/lib/tierlist-theme"
@@ -313,7 +314,9 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
   // A aba "Velocidade" não é um modo de tier (não tem tier/ordem próprios): troca a tabela
   // pelo gráfico. Por isso fica fora de `RatingMode` e dos mapas por modo.
   const [showSpeedChart, setShowSpeedChart] = useState(false)
-  const speedChartAvailable = hasSpeedChart(category)
+  const { user } = useAuthUser()
+  // Ainda em prévia: só admin e localhost veem a aba (SPEED_CHART_PUBLIC).
+  const speedChartAvailable = hasSpeedChart(category) && canSeeSpeedChart(Boolean(user?.isAdmin))
   const modeConfig = MODE_CONFIGS[ratingMode]
   const orderKey = ORDER_KEY_BY_MODE[ratingMode]
   const allowLegacyFallback = ratingMode === "overall"
@@ -548,7 +551,7 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
         <p className="text-sm text-muted-foreground">
           {t.tierlist.viewingBy}{" "}
           <span className="font-semibold text-foreground">
-            {showSpeedChart ? t.tierlist.speedChart.description : localizedModeDescription}
+            {showSpeedChart && speedChartAvailable ? t.tierlist.speedChart.description : localizedModeDescription}
           </span>
         </p>
         {/* grid no mobile evita o wrap desbalanceado do flex (ex: 3 modos = 2 numa linha
@@ -603,8 +606,15 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
         </div>
       </div>
 
-      {showSpeedChart ? (
-        <SpeedChart items={filtered} />
+      {showSpeedChart && speedChartAvailable ? (
+        <>
+          {!SPEED_CHART_PUBLIC && (
+            <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-300">
+              {t.tierlist.speedChart.previewNotice}
+            </p>
+          )}
+          <SpeedChart items={filtered} />
+        </>
       ) : (
 
         <div className={cn("relative overflow-visible rounded-xl border shadow-lg", CARD_SURFACE)}>

@@ -23,7 +23,9 @@ export function CartButton() {
     <button
       onClick={() => setOpen(true)}
       aria-label="Abrir carrinho"
-      className="relative flex h-8 items-center gap-2 rounded-lg border border-border bg-card/70 px-2.5 text-sm font-medium text-muted-foreground transition-all hover:bg-muted/40 hover:text-foreground"
+      // 44px no mobile, como o sino e o botão de entrar ao lado: com h-8 ele
+      // ficava visivelmente menor que os vizinhos na mesma fileira.
+      className="relative flex size-11 shrink-0 items-center justify-center gap-2 rounded-lg border border-border bg-card/70 text-sm sm:h-8 sm:w-auto sm:px-2.5 font-medium text-muted-foreground transition-all hover:bg-muted/40 hover:text-foreground"
     >
       <ShoppingCart className="size-[15px]" />
       {count > 0 && (

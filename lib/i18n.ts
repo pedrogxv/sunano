@@ -299,6 +299,7 @@ type Translations = {
       smooth: string
       disclaimer: string
       empty: string
+      previewNotice: string
       /** `speed`/`texture` já vêm formatados na escala 0–10 (`formatSpeedChartValue`). */
       itemSummary: (name: string, speed: string, texture: string) => string
     }
@@ -1433,6 +1434,7 @@ export const translations: Record<LocaleCode, Translations> = {
         smooth: "Liso",
         disclaimer: "Percepção da equipe Sunano. Lotes diferentes variam, e o feet, a força da mão e a umidade da sua região mudam a sensação.",
         empty: "O gráfico desta categoria ainda está sendo montado.",
+        previewNotice: "Prévia: visível só para admins e no localhost. O gráfico ainda não está público",
         itemSummary: (name: string, speed: string, texture: string) => `${name}: velocidade ${speed} de 10, textura ${texture} de 10`,
       },
     },
@@ -2982,6 +2984,7 @@ export const translations: Record<LocaleCode, Translations> = {
         smooth: "Smooth",
         disclaimer: "The Sunano team's perception. Batches vary, and your skates, hand pressure and local humidity change the feel.",
         empty: "This category's chart is still being put together.",
+        previewNotice: "Preview: visible only to admins and on localhost. The chart isn't public yet",
         itemSummary: (name: string, speed: string, texture: string) => `${name}: speed ${speed} out of 10, texture ${texture} out of 10`,
       },
     },

@@ -217,6 +217,16 @@ export function AuraMissionsBadge({
   const frozen = usage.limitReached
   const level = auraLevelProgress(usage.totalEarned)
 
+  // Só mouse de verdade abre o painel. No toque o navegador emula um
+  // `mouseenter` antes do clique, e o painel abria ao lado da gaveta do
+  // celular, cortado pela borda da tela, em vez de o card só navegar.
+  const openOnHover = (e: React.PointerEvent) => {
+    if (e.pointerType === "mouse") setOpen(true)
+  }
+  const closeOnHover = (e: React.PointerEvent) => {
+    if (e.pointerType === "mouse") setOpen(false)
+  }
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverAnchor asChild>
@@ -227,8 +237,8 @@ export function AuraMissionsBadge({
             onNavigate?.()
           }}
           aria-label={`Central de Aura: ${usage.balance} de Aura, nível ${level.level}, ${completed}/${DAILY_MISSION_KEYS.length} missões diárias`}
-          onMouseEnter={() => setOpen(true)}
-          onMouseLeave={() => setOpen(false)}
+          onPointerEnter={openOnHover}
+          onPointerLeave={closeOnHover}
           className={cn(
             "relative block rounded-xl border transition-colors",
             active
@@ -301,8 +311,8 @@ export function AuraMissionsBadge({
         // Abre no hover: roubar o foco para dentro do popover tiraria a
         // pessoa do lugar onde ela está navegando.
         onOpenAutoFocus={(e) => e.preventDefault()}
-        onMouseEnter={() => setOpen(true)}
-        onMouseLeave={() => setOpen(false)}
+        onPointerEnter={openOnHover}
+        onPointerLeave={closeOnHover}
         className="w-[min(20rem,calc(100vw-2rem))] bg-popover p-0 text-foreground shadow-md"
       >
         <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2.5">

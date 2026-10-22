@@ -103,14 +103,17 @@ export function ProfileMetrics({
   const tone = metric === "streak" ? STREAK_HEAT_STYLES[streakHeatTier(value)].text : meta.tone
 
   return (
+    // `flex-wrap` + rótulo inteiro numa peça só: quando não cabe na largura
+    // do card (pódio de 108px no celular, "dias de ofensiva" na grade de 2
+    // colunas) o rótulo desce para a linha de baixo em vez de vazar do card.
     <p
       className={cn(
-        "mt-1 flex items-center gap-1.5 text-muted-foreground",
-        compact ? "text-xs" : "text-sm"
+        "mt-1 flex max-w-full flex-wrap items-center justify-center gap-x-1.5 text-muted-foreground",
+        compact ? "gap-y-0 text-xs" : "gap-y-0.5 text-sm"
       )}
     >
       <Icon
-        className={cn(compact ? "size-4" : "size-5", tone)}
+        className={cn("shrink-0", compact ? "size-4" : "size-5", tone)}
         {...(meta.filled ? { fill: "currentColor", strokeWidth: 1.5 } : {})}
       />
       <span
@@ -122,7 +125,7 @@ export function ProfileMetrics({
       >
         {formatCount(value)}
       </span>
-      {label}
+      <span className="whitespace-nowrap">{label}</span>
     </p>
   )
 }
@@ -236,7 +239,7 @@ export function ProfileCard({
             </span>
           )}
 
-          <div className={cn("-mt-10 flex flex-col items-center px-2 sm:-mt-11 sm:px-3", !showFollowButton && "pb-4")}>
+          <div className={cn("-mt-10 flex w-full min-w-0 flex-col items-center px-2 sm:-mt-11 sm:px-3", !showFollowButton && "pb-4")}>
             {/* A moldura vem toda de `ProfileAvatar` (equipada ou VIP) — este
                 card não desenha anel próprio, e a colocação no ranking NÃO
                 concede moldura: quem diz o lugar é o badge numérico. */}

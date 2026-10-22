@@ -7,7 +7,7 @@ import { toast } from "sonner"
 import { usePageHeader } from "@/components/providers/page-header-context"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
-import BoxLoader from "@/components/ui/box-loader"
+import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { Button } from "@/components/ui/button"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import type { AdminReferralItem } from "@/lib/server/repositories/referrals-repository"
@@ -129,7 +129,7 @@ export default function AdminIndicacoesPage() {
 
       {loading ? (
         <div className="flex justify-center py-16">
-          <BoxLoader />
+          <SunanoLoader />
         </div>
       ) : referrals.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border py-16 text-center">

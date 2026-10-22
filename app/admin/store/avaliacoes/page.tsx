@@ -6,7 +6,7 @@ import { toast } from "sonner"
 
 import { ReviewGrantsSection } from "@/components/admin/store/ReviewGrantsSection"
 import { usePageHeader } from "@/components/providers/page-header-context"
-import BoxLoader from "@/components/ui/box-loader"
+import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -179,7 +179,7 @@ export default function AdminStoreTestimonialsPage() {
     setDraft((d) => ({ ...d, proofImageUrl: json.publicUrl }))
   }
 
-  if (items === null) return <BoxLoader />
+  if (items === null) return <SunanoLoader />
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 p-4 sm:p-6">

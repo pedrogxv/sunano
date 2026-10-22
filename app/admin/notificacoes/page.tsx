@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { AlertCircle, Megaphone, Send, Users } from "lucide-react"
 import { toast } from "sonner"
 
-import BoxLoader from "@/components/ui/box-loader"
+import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { usePageHeader } from "@/components/providers/page-header-context"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -137,7 +137,7 @@ export default function AdminNotificationsPage() {
   if (loading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
-        <BoxLoader />
+        <SunanoLoader />
       </div>
     )
   }

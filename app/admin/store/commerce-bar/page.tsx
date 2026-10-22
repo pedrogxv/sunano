@@ -12,7 +12,7 @@ import {
   StoreCommerceBar,
 } from "@/components/store/StoreCommerceBar"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import BoxLoader from "@/components/ui/box-loader"
+import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -180,7 +180,7 @@ export default function AdminStoreCommerceBarPage() {
   if (!form || !preview) {
     return (
       <div className="flex justify-center py-14">
-        <BoxLoader />
+        <SunanoLoader />
       </div>
     )
   }

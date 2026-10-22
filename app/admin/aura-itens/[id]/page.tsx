@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { toast } from "sonner"
-import BoxLoader from "@/components/ui/box-loader"
+import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { AuraItemForm } from "../form"
 import { BackBreadcrumb } from "@/components/admin/BackBreadcrumb"
 import { usePageHeader } from "@/components/providers/page-header-context"
@@ -43,7 +43,7 @@ export default function EditAuraItemPage() {
       <div className="mx-auto max-w-2xl space-y-6">
         <BackBreadcrumb href="/admin/aura-itens" parentLabel="Itens de Aura" currentLabel={currentLabel} />
         <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-border bg-card/40 py-20">
-          <BoxLoader />
+          <SunanoLoader />
           <div className="text-center">
             <p className="text-sm font-medium text-foreground">Carregando item…</p>
             <p className="mt-1 text-xs text-muted-foreground">Buscando dados do item de Aura.</p>

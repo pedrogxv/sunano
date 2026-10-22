@@ -7,7 +7,7 @@ import { AlertCircle, Search } from "lucide-react"
 import { toast } from "sonner"
 
 import { BackBreadcrumb } from "@/components/admin/BackBreadcrumb"
-import BoxLoader from "@/components/ui/box-loader"
+import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -295,7 +295,7 @@ export default function TierlistReviewPage() {
 
       {loading ? (
         <div className="flex items-center justify-center py-14">
-          <BoxLoader />
+          <SunanoLoader />
         </div>
       ) : grouped.length === 0 ? (
         <Card className="border-border bg-card">

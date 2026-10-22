@@ -5,7 +5,7 @@ import { Bell, Loader2 } from "lucide-react"
 
 import { AccountPageHeader } from "@/components/account/AccountPageHeader"
 import { ProfileLoadError } from "@/components/account/ProfileLoadError"
-import BoxLoader from "@/components/ui/box-loader"
+import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { Button } from "@/components/ui/button"
 import { useOwnProfile } from "@/lib/hooks/use-own-profile"
 import { useNotifications } from "@/lib/hooks/use-notifications"
@@ -30,7 +30,7 @@ export default function NotificacoesPage() {
   if (profileLoading || !profile) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <BoxLoader />
+        <SunanoLoader />
       </div>
     )
   }
@@ -51,7 +51,7 @@ export default function NotificacoesPage() {
           <p className="py-12 text-center text-sm text-muted-foreground">{t.notifications.error}</p>
         ) : !loaded ? (
           <div className="flex justify-center py-12">
-            <BoxLoader />
+            <SunanoLoader />
           </div>
         ) : items.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border py-16 text-center">

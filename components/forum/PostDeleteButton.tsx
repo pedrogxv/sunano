@@ -56,7 +56,7 @@ export function PostDeleteButton({
           type="button"
           size="sm"
           variant="outline"
-          className="h-7 gap-1.5 border-destructive/40 text-destructive text-xs hover:bg-destructive/10"
+          className="h-8 gap-1.5 border-destructive/40 text-destructive text-xs hover:bg-destructive/10"
           title="Excluir post"
         >
           <Trash2 className="size-3.5 shrink-0" />

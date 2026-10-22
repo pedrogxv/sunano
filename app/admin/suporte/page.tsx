@@ -19,7 +19,7 @@ import {
 } from "lucide-react"
 import type { DateRange } from "react-day-picker"
 
-import BoxLoader from "@/components/ui/box-loader"
+import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { usePageHeader } from "@/components/providers/page-header-context"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -494,7 +494,7 @@ export default function AdminSupportPage() {
 
       {loading ? (
         <div className="flex justify-center py-14">
-          <BoxLoader />
+          <SunanoLoader />
         </div>
       ) : tickets.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-border py-16 text-center">

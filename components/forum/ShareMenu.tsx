@@ -2,6 +2,7 @@
 
 import type { SVGProps } from "react"
 import { Code2, Link2, MoreHorizontal, Share2 } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 
 import {
@@ -52,12 +53,15 @@ export function ShareMenu({
   url,
   path,
   showEmbed = true,
+  className,
 }: {
   slug?: string
   title: string
   url?: string
   path?: string
   showEmbed?: boolean
+  /** Ajuste do gatilho, ex. a altura da barra de ações do post. */
+  className?: string
 }) {
   function getUrl() {
     if (url) return url
@@ -102,7 +106,10 @@ export function ShareMenu({
         <button
           type="button"
           onClick={(event) => event.stopPropagation()}
-          className="flex shrink-0 items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+          className={cn(
+            "flex shrink-0 items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary",
+            className
+          )}
         >
           <Share2 className="size-3.5 shrink-0" />
           <span className="hidden sm:inline">Compartilhar</span>

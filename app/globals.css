@@ -287,68 +287,125 @@ button,
   cursor: pointer;
 }
 
-/* Box Loader */
-.boxes {
-  --size: 32px;
-  --duration: 800ms;
-  height: calc(var(--size) * 2);
-  width: calc(var(--size) * 2);
+/* Sunano Loader — components/ui/SunanoLoader.tsx (fonte única do loading) */
+.sunano-loader {
+  --loader-duration: 900ms;
+  /* amarelo do topete da calopsita */
+  --loader-crest: oklch(0.88 0.16 95);
+  --loader-cheek: oklch(0.72 0.15 35);
+}
+
+.sunano-loader-bird {
+  transform-origin: 50% 100%;
+  filter: drop-shadow(0 4px 12px oklch(0.88 0.16 95 / 0.18));
+  animation: sunano-hop var(--loader-duration) cubic-bezier(0.33, 0, 0.67, 1) infinite;
+}
+
+.sunano-loader-shadow {
+  margin-top: 6px;
+  height: 6px;
+  width: 65%;
+  border-radius: 9999px;
+  background: oklch(0 0 0 / 0.55);
+  filter: blur(3px);
+  animation: sunano-hop-shadow var(--loader-duration) cubic-bezier(0.33, 0, 0.67, 1) infinite;
+}
+
+.sunano-loader-glow {
+  position: absolute;
+  inset: -35%;
+  border-radius: 9999px;
+  background: radial-gradient(closest-side, oklch(0.88 0.16 95 / 0.2), transparent);
+  animation: sunano-glow calc(var(--loader-duration) * 2) ease-in-out infinite;
+}
+
+/* Peninhas que soltam do topete a cada pulo */
+.sunano-loader-feather {
+  position: absolute;
+  top: 10%;
+  left: 50%;
+  width: 6px;
+  height: 10px;
+  border-radius: 9999px 9999px 9999px 0;
+  background: var(--loader-crest);
+  opacity: 0;
+  animation: sunano-feather calc(var(--loader-duration) * 2) ease-out infinite;
+}
+.sunano-loader-feather-1 { --fx: -38px; --fr: -50deg; }
+.sunano-loader-feather-2 { --fx: 34px;  --fr: 40deg;  animation-delay: calc(var(--loader-duration) * 0.66); }
+.sunano-loader-feather-3 { --fx: -8px;  --fr: 15deg;  animation-delay: calc(var(--loader-duration) * 1.33); background: var(--loader-cheek); width: 4px; height: 7px; }
+
+/* Barra indeterminada */
+.sunano-loader-track {
   position: relative;
-  transform-style: preserve-3d;
-  transform-origin: 50% 50%;
-  margin-top: calc(var(--size) * 1.5 * -1);
-  transform: rotateX(60deg) rotateZ(45deg) rotateY(0deg) translateZ(0px);
+  height: 4px;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: color-mix(in oklab, var(--foreground) 10%, transparent);
 }
 
-.box {
-  width: var(--size);
-  height: var(--size);
-  top: 0;
-  left: 0;
+.sunano-loader-bar {
   position: absolute;
-  transform-style: preserve-3d;
-}
-
-.box-1 { transform: translate(100%, 0);   animation: box1 var(--duration) linear infinite; }
-.box-2 { transform: translate(0, 100%);   animation: box2 var(--duration) linear infinite; }
-.box-3 { transform: translate(100%, 100%); animation: box3 var(--duration) linear infinite; }
-.box-4 { transform: translate(200%, 0);   animation: box4 var(--duration) linear infinite; }
-
-.face {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  top: 0;
+  inset-block: 0;
   left: 0;
-  transform: rotateY(var(--face-ry, 0deg)) rotateX(var(--face-rx, 0deg)) translateZ(calc(var(--size) / 2));
-  background: var(--face-bg, oklch(0.30 0.00 0));
+  width: 40%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, transparent, var(--loader-crest) 35%, oklch(0.97 0.03 95) 60%, var(--loader-crest) 80%, transparent);
+  box-shadow: 0 0 10px oklch(0.88 0.16 95 / 0.6);
+  animation: sunano-bar 1.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
 }
 
-.face-front { --face-bg: oklch(0.40 0.00 0); }
-.face-back  { --face-ry: 180deg; --face-bg: oklch(0.18 0.00 0); }
-.face-right { --face-ry: 90deg;  --face-bg: oklch(0.28 0.00 0); }
-.face-top   { --face-rx: -90deg; --face-bg: oklch(0.54 0.00 0); }
+.sunano-loader-dots span {
+  display: inline-block;
+  animation: sunano-dot 1.2s ease-in-out infinite;
+}
+.sunano-loader-dots span:nth-child(2) { animation-delay: 0.15s; }
+.sunano-loader-dots span:nth-child(3) { animation-delay: 0.3s; }
 
-@keyframes box1 {
-  0%, 50% { transform: translate(100%, 0); }
-  100%     { transform: translate(200%, 0); }
+/* Agacha, pula com uma inclinada leve e amortece na volta */
+@keyframes sunano-hop {
+  0%, 100% { transform: translateY(0) scale(1.1, 0.88); }
+  15%      { transform: translateY(0) scale(0.94, 1.08); }
+  50%      { transform: translateY(-32%) scale(1, 1) rotate(-6deg); }
+  85%      { transform: translateY(0) scale(0.97, 1.03); }
 }
 
-@keyframes box2 {
-  0%   { transform: translate(0, 100%); }
-  50%  { transform: translate(0, 0); }
-  100% { transform: translate(100%, 0); }
+@keyframes sunano-hop-shadow {
+  0%, 100% { transform: scaleX(1.1); opacity: 0.9; }
+  50%      { transform: scaleX(0.5); opacity: 0.3; }
 }
 
-@keyframes box3 {
-  0%, 50% { transform: translate(100%, 100%); }
-  100%    { transform: translate(0, 100%); }
+@keyframes sunano-glow {
+  0%, 100% { opacity: 0.5; transform: scale(0.9); }
+  50%      { opacity: 1;   transform: scale(1.05); }
 }
 
-@keyframes box4 {
-  0%   { transform: translate(200%, 0); }
-  50%  { transform: translate(200%, 100%); }
-  100% { transform: translate(100%, 100%); }
+@keyframes sunano-feather {
+  0%   { opacity: 0; transform: translate(-50%, 0) rotate(0deg); }
+  15%  { opacity: 0.9; }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--fx)), -46px) rotate(var(--fr)) scale(0.6); }
+}
+
+@keyframes sunano-bar {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(250%); }
+}
+
+@keyframes sunano-dot {
+  0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }
+  30%           { opacity: 1;    transform: translateY(-2px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sunano-loader-bird,
+  .sunano-loader-shadow,
+  .sunano-loader-feather,
+  .sunano-loader-dots span {
+    animation: none;
+  }
+  .sunano-loader-bar {
+    animation-duration: 3s;
+  }
 }
 
 @keyframes auth-blob-drift-a {
@@ -837,6 +894,27 @@ button,
 
 .vip-badge-crown {
   animation: vip-badge-crown-breathe 2.8s ease-in-out infinite;
+}
+
+/* Aba VIP encaixada no topo do painel de Aura da sidebar
+   (components/layout/SidebarVipTab.tsx). Tinta roxa discreta, no mesmo peso
+   do fundo laranja do card de baixo, e a costura roxo→laranja que amarra os
+   dois. Sem animação de propósito: o card já tem movimento suficiente. */
+.sidebar-vip-tab {
+  background: oklch(0.75 0.19 320 / 0.06);
+  transition: background-color 0.15s;
+}
+
+.sidebar-vip-tab:hover {
+  background: oklch(0.75 0.19 320 / 0.12);
+}
+
+.sidebar-vip-tab-seam {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 1px;
+  background: linear-gradient(90deg, oklch(0.75 0.19 320 / 0.35), oklch(0.7 0.19 45 / 0.3));
+  pointer-events: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2669,12 +2747,24 @@ button:not(:disabled):hover .aura-icon-holder {
   position: relative;
   display: inline-block;
   isolation: isolate;
-  /* O halo pulsante que vaza da chama, atrás de tudo. */
+  /* Hover num `.group` (card, botão) atiça o fogo: cresce a partir da base. */
+  transform: scale(var(--aura-flame-boost, 1));
+  transform-origin: bottom center;
+  transition: transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* O halo que vaza da chama. O ciclo é IRREGULAR (ver keyframes): fogo não
+     respira em seno, ele tremula — umas batidas rápidas, uma pausa longa. */
   filter: drop-shadow(0 0 3px oklch(0.7 0.2 45 / 0.55));
-  animation: aura-flame-halo 3.1s ease-in-out infinite;
+  animation: aura-flame-halo 3.1s linear infinite;
+}
+
+.group:hover .aura-flame,
+.group:focus-visible .aura-flame {
+  --aura-flame-boost: 1.14;
+  --aura-flame-speed: 0.6;
 }
 
 .aura-flame-svg {
+  position: relative;
   display: block;
   width: 100%;
   height: 100%;
@@ -2686,90 +2776,122 @@ button:not(:disabled):hover .aura-icon-holder {
   transform-box: fill-box;
 }
 
+/* Cama de brasa — elipse achatada sob a base, respirando. É o que assenta a
+   chama no lugar: sem ela, o fogo parece um adesivo flutuando. */
+.aura-flame-bed {
+  position: absolute;
+  left: 50%;
+  bottom: -6%;
+  width: 90%;
+  height: 26%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, oklch(0.75 0.2 50 / 0.75), oklch(0.62 0.23 30 / 0.3) 55%, transparent);
+  filter: blur(1.5px);
+  transform: translateX(-50%);
+  pointer-events: none;
+  animation: aura-flame-bed-glow 1.9s ease-in-out infinite;
+}
+
 /* Língua externa — a mais lenta e a que mais se deforma: é ela que dá a
-   silhueta bruxuleante. O leve `skewX` alternado é o que faz a ponta tombar
-   para um lado e voltar, como fogo pegando corrente de ar. */
+   silhueta bruxuleante. O `skewX` alternado faz as três línguas tombarem para
+   um lado e voltarem, como fogo pegando corrente de ar. A cor vem do `fill`
+   do próprio path (gradiente por instância, ver AuraFlame.tsx). */
 .aura-flame-outer {
-  fill: url(#aura-flame-grad-outer);
-  animation: aura-flame-sway-outer 2.3s ease-in-out infinite;
+  animation: aura-flame-sway-outer calc(2.3s * var(--aura-flame-speed, 1)) ease-in-out infinite;
 }
 
 /* Corpo interno — ciclo mais curto e em contratempo (delay negativo), o que
    cria a profundidade. Sem a defasagem, as duas camadas subiriam juntas e a
    chama pareceria um único bloco esticando. */
 .aura-flame-inner {
-  fill: url(#aura-flame-grad-inner);
-  animation: aura-flame-sway-inner 1.7s ease-in-out -0.6s infinite;
+  animation: aura-flame-sway-inner calc(1.7s * var(--aura-flame-speed, 1)) ease-in-out -0.6s infinite;
 }
 
 /* Núcleo — quase parado; só a opacidade respira. É o detalhe que o olho lê
    como brasa, e é justamente por NÃO se mexer que ele ancora a chama. */
 .aura-flame-core {
-  fill: url(#aura-flame-grad-core);
   transform-origin: bottom center;
   transform-box: fill-box;
-  animation: aura-flame-core-breathe 1.7s ease-in-out infinite;
+  animation: aura-flame-core-breathe 1.3s ease-in-out infinite;
 }
 
 @keyframes aura-flame-sway-outer {
   0%, 100% { transform: scale(1, 1) skewX(0deg) translateX(0); }
-  25%      { transform: scale(0.94, 1.08) skewX(-3.5deg) translateX(-0.4px); }
-  50%      { transform: scale(1.05, 0.95) skewX(1.5deg) translateX(0.3px); }
-  75%      { transform: scale(0.97, 1.05) skewX(3deg) translateX(0.5px); }
+  20%      { transform: scale(0.95, 1.07) skewX(-4deg) translateX(-0.4px); }
+  45%      { transform: scale(1.04, 0.96) skewX(1.5deg) translateX(0.2px); }
+  70%      { transform: scale(0.96, 1.09) skewX(4.5deg) translateX(0.5px); }
+  85%      { transform: scale(1.02, 0.98) skewX(1deg) translateX(0.1px); }
 }
 
 @keyframes aura-flame-sway-inner {
   0%, 100% { transform: scale(1, 1) skewX(0deg); opacity: 0.95; }
-  30%      { transform: scale(1.08, 0.9) skewX(3deg); opacity: 0.8; }
-  60%      { transform: scale(0.9, 1.12) skewX(-2.5deg); opacity: 1; }
+  30%      { transform: scale(1.08, 0.9) skewX(4deg); opacity: 0.8; }
+  60%      { transform: scale(0.9, 1.14) skewX(-3.5deg); opacity: 1; }
 }
 
 @keyframes aura-flame-core-breathe {
-  0%, 100% { opacity: 0.9; transform: scaleY(1); }
-  50%      { opacity: 0.55; transform: scaleY(0.88); }
+  0%, 100% { opacity: 0.95; transform: scale(1, 1); }
+  50%      { opacity: 0.6; transform: scale(1.06, 0.86); }
 }
 
+@keyframes aura-flame-bed-glow {
+  0%, 100% { opacity: 0.7; transform: translateX(-50%) scaleX(1); }
+  50%      { opacity: 1; transform: translateX(-50%) scaleX(1.12); }
+}
+
+/* Tremulação: duas batidas rápidas, uma subida longa, uma queda. Em `linear`
+   com paradas desiguais o olho não acha o ritmo — é isso que vende "fogo". */
 @keyframes aura-flame-halo {
-  0%, 100% { filter: drop-shadow(0 0 3px oklch(0.7 0.2 45 / 0.5)); }
-  50%      { filter: drop-shadow(0 0 7px oklch(0.75 0.21 50 / 0.85)); }
+  0%   { filter: drop-shadow(0 0 3px oklch(0.7 0.2 45 / 0.5)); }
+  8%   { filter: drop-shadow(0 0 5px oklch(0.74 0.21 50 / 0.75)); }
+  13%  { filter: drop-shadow(0 0 2.5px oklch(0.7 0.2 45 / 0.45)); }
+  21%  { filter: drop-shadow(0 0 6px oklch(0.76 0.21 52 / 0.8)); }
+  55%  { filter: drop-shadow(0 0 8px oklch(0.78 0.2 55 / 0.9)); }
+  68%  { filter: drop-shadow(0 0 4px oklch(0.72 0.2 48 / 0.6)); }
+  100% { filter: drop-shadow(0 0 3px oklch(0.7 0.2 45 / 0.5)); }
 }
 
-/* Fagulhas — sobem da ponta e apagam. Cada uma tem trajetória, tamanho e
-   atraso próprios (via --spark), senão saem em fila e viram "chuvisco". */
+/* Fagulhas — sobem da ponta e apagam. Cada uma tem trajetória e atraso
+   próprios (via --spark-drift), senão saem em fila e viram "chuvisco".
+   `nth-of-type` porque a cama de brasa (um span) vem antes delas. */
 .aura-flame-spark {
   position: absolute;
   left: 50%;
-  bottom: 55%;
+  bottom: 70%;
   width: 2px;
   height: 2px;
   border-radius: 9999px;
-  background: oklch(0.85 0.17 70);
+  background: oklch(0.88 0.16 75);
   box-shadow: 0 0 5px 1px oklch(0.8 0.19 55 / 0.9);
   opacity: 0;
   pointer-events: none;
-  animation: aura-flame-spark-rise 2.6s ease-out infinite;
+  animation: aura-flame-spark-rise calc(2.6s * var(--aura-flame-speed, 1)) ease-out infinite;
 }
 
-.aura-flame-spark:nth-child(1) { animation-delay: 0s;    --spark-drift: -6px; }
-.aura-flame-spark:nth-child(2) { animation-delay: 0.9s;  --spark-drift: 5px; }
-.aura-flame-spark:nth-child(3) { animation-delay: 1.7s;  --spark-drift: -2px; }
+.aura-flame-spark:nth-of-type(1) { animation-delay: 0s;    --spark-drift: -6px; --spark-rise: -24px; }
+.aura-flame-spark:nth-of-type(2) { animation-delay: 0.9s;  --spark-drift: 6px;  --spark-rise: -30px; }
+.aura-flame-spark:nth-of-type(3) { animation-delay: 1.7s;  --spark-drift: -2px; --spark-rise: -20px; }
 
+/* A fagulha serpenteia (deriva vai e volta) em vez de subir em linha reta. */
 @keyframes aura-flame-spark-rise {
   0%   { transform: translate(-50%, 0) scale(1); opacity: 0; }
   12%  { opacity: 1; }
-  100% { transform: translate(calc(-50% + var(--spark-drift, 0px)), -26px) scale(0.2); opacity: 0; }
+  45%  { transform: translate(calc(-50% + var(--spark-drift, 0px)), calc(var(--spark-rise, -26px) * 0.45)) scale(0.8); }
+  100% { transform: translate(calc(-50% - var(--spark-drift, 0px) * 0.4), var(--spark-rise, -26px)) scale(0.2); opacity: 0; }
 }
 
-/* Parado, mas ainda bonito: a chama fica no frame mais "cheio", com o halo
+/* Parado, mas ainda bonito: a chama fica no frame "cheio", com o halo
    aceso — quem pediu menos movimento não perde o símbolo. */
 @media (prefers-reduced-motion: reduce) {
   .aura-flame,
   .aura-flame-outer,
   .aura-flame-inner,
-  .aura-flame-core {
+  .aura-flame-core,
+  .aura-flame-bed {
     animation: none;
   }
   .aura-flame {
+    transition: none;
     filter: drop-shadow(0 0 5px oklch(0.72 0.2 45 / 0.7));
   }
   .aura-flame-spark {

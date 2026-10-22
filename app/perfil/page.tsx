@@ -3,7 +3,7 @@
 import { AccountPageHeader } from "@/components/account/AccountPageHeader"
 import { ProfileLoadError } from "@/components/account/ProfileLoadError"
 import { ProfileSection } from "@/components/account/ProfileSection"
-import BoxLoader from "@/components/ui/box-loader"
+import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { useOwnProfile } from "@/lib/hooks/use-own-profile"
 
 export default function ProfilePage() {
@@ -14,7 +14,7 @@ export default function ProfilePage() {
   if (loading || !profile) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <BoxLoader />
+        <SunanoLoader />
       </div>
     )
   }

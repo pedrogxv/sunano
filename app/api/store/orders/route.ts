@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getRequestUser } from "@/lib/server/auth/current-user"
-import { listOrdersByUser, type OrderStatus } from "@/lib/server/repositories/orders-repository"
+import { countMissingShippingByUser, listOrdersByUser, type OrderStatus } from "@/lib/server/repositories/orders-repository"
 import { getPaymentComplementProduct } from "@/lib/server/repositories/order-complement-repository"
 
 const VALID_STATUSES: OrderStatus[] = [
@@ -35,8 +35,12 @@ export async function GET(request: NextRequest) {
   // Filtro "falta endereço" de "Meus Pedidos" — resolvido no banco, não
   // filtrando a página já paginada (senão a contagem e a paginação mentem).
   const missingShipping = url.searchParams.get("missingShipping") === "1"
+  // Contagem do aviso "falta endereço" sobre o histórico inteiro. Opt-in: só
+  // "Meus Pedidos" mostra o aviso; o popover do miniperfil chama esta rota em
+  // toda página e não precisa da consulta a mais.
+  const withMissingCount = url.searchParams.get("withMissingCount") === "1"
 
-  const [{ orders, total, hasMore }, complementProduct] = await Promise.all([
+  const [{ orders, total, hasMore }, complementProduct, missingShippingCount] = await Promise.all([
     listOrdersByUser(user.id, page, pageSize, {
       status,
       dateFrom,
@@ -45,6 +49,13 @@ export async function GET(request: NextRequest) {
     }),
     // O passo a passo do complemento (Meus Pedidos) aponta para o anúncio.
     getPaymentComplementProduct(),
+    withMissingCount ? countMissingShippingByUser(user.id) : Promise.resolve(0),
   ])
-  return NextResponse.json({ orders, total, hasMore, complementProductSlug: complementProduct?.slug ?? null })
+  return NextResponse.json({
+    orders,
+    total,
+    hasMore,
+    missingShippingCount,
+    complementProductSlug: complementProduct?.slug ?? null,
+  })
 }

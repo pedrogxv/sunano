@@ -18,7 +18,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 
-import BoxLoader from "@/components/ui/box-loader"
+import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { usePageHeader } from "@/components/providers/page-header-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -436,7 +436,7 @@ function VipsContent() {
       {/* Lista */}
       {loading ? (
         <div className="flex justify-center py-16">
-          <BoxLoader />
+          <SunanoLoader />
         </div>
       ) : rows.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-border py-16 text-center">
@@ -649,7 +649,7 @@ export default function AdminVipsPage() {
     <Suspense
       fallback={
         <div className="flex justify-center py-16">
-          <BoxLoader />
+          <SunanoLoader />
         </div>
       }
     >

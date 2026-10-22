@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils"
 import { formatCurrencyBRL } from "@/lib/format"
 import { CARD_SURFACE } from "@/lib/ui-styles"
 import { mapTier, tierLabel } from "@/lib/tier-utils"
-import BoxLoader from "@/components/ui/box-loader"
+import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { ShareMenu } from "@/components/forum/ShareMenu"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -466,7 +466,7 @@ export function ComparePageClient() {
       {/* Product cards + Add slot */}
       {loading ? (
         <div className="flex items-center justify-center py-16">
-          <BoxLoader />
+          <SunanoLoader />
         </div>
       ) : (
         <div className="-mx-4 overflow-x-auto px-4 pb-1 snap-x snap-mandatory md:mx-0 md:overflow-visible md:px-2 md:pb-0 md:snap-none">

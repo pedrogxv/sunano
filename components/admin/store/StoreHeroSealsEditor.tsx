@@ -6,7 +6,7 @@ import { toast } from "sonner"
 
 import { HERO_SEAL_STYLE, HeroSealsBar } from "@/components/store/StoreHero"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import BoxLoader from "@/components/ui/box-loader"
+import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -129,7 +129,7 @@ export function StoreHeroSealsEditor() {
   if (!form || !preview) {
     return (
       <div className="flex justify-center py-10">
-        <BoxLoader />
+        <SunanoLoader />
       </div>
     )
   }

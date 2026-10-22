@@ -32,7 +32,7 @@ import {
 import { toast } from "sonner"
 import type { DateRange } from "react-day-picker"
 
-import BoxLoader from "@/components/ui/box-loader"
+import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { usePageHeader } from "@/components/providers/page-header-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -1018,7 +1018,7 @@ export default function AdminOrdersPage() {
 
       {loading ? (
         <div className="flex justify-center py-14">
-          <BoxLoader />
+          <SunanoLoader />
         </div>
       ) : orders.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-border py-16 text-center">

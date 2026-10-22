@@ -7,7 +7,7 @@ import { LifeBuoy } from "lucide-react"
 
 import { AccountPageHeader } from "@/components/account/AccountPageHeader"
 import { ProfileLoadError } from "@/components/account/ProfileLoadError"
-import BoxLoader from "@/components/ui/box-loader"
+import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { useOwnProfile } from "@/lib/hooks/use-own-profile"
 import { useSupportTickets, type SupportTicketStatus } from "@/lib/hooks/use-support-tickets"
 import { cn } from "@/lib/utils"
@@ -33,7 +33,7 @@ export default function MeusTicketsPage() {
   if (profileLoading || !profile) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <BoxLoader />
+        <SunanoLoader />
       </div>
     )
   }
@@ -50,7 +50,7 @@ export default function MeusTicketsPage() {
 
         {ticketsLoading ? (
           <div className="flex justify-center py-12">
-            <BoxLoader />
+            <SunanoLoader />
           </div>
         ) : tickets.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border py-16 text-center">

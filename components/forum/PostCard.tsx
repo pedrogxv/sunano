@@ -191,7 +191,7 @@ function PostAuraButton({
             disabled={!canReact || isPending(postId)}
             aria-pressed={reacted}
             className={cn(
-              "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-semibold text-orange-500 transition-colors disabled:cursor-not-allowed",
+              "flex h-8 items-center gap-1.5 rounded-full border px-3 text-sm font-semibold text-orange-500 transition-colors disabled:cursor-not-allowed",
               reacted ? "border-orange-500/50 bg-orange-500/10" : "border-border",
               canReact && "hover:border-orange-500/40 hover:bg-orange-500/5"
             )}
@@ -298,7 +298,7 @@ function PostSaveButton({
             aria-pressed={saved}
             aria-label={tooltipText}
             className={cn(
-              "flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-60",
+              "flex h-8 min-w-8 items-center justify-center gap-1.5 rounded-full border px-2.5 text-xs font-medium text-muted-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-60",
               saved ? "border-primary/50 bg-primary/10 text-primary" : "border-border",
               "hover:border-primary/40 hover:text-primary"
             )}
@@ -440,12 +440,12 @@ export function PostCard({
             <Link
               href={clickable ? `/forum/${post.slug}#comments` : "#comments"}
               onClick={(event) => event.stopPropagation()}
-              className="flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+              className="flex h-8 items-center gap-1.5 rounded-full border border-border px-2.5 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
             >
               <MessageCircle className="size-3.5" />
               {post.comment_count}
             </Link>
-            {!post.is_hidden && <ShareMenu slug={post.slug} title={post.title} />}
+            {!post.is_hidden && <ShareMenu slug={post.slug} title={post.title} className="h-8 py-0" />}
             {isOwner ? (
               <>
                 {!post.hidden_by_moderation && (
@@ -458,7 +458,7 @@ export function PostCard({
                 <PostDeleteButton postSlug={post.slug} onDeleted={onOwnPostDeleted} />
               </>
             ) : (
-              <ReportMenu postSlug={post.slug} targetType="post" />
+              <ReportMenu postSlug={post.slug} targetType="post" className="size-8 p-0" />
             )}
           </div>
 

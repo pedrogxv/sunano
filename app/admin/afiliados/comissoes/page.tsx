@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react"
 import { AlertCircle, Receipt } from "lucide-react"
 import { toast } from "sonner"
 
-import BoxLoader from "@/components/ui/box-loader"
+import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { usePageHeader } from "@/components/providers/page-header-context"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -68,7 +68,7 @@ export default function AdminAfiliadosComissoesPage() {
 
       {loading ? (
         <div className="flex justify-center py-14">
-          <BoxLoader />
+          <SunanoLoader />
         </div>
       ) : events.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-border py-16 text-center">

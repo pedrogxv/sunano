@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
  * de `useOwnProfile` (/perfil, /conta e as sub-rotas da conta).
  *
  * Existe porque todas elas resolviam a carga com `if (loading || !profile)`
- * caindo no `BoxLoader`: quando `/api/profile` falha, `loading` vira `false`
+ * caindo no `SunanoLoader`: quando `/api/profile` falha, `loading` vira `false`
  * mas `profile` continua `null`, e a condição segue verdadeira para sempre —
  * esqueleto eterno, sem erro, sem retentativa e sem nada no console. É o
  * caminho pelo qual um WEB MASTER sem 2FA ficou trancado fora de /conta

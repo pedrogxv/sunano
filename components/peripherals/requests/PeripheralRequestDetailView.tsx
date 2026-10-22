@@ -21,7 +21,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { AuraAmount } from "@/components/ui/AuraIcon"
-import BoxLoader from "@/components/ui/box-loader"
+import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { Button } from "@/components/ui/button"
 import { useAuthUser } from "@/components/providers/auth-context"
 import { useAuthModal } from "@/components/providers/auth-modal-context"
@@ -102,7 +102,7 @@ export function PeripheralRequestDetailView({ id }: { id: string }) {
   if (authLoading || state === "loading") {
     return (
       <div className="flex justify-center py-16">
-        <BoxLoader />
+        <SunanoLoader />
       </div>
     )
   }

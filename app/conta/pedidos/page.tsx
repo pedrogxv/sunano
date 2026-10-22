@@ -19,6 +19,7 @@ import {
   ShoppingCart,
   Sparkles,
   Star,
+  Store,
   Truck,
   X,
   XCircle,
@@ -27,7 +28,7 @@ import type { DateRange } from "react-day-picker"
 
 import { useCart } from "@/components/providers/cart-context"
 import { AccountPageHeader } from "@/components/account/AccountPageHeader"
-import BoxLoader from "@/components/ui/box-loader"
+import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -176,7 +177,7 @@ function DateRangeFilter({
         <Button
           type="button"
           variant="outline"
-          className={cn("w-full justify-between font-normal sm:w-56", !dateFrom && "text-muted-foreground")}
+          className={cn("h-9 w-full justify-between font-normal sm:w-56", !dateFrom && "text-muted-foreground")}
         >
           <span className="flex min-w-0 items-center gap-1.5 truncate">
             <CalendarIcon className="size-3.5 shrink-0" />
@@ -1137,9 +1138,20 @@ export default function PedidosPage() {
   const [search, setSearch] = useState("")
   const [page, setPage] = useState(1)
 
-  const { orders, total, hasMore, loading: ordersLoading, refetch, complementProductSlug } = useUserOrders({
+  const {
+    orders,
+    total,
+    hasMore,
+    missingShippingCount: missingCount,
+    loading: ordersLoading,
+    refetch,
+    complementProductSlug,
+  } = useUserOrders({
     page,
     pageSize: PAGE_SIZE,
+    // O aviso conta o histórico inteiro, não a página: senão só aparecia ao
+    // chegar à página onde o pedido parado estava.
+    withMissingCount: true,
     filters: {
       status: statusFilter === "all" ? undefined : statusFilter,
       dateFrom: dateFrom ? fromDateInputValue(dateFrom).toISOString() : undefined,
@@ -1175,7 +1187,6 @@ export default function PedidosPage() {
       )
     : orders
 
-  const missingCount = orders.filter(isMissingShippingAddress).length
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const hasActiveFilters =
     statusFilter !== "all" || dateFrom !== "" || dateTo !== "" || missingOnly || term !== ""
@@ -1212,7 +1223,7 @@ export default function PedidosPage() {
   if (profileLoading || !profile) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <BoxLoader />
+        <SunanoLoader />
       </div>
     )
   }
@@ -1235,7 +1246,7 @@ export default function PedidosPage() {
             href="/loja"
             className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1.5 text-xs font-medium text-emerald-400 transition-colors hover:bg-emerald-500/20"
           >
-            <Sparkles className="size-3.5" />
+            <Store className="size-3.5" />
             Ver a loja
           </RouteLink>
         </div>
@@ -1292,7 +1303,7 @@ export default function PedidosPage() {
 
         <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
           <Select value={statusFilter} onValueChange={(v) => applyStatusFilter(v as UserOrder["status"] | "all")}>
-            <SelectTrigger className="w-full border-border bg-card text-sm sm:w-56">
+            <SelectTrigger className="h-9 w-full border-border bg-card text-sm data-[size=default]:h-9 sm:w-56">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -1308,11 +1319,10 @@ export default function PedidosPage() {
 
           <Button
             type="button"
-            size="sm"
             variant={missingOnly ? "default" : "outline"}
             onClick={toggleMissingOnly}
             className={cn(
-              "gap-1.5 text-xs",
+              "h-9 gap-1.5 text-sm",
               missingOnly && "bg-amber-500 text-black hover:bg-amber-400"
             )}
           >
@@ -1326,7 +1336,7 @@ export default function PedidosPage() {
           </Button>
 
           {hasActiveFilters && (
-            <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={clearFilters}>
+            <Button variant="ghost" className="h-9 gap-1.5 text-sm text-muted-foreground" onClick={clearFilters}>
               <X className="size-3.5" />
               Limpar filtros
             </Button>

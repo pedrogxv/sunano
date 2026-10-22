@@ -1,5 +1,5 @@
 import { Suspense } from "react"
-import BoxLoader from "@/components/ui/box-loader"
+import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { ComparePageClient } from "./ComparePageClient"
 
 import type { Metadata } from "next"
@@ -20,7 +20,7 @@ export default function ComparePage() {
     <Suspense
       fallback={
         <div className="flex items-center justify-center py-24">
-          <BoxLoader />
+          <SunanoLoader />
         </div>
       }
     >

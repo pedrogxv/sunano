@@ -11,7 +11,7 @@ import { ImagePlus, Loader2, Package, ShoppingBag, Star, X } from "lucide-react"
 
 import { AccountPageHeader } from "@/components/account/AccountPageHeader"
 import { ProfileLoadError } from "@/components/account/ProfileLoadError"
-import BoxLoader from "@/components/ui/box-loader"
+import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { useOwnProfile } from "@/lib/hooks/use-own-profile"
@@ -171,7 +171,7 @@ export default function TicketDetailPage() {
   if (profileLoading || !profile || loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <BoxLoader />
+        <SunanoLoader />
       </div>
     )
   }

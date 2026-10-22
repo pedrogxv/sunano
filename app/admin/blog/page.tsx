@@ -5,7 +5,7 @@ import Link from "next/link"
 import { Plus, Pencil, Trash2, Search, Eye, FileText, BookOpen, Newspaper, Mouse } from "lucide-react"
 import { toast } from "sonner"
 
-import BoxLoader from "@/components/ui/box-loader"
+import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { usePageHeader } from "@/components/providers/page-header-context"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -256,7 +256,7 @@ export default function AdminBlogPage() {
       {/* Content */}
       {loading ? (
         <div className="flex items-center justify-center py-16">
-          <BoxLoader />
+          <SunanoLoader />
         </div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-border bg-card py-16 text-center">

@@ -3,7 +3,7 @@
 import { AccountPageHeader } from "@/components/account/AccountPageHeader"
 import { AccountSection } from "@/components/account/AccountSection"
 import { ProfileLoadError } from "@/components/account/ProfileLoadError"
-import BoxLoader from "@/components/ui/box-loader"
+import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { useOwnProfile } from "@/lib/hooks/use-own-profile"
 
 export default function ContaPage() {
@@ -16,7 +16,7 @@ export default function ContaPage() {
   if (loading || !profile) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <BoxLoader />
+        <SunanoLoader />
       </div>
     )
   }

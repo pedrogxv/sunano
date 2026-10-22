@@ -15,7 +15,7 @@ import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } 
 import { CSS } from "@dnd-kit/utilities"
 import { AlertCircle, Edit, GripVertical, Medal, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
-import BoxLoader from "@/components/ui/box-loader"
+import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { usePageHeader } from "@/components/providers/page-header-context"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -228,7 +228,7 @@ export default function AdminEventsPage() {
 
       {loading ? (
         <div className="flex justify-center py-14">
-          <BoxLoader />
+          <SunanoLoader />
         </div>
       ) : events.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-border py-16 text-center">

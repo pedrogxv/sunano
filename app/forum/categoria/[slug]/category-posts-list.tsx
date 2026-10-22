@@ -4,7 +4,7 @@ import { useCallback, useState } from "react"
 
 import { PostCard, type PostCardData } from "@/components/forum/PostCard"
 import { InfiniteScrollSentinel } from "@/components/forum/InfiniteScrollSentinel"
-import BoxLoader from "@/components/ui/box-loader"
+import { SunanoLoader } from "@/components/ui/SunanoLoader"
 
 export function CategoryPostsList({
   categorySlug,
@@ -44,7 +44,7 @@ export function CategoryPostsList({
       {hasMore && <InfiniteScrollSentinel onIntersect={loadMore} />}
       {loadingMore && (
         <div className="flex items-center justify-center py-6">
-          <BoxLoader />
+          <SunanoLoader />
         </div>
       )}
     </div>

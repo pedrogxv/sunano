@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { Flag, MoreHorizontal } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 
 import {
@@ -20,10 +21,13 @@ export function ReportMenu({
   postSlug,
   targetType,
   commentId,
+  className,
 }: {
   postSlug: string
   targetType: "post" | "comment"
   commentId?: string
+  /** Ajuste do gatilho, ex. a altura da barra de ações do post. */
+  className?: string
 }) {
   const [reported, setReported] = useState(false)
 
@@ -57,7 +61,10 @@ export function ReportMenu({
           type="button"
           onClick={(event) => event.stopPropagation()}
           aria-label="Mais opções"
-          className="flex items-center justify-center rounded-full border border-border p-1.5 text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+          className={cn(
+            "flex items-center justify-center rounded-full border border-border p-1.5 text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary",
+            className
+          )}
         >
           <MoreHorizontal className="size-3.5" />
         </button>

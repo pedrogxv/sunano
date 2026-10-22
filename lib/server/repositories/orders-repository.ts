@@ -668,6 +668,31 @@ export async function listOrdersByUser(
 }
 
 /**
+ * Quantos pedidos pagos de item físico do usuário ainda estão sem endereço,
+ * no histórico inteiro — não só na página carregada. É o número do aviso de
+ * "Meus Pedidos": contado sobre a página, ele só aparecia quando a pessoa
+ * chegava à página onde o pedido parado estava. Mesmas condições do filtro
+ * `missingShipping` de `listOrdersByUser` (e do índice parcial).
+ */
+export async function countMissingShippingByUser(userId: string): Promise<number> {
+  const db = createSupabaseAdminClient()
+  const { count, error } = await db
+    .from("store_orders")
+    .select("id", { count: "exact", head: true })
+    .eq("metadata->>user_id", userId)
+    .eq("is_sandbox", deployChargesInSandbox())
+    .is("shipping_address_filled_at", null)
+    .eq("requires_shipping_address", true)
+    .in("status", ["paid", "awaiting_shipping_info"])
+
+  if (error) {
+    console.error("[orders-repository] countMissingShippingByUser:", error)
+    return 0
+  }
+  return count ?? 0
+}
+
+/**
  * Converte a linha crua (colunas `shipping_*` achatadas) no formato que as
  * telas consomem, com o endereço já colapsado em um objeto só.
  */

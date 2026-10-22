@@ -5,7 +5,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { Edit, Plus, AlertCircle, AlertTriangle, X } from "lucide-react"
 import { toast } from "sonner"
-import BoxLoader from "@/components/ui/box-loader"
+import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { usePageHeader } from "@/components/providers/page-header-context"
 import {
   DndContext,
@@ -2227,7 +2227,7 @@ export default function AdminPeripheralsPage() {
       {/* Tierlist Grid */}
       {loading ? (
         <div className="flex items-center justify-center py-14">
-          <BoxLoader />
+          <SunanoLoader />
         </div>
       ) : showSpeedChart ? (
         <SpeedChartEditor items={filtered} onPlace={handleSpeedChartPlace} />

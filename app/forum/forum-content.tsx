@@ -13,7 +13,7 @@ import { ForumSidebar, ForumSidebarMobileTrigger } from "@/components/forum/Foru
 import { InfiniteScrollSentinel } from "@/components/forum/InfiniteScrollSentinel"
 import type { PublicProfileSummary } from "@/lib/user-directory"
 import { CommentBody } from "@/components/comments/CommentBody"
-import BoxLoader from "@/components/ui/box-loader"
+import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -463,7 +463,7 @@ export function ForumContent({
       {/* Post list */}
       {loading ? (
         <div className="flex items-center justify-center py-16">
-          <BoxLoader />
+          <SunanoLoader />
         </div>
       ) : posts.length === 0 ? (
         <div className={cn("rounded-2xl p-12 text-center", CARD_SURFACE)}>
@@ -488,7 +488,7 @@ export function ForumContent({
           {hasMore && <InfiniteScrollSentinel onIntersect={loadMore} />}
           {loadingMore && (
             <div className="flex items-center justify-center py-6">
-              <BoxLoader />
+              <SunanoLoader size="sm" compact />
             </div>
           )}
         </div>

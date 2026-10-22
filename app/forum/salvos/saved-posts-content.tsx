@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 
 import { PostCard, type PostCardData } from "@/components/forum/PostCard"
 import { Button } from "@/components/ui/button"
-import BoxLoader from "@/components/ui/box-loader"
+import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { CARD_SURFACE } from "@/lib/ui-styles"
 import { cn } from "@/lib/utils"
 
@@ -82,7 +82,7 @@ export function SavedPostsContent({
 
       {loading ? (
         <div className="flex items-center justify-center py-12">
-          <BoxLoader />
+          <SunanoLoader />
         </div>
       ) : (
         <div className="space-y-3">

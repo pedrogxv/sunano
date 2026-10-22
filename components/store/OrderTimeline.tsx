@@ -92,8 +92,14 @@ export function OrderTimeline({
         const done = idx <= lastDone
         const pending = waitingOnCustomer && idx === lastDone + 1
         const Icon = done ? CheckCircle2 : step.icon
+        const isLast = idx === steps.length - 1
+        // Só os passos com linha depois crescem: o último é só o nó, senão ele
+        // ocupa uma fatia inteira e fica encalhado no meio do trilho.
         return (
-          <div key={step.key} className="flex min-w-0 flex-1 items-center gap-1">
+          <div
+            key={step.key}
+            className={cn("flex min-w-0 items-center gap-1", isLast ? "shrink-0" : "flex-1")}
+          >
             <div className="flex min-w-0 flex-col items-center gap-1">
               <span
                 className={cn(
@@ -120,7 +126,7 @@ export function OrderTimeline({
                 {pending && step.key === "address" ? "Falta endereço" : step.label}
               </span>
             </div>
-            {idx < steps.length - 1 && (
+            {!isLast && (
               <span
                 aria-hidden
                 className={cn(

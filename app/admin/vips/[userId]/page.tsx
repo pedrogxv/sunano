@@ -19,7 +19,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 
-import BoxLoader from "@/components/ui/box-loader"
+import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { BackBreadcrumb } from "@/components/admin/BackBreadcrumb"
 import { usePageHeader } from "@/components/providers/page-header-context"
 import { Button } from "@/components/ui/button"
@@ -187,7 +187,7 @@ export default function AdminVipDetailPage() {
   if (loading) {
     return (
       <div className="flex justify-center py-16">
-        <BoxLoader />
+        <SunanoLoader />
       </div>
     )
   }

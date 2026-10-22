@@ -5,7 +5,7 @@ import type { ChangeEvent } from "react"
 import { Upload, Camera, KeyRound, Youtube, RefreshCw, CheckCircle2, AlertTriangle, Clock, User, CreditCard } from "lucide-react"
 import { toast } from "sonner"
 
-import BoxLoader from "@/components/ui/box-loader"
+import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { usePageHeader } from "@/components/providers/page-header-context"
 import { PasswordStrengthMeter } from "@/components/auth/PasswordStrengthMeter"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -261,7 +261,7 @@ export default function SettingsPage() {
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <BoxLoader />
+        <SunanoLoader />
       </div>
     )
   }
@@ -434,7 +434,7 @@ export default function SettingsPage() {
           <CardContent className="pt-6 space-y-5">
             {storeSettingsLoading ? (
               <div className="flex justify-center py-4">
-                <BoxLoader />
+                <SunanoLoader size="sm" compact />
               </div>
             ) : (
               <>

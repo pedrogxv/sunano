@@ -223,7 +223,8 @@ export async function GET(request: NextRequest) {
     // Garante o perfil do usuário a partir dos metadados do OAuth.
     // O nome vindo do Google/Discord pode já pertencer a outra conta — e não
     // dá para parar o login e pedir outro. Entra o primeiro livre derivado
-    // dele ("tried", "tried2"…); o dono ajusta depois em /perfil.
+    // dele ("tried", "tried2"…). É só o provisório: a conta nova escolhe o
+    // nome de verdade no /consentimento, logo em seguida.
     const suggestedName =
       authData.user.user_metadata?.full_name ||
       authData.user.user_metadata?.name ||

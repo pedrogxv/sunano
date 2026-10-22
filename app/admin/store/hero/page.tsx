@@ -36,7 +36,7 @@ import { StoreHeroSealsEditor } from "@/components/admin/store/StoreHeroSealsEdi
 import { usePageHeader } from "@/components/providers/page-header-context"
 import { StoreHero } from "@/components/store/StoreHero"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import BoxLoader from "@/components/ui/box-loader"
+import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -724,7 +724,7 @@ export default function AdminStoreHeroPage() {
 
       {loading ? (
         <div className="flex justify-center py-14">
-          <BoxLoader />
+          <SunanoLoader />
         </div>
       ) : slides.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-border py-16 text-center">

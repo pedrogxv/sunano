@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { toast } from "sonner"
-import BoxLoader from "@/components/ui/box-loader"
+import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { EventForm } from "../form"
 import { StaffGrantPanel } from "../StaffGrantPanel"
 import { BackBreadcrumb } from "@/components/admin/BackBreadcrumb"
@@ -46,7 +46,7 @@ export default function EditEventPage() {
       <div className="mx-auto max-w-2xl space-y-6">
         <BackBreadcrumb href="/admin/eventos" parentLabel="Conquistas" currentLabel={currentLabel} />
         <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-border bg-card/40 py-20">
-          <BoxLoader />
+          <SunanoLoader />
           <div className="text-center">
             <p className="text-sm font-medium text-foreground">Carregando conquista…</p>
             <p className="mt-1 text-xs text-muted-foreground">Buscando dados da medalha e do progresso.</p>

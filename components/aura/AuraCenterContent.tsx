@@ -6,7 +6,7 @@ import { useEffect, useState, type CSSProperties } from "react"
 import { toast } from "sonner"
 import { Bird, Check, ChevronRight, HelpCircle, MessageSquare, Snowflake, Sparkles, SquarePen, Trophy } from "lucide-react"
 import { AuraIcon } from "@/components/ui/AuraIcon"
-import { AuraFlame, AuraFlameDefs } from "@/components/ui/AuraFlame"
+import { AuraFlame } from "@/components/ui/AuraFlame"
 
 import { AuraRankingModal } from "@/components/aura/AuraRankingModal"
 import { AuraVipDiscountBanner } from "@/components/aura/AuraVipDiscountBanner"
@@ -302,8 +302,6 @@ export function AuraCenterContent({
   return (
     <>
     <div className="mx-auto max-w-5xl space-y-8 px-4 py-8 sm:py-12">
-      {/* Gradientes das chamas, uma vez para a página toda (ver AuraFlame.tsx). */}
-      <AuraFlameDefs />
       {/* Título "banner de fogueira": texto em brasa correndo + fagulhas subindo */}
       <div className="aura-title-banner relative flex flex-wrap items-center gap-4 overflow-visible pb-2">
         <span className="aura-hero-icon-holder relative flex size-14 shrink-0 items-center justify-center sm:size-16">

@@ -8,7 +8,7 @@ import { AuthBackground } from "@/components/auth/AuthBackground"
 import { LgpdConsentForm } from "@/components/auth/LgpdConsentForm"
 import { sanitizeNextPath } from "@/lib/auth-mfa"
 import { freshSocialProviderLabel, isFreshSocialAccount } from "@/lib/server/auth/fresh-social-account"
-import { hasRecordedLgpdConsent } from "@/lib/server/repositories/users-repository"
+import { getUserProfile, hasRecordedLgpdConsent } from "@/lib/server/repositories/users-repository"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 
 export const dynamic = "force-dynamic"
@@ -55,6 +55,12 @@ export default async function ConsentimentoPage({
   // lib/server/auth/fresh-social-account.ts.
   const freshSocialProvider = isFreshSocialAccount(user) ? freshSocialProviderLabel(user) : null
 
+  // A conta social nasceu com o nome do provedor, sem a pessoa escolher. É
+  // aqui que ela escolhe (ver `applyChosenDisplayName` em ./actions.ts).
+  const currentDisplayName = freshSocialProvider
+    ? ((await getUserProfile(user.id))?.display_name ?? "")
+    : null
+
   return (
     <div className="relative isolate flex min-h-dvh items-center justify-center overflow-hidden px-4 py-10">
       <AuthBackground />
@@ -69,8 +75,9 @@ export default async function ConsentimentoPage({
             Antes de continuar
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Precisamos do seu aceite à Política de Privacidade para tratar seus dados em
-            conformidade com a LGPD.
+            {freshSocialProvider
+              ? "Escolha como você quer aparecer no site e aceite a Política de Privacidade, exigida pela LGPD para tratarmos seus dados."
+              : "Precisamos do seu aceite à Política de Privacidade para tratar seus dados em conformidade com a LGPD."}
           </p>
         </div>
 
@@ -86,7 +93,12 @@ export default async function ConsentimentoPage({
         )}
 
         <div className="rounded-2xl border border-border bg-card p-8 shadow-xl shadow-black/30">
-          <LgpdConsentForm next={next} isFreshSocialAccount={Boolean(freshSocialProvider)} />
+          <LgpdConsentForm
+            next={next}
+            isFreshSocialAccount={Boolean(freshSocialProvider)}
+            initialDisplayName={currentDisplayName}
+            providerLabel={freshSocialProvider}
+          />
         </div>
       </div>
     </div>

@@ -34,7 +34,7 @@ import {
 import { toast } from "sonner"
 
 import { AnimatedCounter } from "@/components/animated-counter"
-import BoxLoader from "@/components/ui/box-loader"
+import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { ProfileAvatar } from "@/components/ui/ProfileAvatar"
 import { usePageHeader } from "@/components/providers/page-header-context"
 import { getTierCapabilities, type AccountTier } from "@/lib/account-tier"
@@ -1546,7 +1546,7 @@ export default function AdminUsersPage() {
           ordenado, e o filtro de cargo faz esse papel melhor. */}
       {loading ? (
         <div className="flex items-center justify-center py-10">
-          <BoxLoader />
+          <SunanoLoader />
         </div>
       ) : users.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-10 text-center">

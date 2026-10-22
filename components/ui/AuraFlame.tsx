@@ -1,3 +1,5 @@
+import { useId } from "react"
+
 import { cn } from "@/lib/utils"
 
 import {
@@ -11,7 +13,8 @@ import {
  * A CHAMA VIVA DA AURA — o símbolo animado, para o ÍCONE DE DESTAQUE da tela.
  *
  * Três corpos sobrepostos (língua externa, corpo interno, núcleo), cada um
- * com o seu ciclo, mais as fagulhas que sobem da ponta. Toda a animação mora
+ * com o seu ciclo, a cama de brasa respirando embaixo e as fagulhas que sobem
+ * da ponta. Dentro de um `.group`, o hover atiça o fogo (cresce e acelera). Toda a animação mora
  * no `globals.css` (bloco `.aura-flame`); aqui só existe a estrutura que
  * aquelas regras esperam.
  *
@@ -25,7 +28,6 @@ import {
  * nunca redesenhe a forma aqui, senão o site volta a ter dois símbolos.
  *
  * ```tsx
- * <AuraFlameDefs />              // UMA vez por página (os gradientes)
  * <AuraFlame size="2xl" sparks />
  * <AuraFlame size="lg" />
  * ```
@@ -43,37 +45,34 @@ const SIZE_CLASSES: Record<AuraFlameSize, string> = {
 }
 
 /**
- * Os três gradientes das camadas, uma vez por página.
+ * Os três gradientes das camadas, DENTRO de cada chama, com ids de `useId`.
  *
- * O CSS referencia os gradientes por `id` (`fill: url(#aura-flame-grad-*)`),
- * e `id` é global no documento: repetir as `<defs>` em cada chama duplicaria
- * os ids, e o navegador passa a resolver todos para o PRIMEIRO — então basta
- * um `<AuraFlameDefs />` no topo da página e todas as chamas dela acendem.
+ * Antes eles viviam num `<AuraFlameDefs />` por página, referenciado por id
+ * fixo no CSS. Isso prendia a chama viva à Central: em qualquer outra página
+ * (a sidebar está em todas) o `url(#...)` não resolvia e a chama saía sem
+ * cor. Com o id por instância o componente acende sozinho onde for montado.
  */
-export function AuraFlameDefs() {
+function FlameGradients({ id }: { id: string }) {
   return (
-    <svg aria-hidden className="pointer-events-none absolute size-0" focusable="false">
-      <defs>
-        {/* Da base (brasa funda) para a ponta (fumaça quente): a língua
-            externa é a mais fria nas extremidades, por isso ela some no topo. */}
-        <linearGradient id="aura-flame-grad-outer" x1="0" y1="1" x2="0" y2="0">
-          <stop offset="0%" stopColor="oklch(0.62 0.23 28)" />
-          <stop offset="45%" stopColor="oklch(0.7 0.21 45)" />
-          <stop offset="100%" stopColor="oklch(0.78 0.18 65)" />
-        </linearGradient>
-        {/* Corpo interno — mais claro, é o que dá o volume. */}
-        <linearGradient id="aura-flame-grad-inner" x1="0" y1="1" x2="0" y2="0">
-          <stop offset="0%" stopColor="oklch(0.72 0.21 40)" />
-          <stop offset="60%" stopColor="oklch(0.82 0.18 65)" />
-          <stop offset="100%" stopColor="oklch(0.9 0.15 85)" />
-        </linearGradient>
-        {/* Núcleo — quase branco quente; é o ponto mais luminoso da chama. */}
-        <linearGradient id="aura-flame-grad-core" x1="0" y1="1" x2="0" y2="0">
-          <stop offset="0%" stopColor="oklch(0.88 0.15 75)" />
-          <stop offset="100%" stopColor="oklch(0.97 0.08 95)" />
-        </linearGradient>
-      </defs>
-    </svg>
+    <defs>
+      {/* Da base (brasa funda) para a ponta (fogo claro). */}
+      <linearGradient id={`${id}-outer`} x1="0" y1="1" x2="0" y2="0">
+        <stop offset="0%" stopColor="oklch(0.6 0.23 28)" />
+        <stop offset="45%" stopColor="oklch(0.69 0.21 45)" />
+        <stop offset="100%" stopColor="oklch(0.8 0.17 70)" />
+      </linearGradient>
+      {/* Corpo interno — mais claro, é o que dá o volume. */}
+      <linearGradient id={`${id}-inner`} x1="0" y1="1" x2="0" y2="0">
+        <stop offset="0%" stopColor="oklch(0.72 0.21 42)" />
+        <stop offset="60%" stopColor="oklch(0.83 0.17 68)" />
+        <stop offset="100%" stopColor="oklch(0.91 0.14 88)" />
+      </linearGradient>
+      {/* Núcleo — quase branco quente; é o ponto mais luminoso da chama. */}
+      <linearGradient id={`${id}-core`} x1="0" y1="1" x2="0" y2="0">
+        <stop offset="0%" stopColor="oklch(0.9 0.14 80)" />
+        <stop offset="100%" stopColor="oklch(0.98 0.06 95)" />
+      </linearGradient>
+    </defs>
   )
 }
 
@@ -88,20 +87,25 @@ export interface AuraFlameProps {
 }
 
 export function AuraFlame({ size = "md", sparks = false, className }: AuraFlameProps) {
+  // `useId` devolve `«r1»`/`:r1:`, que não são válidos dentro de `url(#...)`.
+  const id = `aura-flame-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`
   return (
     <span className={cn("aura-flame", SIZE_CLASSES[size], className)} aria-hidden>
+      {/* A cama de brasa: o clarão achatado de onde o fogo nasce. */}
+      <span className="aura-flame-bed" />
       <svg className="aura-flame-svg" viewBox={AURA_FLAME_VIEW_BOX} focusable="false">
-        <path className="aura-flame-body aura-flame-outer" d={AURA_FLAME_OUTER_PATH} />
-        <path className="aura-flame-body aura-flame-inner" d={AURA_FLAME_INNER_PATH} />
-        <path className="aura-flame-core" d={AURA_FLAME_CORE_PATH} />
+        <FlameGradients id={id} />
+        <path className="aura-flame-body aura-flame-outer" d={AURA_FLAME_OUTER_PATH} fill={`url(#${id}-outer)`} />
+        <path className="aura-flame-body aura-flame-inner" d={AURA_FLAME_INNER_PATH} fill={`url(#${id}-inner)`} />
+        <path className="aura-flame-core" d={AURA_FLAME_CORE_PATH} fill={`url(#${id}-core)`} />
       </svg>
       {sparks && (
         <>
-          {/* Os atrasos e a deriva de cada fagulha vêm do `:nth-child` no
+          {/* Os atrasos e a deriva de cada fagulha vêm do `:nth-of-type` no
               globals.css — são três de propósito. */}
-          <span className="aura-flame-spark" />
-          <span className="aura-flame-spark" />
-          <span className="aura-flame-spark" />
+          <i className="aura-flame-spark" />
+          <i className="aura-flame-spark" />
+          <i className="aura-flame-spark" />
         </>
       )}
     </span>

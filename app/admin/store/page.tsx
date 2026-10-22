@@ -21,7 +21,7 @@ import {
   X,
 } from "lucide-react"
 import { toast } from "sonner"
-import BoxLoader from "@/components/ui/box-loader"
+import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { usePageHeader } from "@/components/providers/page-header-context"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -616,7 +616,7 @@ export default function AdminStorePage() {
       {/* Products table */}
       {loading ? (
         <div className="flex justify-center py-14">
-          <BoxLoader />
+          <SunanoLoader />
         </div>
       ) : products.length === 0 && outOfStockOnly ? (
         <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-border py-16 text-center">

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import { toast } from "sonner"
 import { Eye, EyeOff, Loader2, Star } from "lucide-react"
-import BoxLoader from "@/components/ui/box-loader"
+import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -165,7 +165,7 @@ export default function AdminProductReviewsPage() {
       <div className="mx-auto max-w-3xl space-y-6">
         <BackBreadcrumb href="/admin/store" parentLabel="Loja" currentLabel="Avaliações" />
         <div className="flex justify-center py-16">
-          <BoxLoader />
+          <SunanoLoader />
         </div>
       </div>
     )

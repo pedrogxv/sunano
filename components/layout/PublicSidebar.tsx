@@ -8,7 +8,6 @@ import {
   BadgePercent,
   BarChart2,
   BookOpen,
-  Crown,
   Home,
   Medal,
   MessageCircle,
@@ -27,6 +26,7 @@ import { useEffect, useState } from "react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { SunanoIcon } from "@/components/ui/SunanoLogo"
 import { VipUpsellModal } from "@/components/aura/VipUpsellModal"
+import { SidebarVipTab } from "@/components/layout/SidebarVipTab"
 import { isVipSubscriptionEnabled } from "@/lib/vip-signup"
 import { vipCtaLabel } from "@/lib/vip-status"
 import { useAuthUser } from "@/components/providers/auth-context"
@@ -113,6 +113,7 @@ export function PublicSidebar() {
 
   const [claimableEvents, setClaimableEvents] = useState(0)
   const [vipUpsellOpen, setVipUpsellOpen] = useState(false)
+  const showVipTab = !authUser?.vip.isVip && isVipSubscriptionEnabled()
 
   useEffect(() => {
     let mounted = true
@@ -292,35 +293,6 @@ export function PublicSidebar() {
                 onClick={close}
               />
             ))}
-
-            {/* Convite VIP para quem NÃO é VIP AGORA (`isVip`, não "tem
-                assinatura viva": quem cancelou dentro do período pago continua
-                VIP até o fim dele). Ver lib/vip-status.ts. */}
-            {!authUser?.vip.isVip && isVipSubscriptionEnabled() && (
-              <button
-                type="button"
-                onClick={() => {
-                  close()
-                  // Deslogado também abre a OFERTA, não o login: o popup se
-                  // apresenta no modo de visitante (vantagens + "Entrar"/"Criar
-                  // conta") e retoma a assinatura sozinho depois. Mandar direto
-                  // para o login perdia o motivo do clique — a pessoa
-                  // autenticava e caía no fórum, sem nada sobre VIP.
-                  setVipUpsellOpen(true)
-                }}
-                className={cn(
-                  "flex w-full items-center gap-3 rounded-lg border border-[var(--vip-accent-soft)] px-3 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--vip-accent-soft)]",
-                  isCollapsed && "justify-center"
-                )}
-                style={{ color: "var(--vip-accent)" }}
-              >
-                <Crown className="size-[18px] shrink-0 vip-badge-crown" />
-                <span className={cn("flex-1 text-left", isCollapsed && "hidden")}>
-                  {/* Visitante deslogado não tem estado: o convite é o genérico. */}
-                  {authUser ? vipCtaLabel(authUser.vip) ?? "Seja VIP" : "Seja VIP"}
-                </span>
-              </button>
-            )}
           </div>
         </nav>
 
@@ -329,8 +301,31 @@ export function PublicSidebar() {
             da rolagem para o saldo estar sempre à vista. Deslogado não tem
             saldo: a Central aparece como link comum. */}
         <div className="shrink-0 space-y-1 border-t border-border px-3 pt-3 pb-3">
+          {/* Convite VIP para quem NÃO é VIP AGORA (`isVip`, não "tem
+              assinatura viva": quem cancelou dentro do período pago continua
+              VIP até o fim dele). Ver lib/vip-status.ts. Encaixa no topo da
+              Central de Aura e os dois viram um bloco só. Deslogado também
+              abre a OFERTA, não o login: o popup se apresenta no modo de
+              visitante e retoma a assinatura sozinho depois. */}
+          <div>
+          {showVipTab && (
+            <SidebarVipTab
+              collapsed={isCollapsed}
+              // Visitante deslogado não tem estado: o convite é o genérico.
+              label={authUser ? vipCtaLabel(authUser.vip) ?? "Seja VIP" : "Seja VIP"}
+              onClick={() => {
+                close()
+                setVipUpsellOpen(true)
+              }}
+            />
+          )}
           {authUser ? (
-            <AuraMissionsBadge collapsed={isCollapsed} active={!!isActive("/aura")} onNavigate={close} />
+            <AuraMissionsBadge
+              collapsed={isCollapsed}
+              active={!!isActive("/aura")}
+              attached={showVipTab}
+              onNavigate={close}
+            />
           ) : (
             <RouteLink
               href="/aura"
@@ -338,6 +333,7 @@ export function PublicSidebar() {
               className={cn(
                 "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
                 isCollapsed && "justify-center",
+                showVipTab && "rounded-b-xl rounded-t-none border-t-0",
                 isActive("/aura")
                   ? "bg-orange-600 text-white shadow-sm shadow-orange-900/40"
                   : "nav-fire-holder border border-orange-500/40 bg-orange-500/10 hover:border-orange-500/60 hover:bg-orange-500/20"
@@ -353,6 +349,7 @@ export function PublicSidebar() {
               </span>
             </RouteLink>
           )}
+          </div>
 
           <RouteLink
             href="/changelog"

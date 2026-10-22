@@ -20,7 +20,7 @@ import {
   Zap,
 } from "lucide-react"
 
-import BoxLoader from "@/components/ui/box-loader"
+import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { TelegramIcon } from "@/components/icons/social-icons"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { CouponChip } from "@/components/offers/CouponChip"
@@ -523,7 +523,7 @@ export default function OffersPage() {
 
       {loading ? (
         <div className="flex items-center justify-center py-20">
-          <BoxLoader />
+          <SunanoLoader />
         </div>
       ) : (
         /* ── Sidebar + grid ─────────────────────────────────────────────── */

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { toast } from "sonner"
-import BoxLoader from "@/components/ui/box-loader"
+import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { StoreProductForm, type StoreProduct, type StoreProductSkuInput } from "../form"
 import { BackBreadcrumb } from "@/components/admin/BackBreadcrumb"
 import { usePageHeader } from "@/components/providers/page-header-context"
@@ -108,7 +108,7 @@ export default function EditProductPage() {
       <div className="mx-auto max-w-4xl space-y-6">
         <BackBreadcrumb href="/admin/store" parentLabel="Loja" currentLabel={currentLabel} />
         <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-border bg-card/40 py-20">
-          <BoxLoader />
+          <SunanoLoader />
           <div className="text-center">
             <p className="text-sm font-medium text-foreground">Carregando produto…</p>
             <p className="mt-1 text-xs text-muted-foreground">Buscando informações, imagens e estoque.</p>

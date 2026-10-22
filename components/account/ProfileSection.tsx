@@ -38,7 +38,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
-import BoxLoader from "@/components/ui/box-loader"
+import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { useAccountTier } from "@/lib/hooks/use-account-tier"
 import { slugifyDisplayName } from "@/lib/profile-name"
 import { ChangeDisplayNameModal } from "@/components/profile/ChangeDisplayNameModal"
@@ -920,7 +920,7 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
           <TabsContent value="espaco" forceMount hidden={tab !== "espaco"} className="space-y-4">
             {loadingShowcase ? (
               <div className="flex min-h-64 items-center justify-center">
-                <BoxLoader />
+                <SunanoLoader />
               </div>
             ) : (
               <>

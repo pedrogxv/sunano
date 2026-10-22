@@ -7,7 +7,7 @@ import { ChevronRight, Inbox } from "lucide-react"
 
 import { PeripheralRequestForm } from "@/components/peripherals/requests/PeripheralRequestForm"
 import { PeripheralRequestStatusBadge } from "@/components/peripherals/requests/PeripheralRequestStatusBadge"
-import BoxLoader from "@/components/ui/box-loader"
+import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { useAuthUser } from "@/components/providers/auth-context"
 import { usePeripheralRequests } from "@/lib/hooks/use-peripheral-requests"
 import { MAX_OPEN_PERIPHERAL_REQUESTS, peripheralRequestNumber } from "@/lib/peripheral-requests"
@@ -37,7 +37,7 @@ export function PeripheralRequestsHub() {
 
           {loading ? (
             <div className="flex justify-center py-10">
-              <BoxLoader />
+              <SunanoLoader />
             </div>
           ) : requests.length === 0 ? (
             <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border py-10 text-center">

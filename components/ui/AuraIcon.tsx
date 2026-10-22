@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils"
 
-import { AURA_FLAME_OUTER_PATH, AURA_FLAME_VIEW_BOX } from "@/components/ui/aura-flame-shape"
+import { AURA_FLAME_ICON_PATH, AURA_FLAME_VIEW_BOX } from "@/components/ui/aura-flame-shape"
 
 /**
  * A CHAMA DA AURA — o símbolo da moeda do site, num lugar só.
@@ -106,9 +106,10 @@ export function AuraIcon({
       {/* A forma vem de `aura-flame-shape.tsx`, a MESMA que o `AuraFlame`
           animado desenha — é o que impede o site de ter dois símbolos. */}
       <path
-        d={AURA_FLAME_OUTER_PATH}
+        d={AURA_FLAME_ICON_PATH}
+        fillRule="evenodd"
         stroke="currentColor"
-        strokeWidth={1.5}
+        strokeWidth={1.2}
         strokeLinejoin="round"
         fill={outline ? "none" : "currentColor"}
       />
@@ -140,9 +141,10 @@ export function AuraFlameIcon({
       {...props}
     >
       <path
-        d={AURA_FLAME_OUTER_PATH}
+        d={AURA_FLAME_ICON_PATH}
+        fillRule="evenodd"
         stroke="currentColor"
-        strokeWidth={1.5}
+        strokeWidth={1.2}
         strokeLinejoin="round"
         fill="currentColor"
       />

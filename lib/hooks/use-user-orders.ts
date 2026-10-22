@@ -82,6 +82,8 @@ export type UseUserOrdersOptions = {
   page?: number
   pageSize?: number
   filters?: UserOrderFilters
+  /** Traz `missingShippingCount` (histórico inteiro, ignora página e filtros). */
+  withMissingCount?: boolean
 }
 
 export type UseUserOrdersResult = {
@@ -89,6 +91,8 @@ export type UseUserOrdersResult = {
   pendingOrder: UserOrder | null
   total: number
   hasMore: boolean
+  /** Pedidos pagos sem endereço no histórico inteiro; 0 sem `withMissingCount`. */
+  missingShippingCount: number
   loading: boolean
   refetch: () => void
   /** Slug do anúncio "Complemento de Pagamento"; null se ele está desativado. */
@@ -115,6 +119,7 @@ export function useUserOrders(options?: UseUserOrdersOptions): UseUserOrdersResu
   const [orders, setOrders] = useState<UserOrder[]>([])
   const [total, setTotal] = useState(0)
   const [hasMore, setHasMore] = useState(false)
+  const [missingShippingCount, setMissingShippingCount] = useState(0)
   const [loading, setLoading] = useState(Boolean(user))
   const [reloadToken, setReloadToken] = useState(0)
   const [complementProductSlug, setComplementProductSlug] = useState<string | null>(null)
@@ -125,6 +130,7 @@ export function useUserOrders(options?: UseUserOrdersOptions): UseUserOrdersResu
   const dateFrom = options?.filters?.dateFrom
   const dateTo = options?.filters?.dateTo
   const missingShipping = options?.filters?.missingShipping
+  const withMissingCount = options?.withMissingCount
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams()
@@ -134,8 +140,9 @@ export function useUserOrders(options?: UseUserOrdersOptions): UseUserOrdersResu
     if (dateFrom) params.set("dateFrom", dateFrom)
     if (dateTo) params.set("dateTo", dateTo)
     if (missingShipping) params.set("missingShipping", "1")
+    if (withMissingCount) params.set("withMissingCount", "1")
     return params.toString()
-  }, [page, pageSize, status, dateFrom, dateTo, missingShipping])
+  }, [page, pageSize, status, dateFrom, dateTo, missingShipping, withMissingCount])
 
   useEffect(() => {
     if (!user) return
@@ -147,16 +154,26 @@ export function useUserOrders(options?: UseUserOrdersOptions): UseUserOrdersResu
     })
     fetch(`/api/store/orders?${queryString}`)
       .then((res) => (res.ok ? res.json() : { orders: [], total: 0, hasMore: false }))
-      .then((data: { orders?: UserOrder[]; total?: number; hasMore?: boolean; complementProductSlug?: string | null }) => {
-        if (cancelled) return
-        setOrders(data.orders ?? [])
-        setComplementProductSlug(data.complementProductSlug ?? null)
-        setTotal(data.total ?? 0)
-        setHasMore(data.hasMore ?? false)
-      })
+      .then(
+        (data: {
+          orders?: UserOrder[]
+          total?: number
+          hasMore?: boolean
+          missingShippingCount?: number
+          complementProductSlug?: string | null
+        }) => {
+          if (cancelled) return
+          setOrders(data.orders ?? [])
+          setMissingShippingCount(data.missingShippingCount ?? 0)
+          setComplementProductSlug(data.complementProductSlug ?? null)
+          setTotal(data.total ?? 0)
+          setHasMore(data.hasMore ?? false)
+        }
+      )
       .catch(() => {
         if (cancelled) return
         setOrders([])
+        setMissingShippingCount(0)
         setTotal(0)
         setHasMore(false)
       })
@@ -171,5 +188,14 @@ export function useUserOrders(options?: UseUserOrdersOptions): UseUserOrdersResu
   const pendingOrder = orders.find((o) => o.status === "pending") ?? null
   const refetch = () => setReloadToken((n) => n + 1)
 
-  return { orders, pendingOrder, total, hasMore, loading, refetch, complementProductSlug }
+  return {
+    orders,
+    pendingOrder,
+    total,
+    hasMore,
+    missingShippingCount,
+    loading,
+    refetch,
+    complementProductSlug,
+  }
 }

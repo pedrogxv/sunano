@@ -98,6 +98,6 @@ export async function verifyTotpAction(
 /** Sai da conta — escape para quem não tem acesso ao app autenticador. */
 export async function cancelTwoFactorAction() {
   const supabase = await createSupabaseServerClient()
-  await supabase.auth.signOut()
+  await supabase.auth.signOut({ scope: "local" })
   redirect("/login")
 }

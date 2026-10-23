@@ -82,7 +82,7 @@ export function PrivacidadeTab({ email, lgpdConsentAt, lgpdConsentVersion }: Pri
         const data = (await res.json().catch(() => null)) as { error?: string } | null
         throw new Error(data?.error ?? "Erro ao excluir conta")
       }
-      await supabaseAuth.auth.signOut()
+      await supabaseAuth.auth.signOut({ scope: "local" })
       window.location.href = "/login?deleted=1"
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao excluir conta"

@@ -73,7 +73,7 @@ export async function loginUserAction(_: AuthState, formData: FormData): Promise
   // 2FA) — não deve nem chegar a progredir por essas etapas.
   const banStatus = await getAccountBanStatus(authData.user.id)
   if (banStatus.isBanned) {
-    await supabase.auth.signOut()
+    await supabase.auth.signOut({ scope: "global" })
     return { error: "account_banned" }
   }
 
@@ -116,6 +116,6 @@ export async function loginUserAction(_: AuthState, formData: FormData): Promise
 
 export async function logoutUserAction() {
   const supabase = await createSupabaseServerClient()
-  await supabase.auth.signOut()
+  await supabase.auth.signOut({ scope: "local" })
   redirect("/login")
 }

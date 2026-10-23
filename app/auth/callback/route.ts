@@ -82,7 +82,7 @@ export async function GET(request: NextRequest) {
     }
     // Confirmar o e-mail não cria sessão (ver nota em app/register/actions.ts
     // sobre `confirmed_at`) — a pessoa ainda precisa logar com a senha.
-    await supabase.auth.signOut()
+    await supabase.auth.signOut({ scope: "local" })
     return NextResponse.redirect(`${origin}/login?confirmed=1`)
   }
 
@@ -163,7 +163,7 @@ export async function GET(request: NextRequest) {
     // 2FA, LGPD) — não deve nem chegar a progredir por essas etapas.
     const banStatus = await getAccountBanStatus(authData.user.id)
     if (banStatus.isBanned) {
-      await supabase.auth.signOut()
+      await supabase.auth.signOut({ scope: "global" })
       return NextResponse.redirect(`${origin}/login?error=account_banned`)
     }
 
@@ -216,7 +216,7 @@ export async function GET(request: NextRequest) {
         "[auth/callback] provedor devolveu e-mail não verificado — login recusado.",
         currentIdentity?.provider
       )
-      await supabase.auth.signOut()
+      await supabase.auth.signOut({ scope: "local" })
       return NextResponse.redirect(`${origin}/login?error=email_not_verified`)
     }
 

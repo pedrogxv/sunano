@@ -200,6 +200,6 @@ export async function declineLgpdConsentAction() {
 
   // Depois do deleteUser a sessão já não existe no Supabase; o signOut ainda
   // apaga os cookies deste navegador.
-  await supabase.auth.signOut()
+  await supabase.auth.signOut({ scope: "local" })
   redirect(discarded ? "/login?discarded=1" : "/login")
 }

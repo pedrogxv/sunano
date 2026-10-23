@@ -61,11 +61,17 @@ function clearSupabaseCookies() {
  * liberada e `signOut()` fica pendurado pra sempre, sem erro. Por isso aqui
  * ele nunca é a única fonte de verdade: tem timeout e, de qualquer forma,
  * os cookies de sessão são apagados na mão antes de redirecionar.
+ *
+ * `scope: "local"` é obrigatório: o padrão do gotrue-js é `global`, que revoga
+ * TODAS as sessões da conta (outro aparelho, outra aba de produção, localhost).
+ * Sair aqui derrubava a sessão de produção do mesmo navegador, que continuava
+ * abrindo o painel pelo JWT ainda válido mas mostrava "Login" na sidebar.
+ * Encerrar tudo é uma ação explícita: "Encerrar sessões" em PreferencesTab.
  */
 export async function signOutSafely() {
   try {
     await Promise.race([
-      supabaseAuth.auth.signOut(),
+      supabaseAuth.auth.signOut({ scope: "local" }),
       new Promise((resolve) => setTimeout(resolve, 2500)),
     ])
   } catch {

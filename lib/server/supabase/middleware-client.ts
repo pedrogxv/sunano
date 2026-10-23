@@ -152,7 +152,7 @@ export async function updateSession(
     if (isAccountBanned) {
       // Encerra a sessão já neste response — o cookie sai invalidado junto
       // com o redirect que proxy.ts monta a partir daqui.
-      await supabase.auth.signOut()
+      await supabase.auth.signOut({ scope: "global" })
     }
 
     const pendingConsent = userProfile !== null && !userProfile.lgpd_consent_at

@@ -14,8 +14,11 @@ import { cn } from "@/lib/utils"
  *
  * Acessibilidade (o que faz este componente passar em auditoria):
  * - **Botão de pausa explícito** — WCAG 2.2.2 exige um controle para parar
- *   conteúdo que se move sozinho por mais de 5s. Hover e foco também pausam,
- *   mas nenhum dos dois substitui o botão.
+ *   conteúdo que se move sozinho por mais de 5s. Mouse em cima e foco de
+ *   teclado também pausam (a barra congela onde está), mas nenhum dos dois
+ *   substitui o botão. Toque não pausa: no celular o navegador emula um
+ *   `mouseenter` no toque e nunca manda o `mouseleave`, e o carrossel ficava
+ *   parado para sempre depois do primeiro swipe ou dot.
  * - Slides fora de tela ficam `inert`: não recebem foco nem clique.
  * - Sem rotação automática para quem pediu menos movimento no sistema
  *   (`prefers-reduced-motion`); a navegação manual continua.
@@ -269,7 +272,7 @@ export default function BannerCarousel({
   className?: string
 }) {
   const [current, setCurrent] = useState(0)
-  // Pausa transitória: ponteiro em cima ou foco dentro do carrossel.
+  // Pausa transitória: mouse em cima ou foco de teclado dentro do carrossel.
   const [isHoverPaused, setIsHoverPaused] = useState(false)
   // Pausa deliberada: o visitante apertou o botão. Só ele reverte. `null` =
   // ainda não escolheu, e aí vale o padrão do viewport (parado no celular).
@@ -284,8 +287,11 @@ export default function BannerCarousel({
   const suppressClickRef = useRef(false)
 
   const total = banners.length
-  const shouldAutoRotate =
-    total > 1 && !isHoverPaused && !isStopped && !prefersReducedMotion
+  // Com a rotação ligada, quem troca o slide é o fim da barra do dot atual
+  // (`onAnimationEnd`), não um setInterval: a pausa por hover só congela a
+  // barra, e ela retoma de onde parou em vez de recomeçar o relógio com a
+  // barra pela metade.
+  const isAutoplayOn = total > 1 && !isStopped && !prefersReducedMotion
 
   // Se a lista encolher (banner removido no admin), o índice guardado pode
   // apontar para fora dela — daí o slide exibido ser sempre derivado, não o
@@ -320,18 +326,6 @@ export default function BannerCarousel({
     },
     [total]
   )
-
-  useEffect(() => {
-    if (!shouldAutoRotate) return
-
-    const timer = window.setInterval(() => {
-      setCurrent((value) => (value + 1) % total)
-    }, intervalMs)
-
-    return () => window.clearInterval(timer)
-    // `currentIndex` entra na lista de propósito: qualquer navegação manual
-    // reinicia a contagem, em vez de trocar de slide logo em seguida.
-  }, [shouldAutoRotate, total, intervalMs, currentIndex])
 
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
@@ -387,9 +381,17 @@ export default function BannerCarousel({
     <section
       aria-roledescription="carrossel"
       aria-label="Destaques do Sunano"
-      onMouseEnter={() => setIsHoverPaused(true)}
-      onMouseLeave={() => setIsHoverPaused(false)}
-      onFocusCapture={() => setIsHoverPaused(true)}
+      onPointerEnter={(event) => {
+        if (event.pointerType === "mouse") setIsHoverPaused(true)
+      }}
+      onPointerLeave={(event) => {
+        if (event.pointerType === "mouse") setIsHoverPaused(false)
+      }}
+      // Só foco de teclado: o clique num dot também foca o botão, e aí a
+      // rotação parava depois de qualquer troca manual.
+      onFocusCapture={(event) => {
+        if ((event.target as Element).matches(":focus-visible")) setIsHoverPaused(true)
+      }}
       onBlurCapture={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
           setIsHoverPaused(false)
@@ -468,18 +470,24 @@ export default function BannerCarousel({
                         isCurrent ? "w-6 bg-white/25" : "w-2 bg-white/50 group-hover:bg-white/80"
                       )}
                     >
-                      {/* No dot ativo, a barra some do zero e enche até trocar de
-                          slide — parada (sem animação) enquanto o autoplay está
-                          pausado, já que aí não há contagem correndo pra mostrar.
-                          `key` reinicia a animação do zero a cada slide novo. */}
-                      {isCurrent && shouldAutoRotate && (
+                      {/* No dot ativo, a barra sai do zero e, ao encher, troca o
+                          slide. Mouse em cima congela a barra onde está; com a
+                          rotação desligada ela fica cheia, sem contagem para
+                          mostrar. `key` reinicia do zero a cada slide novo. */}
+                      {isCurrent && isAutoplayOn && (
                         <span
                           key={currentIndex}
-                          style={{ "--carousel-interval": `${intervalMs}ms` } as React.CSSProperties}
+                          onAnimationEnd={() => goTo(currentIndex + 1)}
+                          style={
+                            {
+                              "--carousel-interval": `${intervalMs}ms`,
+                              animationPlayState: isHoverPaused ? "paused" : "running",
+                            } as React.CSSProperties
+                          }
                           className="animate-carousel-progress absolute inset-0 rounded-full bg-white"
                         />
                       )}
-                      {isCurrent && !shouldAutoRotate && (
+                      {isCurrent && !isAutoplayOn && (
                         <span className="absolute inset-0 rounded-full bg-white" />
                       )}
                     </span>

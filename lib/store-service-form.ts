@@ -90,15 +90,19 @@ export function newServiceFormFieldId(): string {
  * chamada, para dois produtos não dividirem a mesma chave por acidente.
  */
 export function defaultServiceFormFields(): ServiceFormField[] {
-  const field = (label: string, type: ServiceFormFieldType): ServiceFormField => ({
+  const field = (label: string, type: ServiceFormFieldType, required: boolean): ServiceFormField => ({
     id: newServiceFormFieldId(),
     label,
     type,
-    required: true,
+    required,
     placeholder: null,
     options: [],
   })
-  return [field("Nome do produto", "text"), field("Link do produto", "url"), field("Cor e modelo", "text")]
+  return [
+    field("Nome do item", "text", true),
+    field("Link do item (Taobao/Goofish)", "url", false),
+    field("Fotos do item ou modelo", "image", false),
+  ]
 }
 
 /** Campos como o admin salva (POST/PATCH do produto). */

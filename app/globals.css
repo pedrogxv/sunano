@@ -210,11 +210,12 @@ h3,
   animation: skeleton-shimmer 1.6s ease-in-out infinite;
 }
 
-/* Preenchimento do "pill" ativo no BannerCarousel — a barrinha some do zero e
-   enche em linha reta até o próximo slide, em vez de já nascer cheia. A
-   duração é injetada via `--carousel-interval` (mesmo valor do setInterval do
-   componente), e o `key={currentIndex}` no elemento reinicia a animação do
-   zero sempre que o slide muda, seja por autoplay ou clique manual. */
+/* Preenchimento do "pill" ativo no BannerCarousel e no StoreHero: a barrinha
+   sai do zero e enche em linha reta até o próximo slide, em vez de já nascer
+   cheia. A duração vem de `--carousel-interval`, e o FIM da animação é o que
+   troca o slide (`onAnimationEnd`), então barra e troca nunca se desencontram;
+   pausar é `animation-play-state: paused`. O `key={currentIndex}` reinicia a
+   animação do zero sempre que o slide muda, por autoplay ou clique manual. */
 @keyframes carousel-progress {
   from { transform: scaleX(0); }
   to { transform: scaleX(1); }

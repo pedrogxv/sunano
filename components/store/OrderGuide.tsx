@@ -47,6 +47,7 @@ const MASCOT = {
   packing: "/images/mascot/guide/packing.webp",
   shipping: "/images/mascot/guide/shipping.webp",
   unboxing: "/images/mascot/guide/unboxing.webp",
+  support: "/images/mascot/guide/support.webp",
 } as const
 
 type GuideSlide = {
@@ -184,7 +185,7 @@ const SLIDES: GuideSlide[] = [
         o pedido vinculado, sem precisar explicar de qual compra se trata.
       </>
     ),
-    mascot: "received",
+    mascot: "support",
   },
 ]
 
@@ -346,29 +347,23 @@ export function OrderGuideDialog({
           </div>
         </div>
 
-        {/* Trilho em miniatura: as mesmas etapas do card do pedido, com a
-            atual acesa. Clicável para pular direto a uma etapa. */}
-        <div className="flex items-center justify-center gap-1.5 border-t border-border/60 px-4 pt-4">
+        {/* Pontinhos como os do hero da Loja: o atual vira pílula. Clicável
+            para pular direto a um slide. */}
+        <div className="flex items-center justify-center gap-2 border-t border-border/60 px-4 pt-4">
           {SLIDES.map((s, i) => {
-            const StepIcon = s.icon
+            const isCurrent = i === index
             return (
               <button
                 key={s.key}
                 type="button"
                 onClick={() => setIndex(i)}
-                aria-label={s.step ?? s.title}
-                aria-current={i === index ? "step" : undefined}
+                aria-label={`Ir para o slide ${i + 1}: ${s.title}`}
+                aria-current={isCurrent ? "step" : undefined}
                 className={cn(
-                  "flex size-7 items-center justify-center rounded-full border transition-colors",
-                  i === index
-                    ? "border-emerald-400 bg-emerald-500/20 text-emerald-300"
-                    : i < index
-                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-500/70"
-                      : "border-border/60 text-muted-foreground/50 hover:text-muted-foreground"
+                  "h-2 rounded-full transition-all duration-300 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/80",
+                  isCurrent ? "w-7 bg-emerald-400" : "w-2 bg-muted-foreground/35 hover:bg-muted-foreground/70"
                 )}
-              >
-                <StepIcon className="size-3.5" />
-              </button>
+              />
             )
           })}
         </div>
@@ -378,9 +373,6 @@ export function OrderGuideDialog({
             <ChevronLeft className="size-4" />
             Anterior
           </Button>
-          <span className="text-xs tabular-nums text-muted-foreground">
-            {index + 1} / {SLIDES.length}
-          </span>
           {isLast ? (
             <Button
               type="button"

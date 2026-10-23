@@ -1,8 +1,10 @@
 import "server-only"
 
+import { cookies } from "next/headers"
 import { cache } from "react"
 
-import { isMfaStepUpRequired } from "@/lib/auth-mfa"
+import { isMfaStepUpRequired, TRUSTED_DEVICE_COOKIE_NAME } from "@/lib/auth-mfa"
+import { isTrustedDevice } from "@/lib/server/repositories/mfa-trusted-devices-repository"
 import { isStoreMaintenanceEnabled } from "@/lib/store-maintenance"
 import { canUseStoreNow } from "@/lib/server/auth/store-access"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
@@ -153,8 +155,15 @@ export const resolveAuthUser = cache(async function resolveAuthUser(): Promise<A
   // Sessão aal1 com fator verificado: o 2FA ainda não foi concluído. Trata
   // como anônimo para que a casca não exiba dados do perfil antes da
   // autenticação estar completa.
+  //
+  // Exceto em dispositivo confiável, a MESMA régua do proxy.ts: lá a sessão
+  // aal1 passa sem pedir o código, então aqui também conta como logada. Sem
+  // isso o login dava certo, o proxy liberava as páginas e a casca mostrava
+  // "Entrar": a pessoa logava de novo, pulava o 2FA de novo, e nunca saía
+  // do laço (conta sunano, 23/10/2026).
   if (isMfaStepUpRequired({ current: aal?.currentLevel ?? null, next: aal?.nextLevel ?? null })) {
-    return anonymousPayload()
+    const trustedToken = (await cookies()).get(TRUSTED_DEVICE_COOKIE_NAME)?.value
+    if (!(await isTrustedDevice(authData.user.id, trustedToken))) return anonymousPayload()
   }
 
   const user = { id: authData.user.id, email: authData.user.email ?? null }

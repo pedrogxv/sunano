@@ -549,6 +549,7 @@ function HeroCarousel({ slides }: { slides: StoreHeroView[] }) {
   // navegação e o que sai vai para o oposto, inclusive na volta do último
   // para o primeiro (autoplay é sempre "next").
   const [transition, setTransition] = useState<{ from: number; direction: SlideDirection } | null>(null)
+  // Mouse em cima ou foco de teclado: congela a barra do dot atual.
   const [isHoverPaused, setIsHoverPaused] = useState(false)
   const [isStopped, setIsStopped] = useState(false)
   const prefersReducedMotion = usePrefersReducedMotion()
@@ -556,7 +557,10 @@ function HeroCarousel({ slides }: { slides: StoreHeroView[] }) {
 
   const total = slides.length
   const currentIndex = current < total ? current : 0
-  const shouldAutoRotate = total > 1 && !isHoverPaused && !isStopped && !prefersReducedMotion
+  // Quem troca o slide é o fim da barra do dot atual (`onAnimationEnd`), como
+  // no carrossel da Home: a pausa só congela a barra, e ela retoma de onde
+  // parou. Com setInterval, a barra e o relógio se desencontravam.
+  const isAutoplayOn = total > 1 && !isStopped && !prefersReducedMotion
 
   const goTo = useCallback(
     (index: number, direction: SlideDirection) => {
@@ -568,13 +572,6 @@ function HeroCarousel({ slides }: { slides: StoreHeroView[] }) {
     },
     [total, currentIndex]
   )
-
-  useEffect(() => {
-    if (!shouldAutoRotate) return
-    const timer = window.setInterval(() => goTo(currentIndex + 1, "next"), AUTOPLAY_MS)
-    return () => window.clearInterval(timer)
-    // `currentIndex` de propósito: navegação manual reinicia a contagem.
-  }, [shouldAutoRotate, goTo, currentIndex])
 
   function onKeyDown(event: React.KeyboardEvent) {
     if (total <= 1) return
@@ -610,9 +607,18 @@ function HeroCarousel({ slides }: { slides: StoreHeroView[] }) {
     <section
       aria-roledescription="carrossel"
       aria-label="Destaques da Loja"
-      onMouseEnter={() => setIsHoverPaused(true)}
-      onMouseLeave={() => setIsHoverPaused(false)}
-      onFocusCapture={() => setIsHoverPaused(true)}
+      // Toque não pausa: o navegador emula `mouseenter` no toque e nunca manda
+      // o `mouseleave`, e o hero parava para sempre depois do primeiro swipe.
+      onPointerEnter={(event) => {
+        if (event.pointerType === "mouse") setIsHoverPaused(true)
+      }}
+      onPointerLeave={(event) => {
+        if (event.pointerType === "mouse") setIsHoverPaused(false)
+      }}
+      // Só foco de teclado: clicar num dot também foca o botão.
+      onFocusCapture={(event) => {
+        if ((event.target as Element).matches(":focus-visible")) setIsHoverPaused(true)
+      }}
       onBlurCapture={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setIsHoverPaused(false)
       }}
@@ -677,10 +683,27 @@ function HeroCarousel({ slides }: { slides: StoreHeroView[] }) {
                     aria-label={`Ir para o slide ${index + 1}: ${slide.title}`}
                     aria-current={isCurrent}
                     className={cn(
-                      "h-2 rounded-full transition-all duration-300 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80",
-                      isCurrent ? "w-7 bg-white" : "w-2 bg-white/45 hover:bg-white/80"
+                      "relative h-2 overflow-hidden rounded-full transition-all duration-300 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80",
+                      isCurrent ? "w-7 bg-white/25" : "w-2 bg-white/45 hover:bg-white/80"
                     )}
-                  />
+                  >
+                    {/* A barra enche e, ao terminar, passa o slide. Com a
+                        rotação desligada fica cheia, sem contagem para mostrar. */}
+                    {isCurrent && isAutoplayOn && (
+                      <span
+                        key={currentIndex}
+                        onAnimationEnd={() => goTo(currentIndex + 1, "next")}
+                        style={
+                          {
+                            "--carousel-interval": `${AUTOPLAY_MS}ms`,
+                            animationPlayState: isHoverPaused ? "paused" : "running",
+                          } as React.CSSProperties
+                        }
+                        className="animate-carousel-progress absolute inset-0 rounded-full bg-white"
+                      />
+                    )}
+                    {isCurrent && !isAutoplayOn && <span className="absolute inset-0 rounded-full bg-white" />}
+                  </button>
                 )
               })}
             </div>

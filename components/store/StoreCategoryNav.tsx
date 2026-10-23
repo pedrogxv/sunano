@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "@/lib/hooks/use-pathname"
-import { ArrowRight, ChevronLeft, ChevronRight, Home, LifeBuoy, Package, ShoppingCart, Star, type LucideIcon } from "lucide-react"
+import { ArrowRight, ChevronLeft, ChevronRight, Home, Package, ShoppingCart, Star, type LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getCategoryIcon, getCategoryLabel, classifyStoreNavGroup, type StoreNavGroup } from "@/lib/store-category-icons"
 import { catalogConfigForGroup, catalogHref, navGroupLanding } from "@/lib/store-catalog"
@@ -81,7 +81,7 @@ function MenuLink({ href, label, count, onNavigate }: { href: string; label: str
 }
 
 /**
- * Ação da direita do menu (Carrinho, Pedidos, Suporte). O rótulo
+ * Ação da direita do menu (Carrinho, Pedidos). O rótulo
  * só aparece quando o MENU tem largura para ele (container query, não
  * viewport): com a sidebar do site aberta, 1440px de tela não sobram 1240px
  * para o menu, e o rótulo empurraria as categorias para fora.
@@ -231,8 +231,9 @@ export function StoreCategoryNav({ data, activeCategory }: StoreCategoryNavProps
         linhas (busca + pílulas), alto demais para ficar fixo. */}
     <div className="@container relative bg-card xl:sticky xl:top-0 xl:z-20" onMouseLeave={() => hoverGroup(null)}>
       {/* Desktop: 3 blocos: Busca | Home + categorias (centralizados) |
-          Carrinho, Pedidos, Suporte. A busca mora à esquerda para
-          o bloco de categorias ficar no meio com espaço dos dois lados. */}
+          Carrinho, Pedidos. A busca mora à esquerda para o bloco de
+          categorias ficar no meio com espaço dos dois lados. Suporte não
+          entra: o `SupportFab` flutuante já está em toda a Loja. */}
       <nav className="hidden grid-cols-[1fr_auto_1fr] items-center gap-x-6 border-b border-[#262626] bg-card px-4 @min-[920px]:grid @min-[1100px]:px-8">
         <div className="flex min-w-0 items-center gap-3" onMouseEnter={() => hoverGroup(null)}>
           <SidebarToggleButton />
@@ -308,7 +309,6 @@ export function StoreCategoryNav({ data, activeCategory }: StoreCategoryNavProps
             badge={ordersPending}
             active={pathname?.startsWith("/conta/pedidos")}
           />
-          <NavAction icon={LifeBuoy} label="Suporte" href="/suporte" />
           <div className="mx-1 h-6 w-px shrink-0 bg-[#262626]" />
           <NotificationBell />
           <AuthUser layout="topbar" variant="public" />
@@ -383,12 +383,6 @@ export function StoreCategoryNav({ data, activeCategory }: StoreCategoryNavProps
           className="inline-flex h-[34px] shrink-0 items-center rounded-full border border-[#2a2a2a] bg-[#141414] px-[15px] text-[12.5px] font-semibold text-[#cfcfcf] transition-colors"
         >
           Avaliações
-        </Link>
-        <Link
-          href="/suporte"
-          className="inline-flex h-[34px] shrink-0 items-center rounded-full border border-[#2a2a2a] bg-[#141414] px-[15px] text-[12.5px] font-semibold text-[#cfcfcf] transition-colors"
-        >
-          Suporte
         </Link>
       </div>
 

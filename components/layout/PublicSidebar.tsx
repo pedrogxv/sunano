@@ -34,6 +34,7 @@ import { useSidebar } from "@/components/providers/sidebar-context"
 import { useCart } from "@/components/providers/cart-context"
 import { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
+import { fetchRedeemableEvents } from "@/lib/client/redeemable-events"
 
 // Mesmo motivo de antes na TopBar: o painel busca os próprios endpoints e só
 // interessa a quem tem conta. Fora do bundle crítico das páginas públicas.
@@ -117,10 +118,9 @@ export function PublicSidebar() {
 
   useEffect(() => {
     let mounted = true
-    fetch("/api/conquistas/resgataveis")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data: { count?: number } | null) => { if (mounted) setClaimableEvents(data?.count ?? 0) })
-      .catch(() => { if (mounted) setClaimableEvents(0) })
+    void fetchRedeemableEvents().then((data) => {
+      if (mounted) setClaimableEvents(data?.count ?? 0)
+    })
     return () => { mounted = false }
   }, [])
 

@@ -16,6 +16,7 @@ import {
   IMAGE_PRESETS,
   IMMUTABLE_CACHE_CONTROL,
 } from "@/lib/server/image-compression"
+import { createImageThumbnails } from "@/lib/server/image-thumbnails"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -76,6 +77,10 @@ export async function POST(request: NextRequest) {
     console.error("[store/reviews/upload-image] upload no storage falhou:", error)
     return NextResponse.json({ error: "Falha ao enviar o arquivo." }, { status: 500 })
   }
+
+  // Miniaturas por largura (lib/storage-thumb.ts): sem transformador em
+  // runtime, é o que evita servir o arquivo inteiro num card pequeno.
+  await createImageThumbnails(db, STORE_REVIEW_BUCKET, fileName, compressed.bytes, compressed.mime)
 
   const { data } = db.storage.from(STORE_REVIEW_BUCKET).getPublicUrl(fileName)
   return NextResponse.json({ ok: true, publicUrl: data.publicUrl })

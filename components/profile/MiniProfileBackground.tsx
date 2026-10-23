@@ -5,6 +5,10 @@ import { useMemo, type CSSProperties } from "react"
 import { cn } from "@/lib/utils"
 import type { MiniProfileBgTheme } from "@/lib/mini-profile-backgrounds"
 
+// As classes `.mpbg-*` moram aqui, não no globals.css: só a tela que desenha
+// um fundo paga pelos ~26KB de CSS.
+import "./mini-profile-backgrounds.css"
+
 /**
  * Camadas animadas de um Fundo de Mini Perfil comprado na Central de Aura.
  *

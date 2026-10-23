@@ -11,6 +11,7 @@ import { AnimatedCounter } from "@/components/animated-counter"
 import { RankingInfo } from "@/components/ranking/RankingInfo"
 import { cn } from "@/lib/utils"
 import { rankingGroupOf } from "@/lib/tag-options"
+import { storageImgProps } from "@/lib/storage-thumb"
 
 export type RankedPeripheral = {
   id: string
@@ -94,11 +95,10 @@ function BarChart({ items, isAdmin }: { items: RankedPeripheral[]; isAdmin: bool
               {/* Name */}
               <span className="flex min-w-0 items-center gap-2 truncate text-sm font-medium text-foreground transition-colors group-hover:text-primary sm:w-56 sm:shrink-0">
                 {item.image_url && (
-                  // <img> puro de propósito: <Image> passa pelo loader custom
-                  // (lib/image-loader.ts), que redimensiona via Supabase Storage —
-                  // desnecessário pra um ícone de 20px, é só peso de transform.
+                  // Ícone de 20px: a miniatura gerada no upload (lib/storage-thumb.ts)
+                  // em vez da foto inteira do produto.
                   <img
-                    src={item.image_url}
+                    {...storageImgProps(item.image_url, 20)}
                     alt=""
                     width={20}
                     height={20}

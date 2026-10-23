@@ -10,6 +10,7 @@ import type { AuraItem } from "@/lib/server/repositories/aura-store-repository"
 import { auraPriceForVip } from "@/lib/aura-pricing"
 import { AuraPriceTag } from "@/components/aura/AuraPriceTag"
 import { PurchaseConfirmDialog } from "@/components/aura/PurchaseConfirmDialog"
+import { storageImgProps } from "@/lib/storage-thumb"
 
 interface AuraItemCardProps {
   item: AuraItem
@@ -83,7 +84,7 @@ export function AuraItemCard({ item, balance, isVip, owned, equipped, requireLog
       <div className="relative aspect-square overflow-hidden bg-[var(--card-image-bg)]">
         {item.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={item.imageUrl} alt={item.name} className="h-full w-full object-contain p-3" />
+          <img {...storageImgProps(item.imageUrl, 240)} alt={item.name} className="h-full w-full object-contain p-3" />
         ) : (
           <div className="flex h-full items-center justify-center">
             <Sparkles className="size-14 text-orange-500/50" strokeWidth={1.15} />

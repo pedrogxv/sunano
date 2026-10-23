@@ -22,7 +22,8 @@ import type { ForumTopComment } from "@/lib/server/repositories/forum-repository
  *
  * Comentário com mídia mostra uma miniatura quadrada ao lado do texto — GIF
  * do KLIPY vive no mesmo `image_urls` das imagens, então os dois caem aqui;
- * `unoptimized` mantém o GIF animado, igual ao `ImageLightbox`. Só a primeira
+ * a miniatura do loader é WebP animado (`lib/storage-thumb.ts`) e o GIF
+ * externo do KLIPY passa intacto, então os dois seguem animados. Só a primeira
  * imagem vem do banco (as demais viram um "+N" sobre a miniatura), e clicar
  * leva ao post, onde o comentário aparece inteiro com lightbox.
  *
@@ -98,7 +99,6 @@ export function TopCommentPreview({ comment, postSlug }: { comment: ForumTopComm
                 alt=""
                 fill
                 sizes="48px"
-                unoptimized
                 className="object-cover"
               />
               {comment.image_count > 1 && (

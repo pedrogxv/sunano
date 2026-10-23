@@ -20,7 +20,11 @@ import path from "node:path"
 const ROOTS = ["app", "lib", "components"]
 
 /** Upload de mídia que não é imagem (vídeo) não passa por `sharp`. */
-const COMPRESSION_EXEMPT = new Set(["app/api/admin/store-banners/upload-video/route.ts"])
+const COMPRESSION_EXEMPT = new Set([
+  "app/api/admin/store-banners/upload-video/route.ts",
+  // Grava as MINIATURAS a partir dos bytes que o chamador já comprimiu.
+  "lib/server/image-thumbnails.ts",
+])
 
 type Finding = { file: string; problem: string }
 

@@ -15,6 +15,7 @@ import { cardActiveVariant, computeEffectivePrice, computeItemCardPriceCents, is
 import { hasFreeShipping } from "@/lib/store-shipping"
 import { cn } from "@/lib/utils"
 import type { StoreProductCard } from "@/lib/server/repositories/store-repository"
+import { storageImgProps } from "@/lib/storage-thumb"
 
 /**
  * Card de Lançamento: o mesmo desenho do `PreorderCard`, em violeta (a cor do
@@ -89,7 +90,7 @@ export function LaunchCard(props: StoreProductCard) {
         {image ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={image}
+            {...storageImgProps(image, 320)}
             alt={props.name}
             loading="lazy"
             decoding="async"

@@ -12,6 +12,7 @@ import { CARD_SURFACE } from "@/lib/ui-styles"
 import { mapTier, tierLabel } from "@/lib/tier-utils"
 import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { ShareMenu } from "@/components/forum/ShareMenu"
+import { storageImgProps } from "@/lib/storage-thumb"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -539,7 +540,7 @@ export function ComparePageClient() {
                   {item.image_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={item.image_url}
+                      {...storageImgProps(item.image_url, 240)}
                       alt={item.name}
                       className="h-full w-full object-contain p-2.5 transition-transform duration-300 group-hover:scale-105"
                     />
@@ -697,7 +698,7 @@ export function ComparePageClient() {
                       <div className="size-10 shrink-0 overflow-hidden rounded-lg border border-border bg-muted/20">
                         {result.image_url ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={result.image_url} alt={result.name} className="h-full w-full object-contain p-1" loading="lazy" decoding="async" />
+                          <img {...storageImgProps(result.image_url, 48)} alt={result.name} className="h-full w-full object-contain p-1" loading="lazy" decoding="async" />
                         ) : (
                           <div className="flex h-full w-full items-center justify-center text-[9px] font-bold text-muted-foreground">
                             {result.brand.slice(0, 2).toUpperCase()}

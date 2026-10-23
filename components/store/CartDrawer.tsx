@@ -13,6 +13,7 @@ import { useStoreSettings } from "@/lib/hooks/use-store-settings"
 import { cn } from "@/lib/utils"
 import { SALE_TYPE_ICON, SALE_TYPE_LABEL } from "@/lib/store-sale-type"
 import { cartLineMaxQuantity } from "@/lib/store-cart-limits"
+import { storageImgProps } from "@/lib/storage-thumb"
 
 export function CartButton() {
   const { count, setOpen } = useCart()
@@ -157,7 +158,7 @@ export function CartDrawer() {
                   <div className="flex size-[70px] shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted">
                     {item.image ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={item.image} alt={item.name} className="h-full w-full object-contain p-1.5" loading="lazy" decoding="async" />
+                      <img {...storageImgProps(item.image, 64)} alt={item.name} className="h-full w-full object-contain p-1.5" loading="lazy" decoding="async" />
                     ) : (
                       <Package className="size-6 text-muted-foreground" />
                     )}

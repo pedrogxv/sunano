@@ -160,7 +160,6 @@ function StaffProfileCard({ profile }: { profile: PublicProfileSummary }) {
           src={banner.src}
           alt=""
           fill
-          unoptimized={banner.animated}
           freeze={banner.needsFreeze}
           sizes="224px"
           style={mediaAdjustStyle(profile.media_adjustments.mini_banner)}

@@ -9,6 +9,7 @@ import {
   IMAGE_PRESETS,
   IMMUTABLE_CACHE_CONTROL,
 } from "@/lib/server/image-compression"
+import { createImageThumbnails } from "@/lib/server/image-thumbnails"
 import { UPLOAD_LIMITS } from "@/lib/upload-limits"
 
 const ALLOWED_MIME_TYPES = ["image/webp", "image/png", "image/jpeg"]
@@ -71,6 +72,10 @@ export async function POST(request: NextRequest) {
     console.error("[admin/store-banners/upload-image] upload no storage falhou:", error)
     return NextResponse.json({ error: "Falha ao enviar o arquivo." }, { status: 500 })
   }
+
+  // Miniaturas por largura (lib/storage-thumb.ts): sem transformador em
+  // runtime, é o que evita servir o arquivo inteiro num card pequeno.
+  await createImageThumbnails(db, STORAGE_BUCKET, filename, compressed.bytes, compressed.mime)
 
   const {
     data: { publicUrl },

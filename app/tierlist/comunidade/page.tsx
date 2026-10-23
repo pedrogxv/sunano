@@ -6,7 +6,7 @@ import { buildMetadata } from "@/lib/seo"
 import { profilePath } from "@/lib/profile-name"
 import { cn } from "@/lib/utils"
 import { CARD_SURFACE } from "@/lib/ui-styles"
-import { translations, DEFAULT_LOCALE } from "@/lib/i18n"
+import { ptBR } from "@/lib/i18n-pt-br"
 import { getTierlistMeta } from "@/lib/server/repositories/tierlist-meta-repository"
 import {
   coerceCommunityTierlistSort,
@@ -75,7 +75,7 @@ export default async function CommunityTierlistsPage({
   // Locale é resolvido no cliente neste projeto (locale-context); numa página
   // server renderizamos com o idioma padrão — mesmo caminho de
   // `app/perfil/[handle]/tierlist`.
-  const t = translations[DEFAULT_LOCALE]
+  const t = ptBR
 
   const sort = coerceCommunityTierlistSort(ordenar)
   const page = Math.max(1, Number(pagina) || 1)

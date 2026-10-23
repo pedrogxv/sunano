@@ -17,6 +17,7 @@ import { SidebarToggleButton } from "@/components/layout/SidebarToggleButton"
 import { AuthUser, NotificationBell } from "@/components/layout/topbar-account"
 import { useAuthUser } from "@/components/providers/auth-context"
 import type { StoreFilterOptions } from "@/lib/server/repositories/store-repository"
+import { storageImgProps } from "@/lib/storage-thumb"
 
 /** O que o menu precisa das opções de filtro: categorias, marcas, contagens do catálogo e destaques. */
 export type StoreNavData = Pick<
@@ -498,7 +499,7 @@ export function StoreCategoryNav({ data, activeCategory }: StoreCategoryNavProps
                             {image ? (
                               // eslint-disable-next-line @next/next/no-img-element
                               <img
-                                src={image}
+                                {...storageImgProps(image, 200)}
                                 alt=""
                                 className="size-full object-contain p-2 transition-transform duration-300 group-hover/preview:scale-105"
                               />

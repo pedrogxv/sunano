@@ -6,6 +6,7 @@ import { Heart } from "lucide-react"
 import { safeHref } from "@/lib/safe-url"
 import type { Software } from "@/lib/softwares"
 import { cn } from "@/lib/utils"
+import { storageImgProps } from "@/lib/storage-thumb"
 
 export type SoftwareCardProps = {
   software: Software
@@ -58,7 +59,7 @@ export function SoftwareCard({
         <div className="aspect-square overflow-hidden rounded-lg bg-muted/30">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={software.logoUrl}
+            {...storageImgProps(software.logoUrl, 200)}
             alt=""
             loading="lazy"
             draggable={false}

@@ -1,9 +1,8 @@
 "use client"
 
 import { useLocale } from "@/components/providers/locale-context"
-import { translations } from "@/lib/i18n"
 
+/** Textos do idioma ativo. O dicionário vem do `LocaleProvider` (en-US sob demanda). */
 export function useT() {
-  const { locale } = useLocale()
-  return translations[locale]
+  return useLocale().dictionary
 }

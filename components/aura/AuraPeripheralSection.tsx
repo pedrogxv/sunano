@@ -18,6 +18,7 @@ import { shippingFormToPayload, type ShippingForm } from "@/components/store/Shi
 import type { PublicTrustSummary } from "@/lib/server/repositories/trust-repository"
 import { TrustSeal } from "@/components/ui/TrustBadge"
 import { TRUST_PHYSICAL_REDEEM_LEVEL, trustLevelLabel } from "@/lib/trust-factor"
+import { storageImgProps } from "@/lib/storage-thumb"
 
 interface AuraPeripheralSectionProps {
   /** Itens de kind `peripheral` vindos do catálogo. */
@@ -263,7 +264,7 @@ function AuraPeripheralCard({
         {item.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={item.imageUrl}
+            {...storageImgProps(item.imageUrl, 240)}
             alt={item.name}
             className={cn("h-full w-full object-contain p-3", soldOut && !ownedByMe && "opacity-40 grayscale")}
           />

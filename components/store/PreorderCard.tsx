@@ -15,6 +15,7 @@ import { formatPreorderShipDate, PREORDER_CTA_LABEL } from "@/lib/store-preorder
 import { cardActiveVariant, computeEffectivePrice, isSinglePriceProduct } from "@/lib/store-pricing"
 import { cn } from "@/lib/utils"
 import type { StoreProductCard } from "@/lib/server/repositories/store-repository"
+import { storageImgProps } from "@/lib/storage-thumb"
 
 /**
  * Card de pré-venda da seção "Lançamentos e Pré-venda". Diferente do card de
@@ -87,7 +88,7 @@ export function PreorderCard(props: StoreProductCard) {
         {image ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={image}
+            {...storageImgProps(image, 320)}
             alt={props.name}
             loading="lazy"
             decoding="async"

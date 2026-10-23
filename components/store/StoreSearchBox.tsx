@@ -9,6 +9,7 @@ import { formatBRL } from "@/lib/format"
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value"
 import { getCategoryIcon } from "@/lib/store-category-icons"
 import type { StoreSearchSuggestion } from "@/lib/server/repositories/store-repository"
+import { storageImgProps } from "@/lib/storage-thumb"
 
 interface StoreSearchBoxProps {
   className?: string
@@ -172,7 +173,7 @@ export function StoreSearchBox({ className, inputClassName, iconClassName, place
                       {product.images?.[0] ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
-                          src={product.images[0]}
+                          {...storageImgProps(product.images[0], 36)}
                           alt=""
                           className="size-9 shrink-0 rounded-[8px] bg-[#1c1c1c] object-contain p-1"
                         />

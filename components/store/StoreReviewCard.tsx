@@ -12,6 +12,7 @@ import { TESTIMONIAL_SOURCE_LABEL, type StoreTestimonial } from "@/lib/store-tes
 import { cn } from "@/lib/utils"
 // `import type` é apagado no build: não puxa `server-only` para o bundle.
 import type { ProductReview, StoreWideReview } from "@/lib/server/repositories/store-reviews-repository"
+import { storageImgProps } from "@/lib/storage-thumb"
 
 export function StarRow({ value, size = "size-4" }: { value: number; size?: string }) {
   return (
@@ -169,7 +170,7 @@ function ReviewPhotos({ images }: { images: string[] }) {
             className="block size-20 cursor-zoom-in overflow-hidden rounded-[10px] border border-[#262626] bg-[#0e0e0e] transition-opacity hover:opacity-90"
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={url} alt="" loading="lazy" className="size-full object-cover" />
+            <img {...storageImgProps(url, 80)} alt="" loading="lazy" className="size-full object-cover" />
           </button>
         ))}
       </div>
@@ -199,7 +200,7 @@ function ProductChip({ product }: { product: NonNullable<StoreReviewEntry["produ
     >
       {product.image ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={product.image} alt="" className="size-9 shrink-0 rounded-[8px] bg-[#171717] object-contain p-1" />
+        <img {...storageImgProps(product.image, 36)} alt="" className="size-9 shrink-0 rounded-[8px] bg-[#171717] object-contain p-1" />
       ) : (
         <span className="flex size-9 shrink-0 items-center justify-center rounded-[8px] bg-[#171717]">
           <Icon className="size-[18px] opacity-55" style={{ color: tint }} strokeWidth={1.6} />

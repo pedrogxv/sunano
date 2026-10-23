@@ -141,6 +141,31 @@ reviews. Nome igual não quer dizer produto igual.
   que muda nome/marca/categoria. Caminho novo que grava em `peripherals`
   chama o mesmo helper.
 
+# Imagem do Storage — sempre a miniatura
+
+Não há transformador de imagem em runtime (o da Vercel e o `render/image` do
+Supabase são pagos e estão desligados). O redimensionamento acontece NO
+UPLOAD: `createImageThumbnails` (`lib/server/image-thumbnails.ts`) grava
+`_thumbs/w{128,256,512,1024}/<path>.webp` no mesmo bucket, e as telas
+apontam para a menor que cobre o tamanho exibido (`lib/storage-thumb.ts`).
+
+- **Rota de upload nova** chama `createImageThumbnails(db, bucket, path,
+  compressed.bytes, compressed.mime)` logo depois do `.upload()`. Sem isso a
+  imagem nova sai inteira em todo card (o fallback evita quebrar, não pesar).
+- **`<Image>` do `next/image`** já resolve pelo loader. **`<img>` cru** com URL
+  do Storage usa `{...storageImgProps(url, larguraCss)}`; imagem de largura
+  fluida (banner) usa `srcSet={storageWidthSrcSet(url)}` + `sizes`. Nunca
+  `src={url}` direto: foi assim que a home baixava 2,2MB para cards de 166px.
+- **Apagar** um original passa por `withThumbnailPaths(paths)`, senão as
+  miniaturas ficam órfãs no bucket.
+- **`onError` que esconde a imagem** ignora o primeiro erro de miniatura
+  (`isRetryableThumbUrl`): o script inline do layout está trocando a `<img>`
+  pelo original naquele instante.
+- GIF vira WebP ANIMADO na miniatura: não precisa de `unoptimized` para manter
+  a animação.
+- Imagens antigas: `npx tsx scripts/generate-image-thumbnails.ts --apply`
+  (idempotente).
+
 # Símbolo da Aura — SEMPRE o componente central
 
 **Toda** referência nova à Aura (saldo, custo, preço, contador, ranking,

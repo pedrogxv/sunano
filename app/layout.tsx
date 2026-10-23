@@ -19,7 +19,9 @@ import { ChromeOutsideMaintenance } from "@/components/layout/ChromeOutsideMaint
 import { CookieBanner } from "@/components/lgpd/CookieBanner"
 import { ImpersonationBanner } from "@/components/admin/ImpersonationBanner"
 import { OrganizationJsonLd } from "@/components/seo/OrganizationJsonLd"
+import { VitalsReporter } from "@/components/perf/VitalsReporter"
 import { SITE_URL } from "@/lib/site-url"
+import { IMAGE_THUMB_FALLBACK_SCRIPT } from "@/lib/storage-thumb"
 import { OG_IMAGE_HEIGHT, OG_IMAGE_WIDTH, SITE_NAME, ogImageUrl } from "@/lib/seo"
 
 const manrope = Manrope({
@@ -119,6 +121,9 @@ export default function RootLayout({
   return (
     <html lang="pt-BR" className="bg-background" data-theme="dark" suppressHydrationWarning>
       <head>
+        {/* Antes de qualquer <img> do HTML: miniatura que ainda não existe
+            volta para o original em vez de aparecer quebrada (lib/storage-thumb.ts). */}
+        <script dangerouslySetInnerHTML={{ __html: IMAGE_THUMB_FALLBACK_SCRIPT }} />
         <OrganizationJsonLd />
       </head>
       <body className={`${manrope.variable} ${spaceGrotesk.variable} ${caveat.variable} font-sans`}>
@@ -148,6 +153,7 @@ export default function RootLayout({
             </AuthModalProvider>
           </AuthProvider>
         </LocaleProvider>
+        <VitalsReporter />
       </body>
     </html>
   )

@@ -295,7 +295,10 @@ export function AccountSection({ email, lgpdConsentAt, lgpdConsentVersion }: Acc
   if (openSection) {
     const { Icon, label, description } = openSection
     return (
-      <div ref={panelRef} className="scroll-mt-20 space-y-5">
+      // Seção aberta fica na largura de formulário (`max-w-4xl`): o hub de
+      // /conta é largo para os cards, mas campo de senha esticado a 1100px
+      // vira linha difícil de ler.
+      <div ref={panelRef} className="mx-auto max-w-4xl scroll-mt-20 space-y-5">
         <button
           type="button"
           onClick={close}
@@ -327,7 +330,7 @@ export function AccountSection({ email, lgpdConsentAt, lgpdConsentVersion }: Acc
   }
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {sections.map((section) => (
         <SectionCard
           key={section.id}

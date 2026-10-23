@@ -214,7 +214,6 @@ export function ProfileCard({
                 src={miniBanner.src}
                 alt=""
                 fill
-                unoptimized={miniBanner.animated}
                 freeze={miniBanner.needsFreeze}
                 sizes="(max-width: 640px) 50vw, 240px"
                 style={mediaAdjustStyle(profile.media_adjustments.mini_banner)}

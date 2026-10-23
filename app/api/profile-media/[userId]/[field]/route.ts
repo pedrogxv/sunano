@@ -4,6 +4,7 @@ import sharp from "sharp"
 import { coerceAccountTier, resolveProfileMedia, type ProfileMediaField } from "@/lib/account-tier"
 import { isAllowedProfileMediaUrl } from "@/lib/server/profile-media-url"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
+import { storageThumbUrl, THUMB_WIDTHS } from "@/lib/storage-thumb"
 
 export const runtime = "nodejs"
 
@@ -39,8 +40,20 @@ function isProfileMediaField(value: string): value is ProfileMediaField {
   return value === "avatar" || value === "banner" || value === "mini-banner"
 }
 
+/**
+ * Largura pedida (`?w=`, posta por `profileMediaWithWidth`). Só os valores de
+ * `THUMB_WIDTHS`: qualquer outro número viraria uma URL de cache nova por
+ * requisição sem miniatura correspondente.
+ */
+function requestedThumbWidth(request: Request): number | null {
+  const raw = new URL(request.url).searchParams.get("w")
+  if (!raw) return null
+  const width = Number(raw)
+  return (THUMB_WIDTHS as readonly number[]).includes(width) ? width : null
+}
+
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ userId: string; field: string }> }
 ) {
   const { userId, field } = await params
@@ -76,8 +89,13 @@ export async function GET(
 
   if (!needsFreeze) {
     // Tier libera animação (ou o arquivo nem é GIF) — sem motivo pra gastar
-    // CPU convertendo nada, o redirect aponta pro arquivo original.
-    return NextResponse.redirect(url, {
+    // CPU convertendo nada, o redirect aponta pro arquivo original, ou para a
+    // miniatura da largura pedida (GIF vira WebP animado lá, então continua
+    // animado). Miniatura ausente: a `<img>` volta sozinha para esta URL sem
+    // `?w=` (IMAGE_THUMB_FALLBACK_SCRIPT).
+    const width = requestedThumbWidth(request)
+    const target = width ? storageThumbUrl(url, width) : url
+    return NextResponse.redirect(target, {
       status: 302,
       headers: { "Cache-Control": "public, max-age=60" },
     })

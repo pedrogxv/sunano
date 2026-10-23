@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { usePathname } from "@/lib/hooks/use-pathname"
 
-import { supabaseAuth } from "@/lib/client/supabase-auth"
+import type { AuthChangeEvent } from "@supabase/supabase-js"
 import { readAuthSnapshot, writeAuthSnapshot } from "@/lib/client/auth-snapshot"
 import { isVipActive } from "@/lib/account-tier"
 import { resolveVipStatus, type VipStatus } from "@/lib/vip-status"
@@ -265,6 +265,19 @@ async function fetchMe(signal: AbortSignal): Promise<AuthContextUser | null> {
  * dinâmicas, já que o HTML servido pelo cache ISR precisa continuar igual para
  * todos os visitantes.
  */
+/**
+ * Agenda `task` para quando o navegador estiver ocioso (com teto de 4s, para
+ * não esperar para sempre numa página que nunca para). Devolve o cancelamento.
+ */
+function runWhenIdle(task: () => void): () => void {
+  if (typeof window.requestIdleCallback === "function") {
+    const handle = window.requestIdleCallback(task, { timeout: 4000 })
+    return () => window.cancelIdleCallback(handle)
+  }
+  const timer = setTimeout(task, 1500)
+  return () => clearTimeout(timer)
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Começa SEMPRE vazio, igual ao que o servidor renderiza. Ler o snapshot
   // aqui produziria HTML do servidor (sem storage) diferente do primeiro
@@ -350,9 +363,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     resolve()
 
-    const {
-      data: { subscription },
-    } = supabaseAuth.auth.onAuthStateChange((event) => {
+    // O client do Supabase (~190KB de JS, com realtime junto) só entra depois
+    // que a página fica ociosa. Ele não é necessário para a primeira resposta
+    // — quem a dá é o `/api/auth/me` acima —, e importá-lo no topo deste
+    // arquivo o colocava no caminho crítico de TODA página, atrasando a
+    // primeira pintura e a hidratação no celular. O gatilho 3 continua igual,
+    // só chega alguns instantes depois.
+    let cancelled = false
+    let unsubscribe: (() => void) | null = null
+    const subscribe = () => {
+      import("@/lib/client/supabase-auth")
+        .then(({ supabaseAuth }) => {
+          if (cancelled) return
+          const {
+            data: { subscription },
+          } = supabaseAuth.auth.onAuthStateChange(handleAuthEvent)
+          unsubscribe = () => subscription.unsubscribe()
+        })
+        .catch(() => {
+          // Chunk indisponível (deploy novo, rede): os gatilhos 1 e 2 seguem valendo.
+        })
+    }
+    const cancelIdle = runWhenIdle(subscribe)
+
+    function handleAuthEvent(event: AuthChangeEvent) {
       // Este callback roda COM o lock de auth do gotrue-js segurado. Nada de
       // `await` aqui dentro, e muito menos outra chamada de `supabaseAuth.auth`
       // (era `mfa.getAuthenticatorAssuranceLevel()`): ela fica esperando o
@@ -378,10 +412,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (event === "SIGNED_IN" || event === "USER_UPDATED" || event === "MFA_CHALLENGE_VERIFIED") {
         setTimeout(() => resolve(), 0)
       }
-    })
+    }
 
     return () => {
-      subscription.unsubscribe()
+      cancelled = true
+      cancelIdle()
+      unsubscribe?.()
       if (retryTimer.current) clearTimeout(retryTimer.current)
     }
   }, [resolve])

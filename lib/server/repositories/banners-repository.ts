@@ -2,6 +2,7 @@ import "server-only"
 
 import { escapeOrFilterValue } from "@/lib/server/repositories/_shared"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
+import { withThumbnailPaths } from "@/lib/storage-thumb"
 
 /**
  * Repositório dos banners da Home — acesso à tabela `home_banners`.
@@ -307,7 +308,7 @@ async function removeUnreferencedImages(urls: string[]): Promise<void> {
     }
 
     if (paths.length > 0) {
-      await db.storage.from(STORAGE_BUCKET).remove(paths)
+      await db.storage.from(STORAGE_BUCKET).remove(withThumbnailPaths(paths))
     }
   } catch (error) {
     console.error("[banners-repository] removeUnreferencedImages:", error)

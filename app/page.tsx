@@ -22,6 +22,7 @@ import { getHomeData } from "@/lib/server/repositories/home-repository"
 import { formatBRL } from "@/lib/format"
 import { mapTier } from "@/lib/tier-utils"
 import { CARD_TIER_STYLES } from "@/lib/tierlist-theme"
+import { storageImgProps } from "@/lib/storage-thumb"
 import { cn } from "@/lib/utils"
 
 export const revalidate = 300
@@ -168,7 +169,7 @@ export default async function HomePage() {
                       {p.image_url ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
-                          src={p.image_url}
+                          {...storageImgProps(p.image_url, 200)}
                           alt={p.name}
                           loading="lazy"
                           decoding="async"
@@ -238,7 +239,7 @@ export default async function HomePage() {
                   {product.images?.[0] && (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={product.images[0]}
+                      {...storageImgProps(product.images[0], 240)}
                       alt={product.name}
                       className="absolute inset-0 size-full object-cover transition-transform duration-500 group-hover:scale-105"
                     />
@@ -294,7 +295,7 @@ export default async function HomePage() {
                       <div className="size-10 shrink-0 overflow-hidden rounded-lg bg-muted">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
-                          src={post.media_image_urls[0]}
+                          {...storageImgProps(post.media_image_urls[0], 40)}
                           alt=""
                           loading="lazy"
                           decoding="async"
@@ -349,7 +350,7 @@ export default async function HomePage() {
                       <div className="size-10 shrink-0 overflow-hidden rounded-lg bg-muted">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
-                          src={post.media_image_urls[0]}
+                          {...storageImgProps(post.media_image_urls[0], 40)}
                           alt=""
                           loading="lazy"
                           decoding="async"

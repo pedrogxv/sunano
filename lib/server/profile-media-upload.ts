@@ -8,6 +8,7 @@ import {
   IMAGE_PRESETS,
   IMMUTABLE_CACHE_CONTROL,
 } from "@/lib/server/image-compression"
+import { createImageThumbnails } from "@/lib/server/image-thumbnails"
 import { isKlipyGifUrl } from "@/lib/klipy"
 import {
   isProfileMediaFileOf,
@@ -187,6 +188,12 @@ export async function finalizeProfileMediaUpload(
       upsert: true,
     })
 
+  // Miniaturas por largura (lib/storage-thumb.ts): o avatar de 32px deixa de
+  // baixar o arquivo inteiro. GIF vira WebP animado, então continua animado.
+  await createImageThumbnails(supabase, BUCKET, path, compressed.bytes, compressed.mime, {
+    upsert: true,
+  })
+
   const { data: publicData } = supabase.storage.from(BUCKET).getPublicUrl(path)
   return { ok: true, publicUrl: publicData.publicUrl }
 }
@@ -266,6 +273,9 @@ export async function importProfileMediaFromKlipy(
   if (uploadError) {
     return { ok: false, error: "Não foi possível salvar o GIF. Tente novamente.", status: 500 }
   }
+  await createImageThumbnails(supabase, BUCKET, path, compressed.bytes, compressed.mime, {
+    upsert: true,
+  })
 
   const { data: publicData } = supabase.storage.from(BUCKET).getPublicUrl(path)
   return { ok: true, publicUrl: publicData.publicUrl }
@@ -349,6 +359,9 @@ export async function importOAuthAvatar(
         upsert: true,
       })
     if (uploadError) return null
+    await createImageThumbnails(supabase, BUCKET, path, compressed.bytes, compressed.mime, {
+      upsert: true,
+    })
 
     const { data: publicData } = supabase.storage.from(BUCKET).getPublicUrl(path)
     return publicData.publicUrl

@@ -41,6 +41,7 @@ import {
 import { computeEffectivePrice } from "@/lib/store-pricing"
 import { cn } from "@/lib/utils"
 import type { StoreProductCard } from "@/lib/server/repositories/store-repository"
+import { storageImgProps, storageWidthSrcSet } from "@/lib/storage-thumb"
 
 /**
  * Hero da Home da Loja: o banner principal, administrável em /admin/store/hero.
@@ -202,7 +203,7 @@ function HeroProductChip({ product, tabIndex }: { product: StoreProductCard; tab
       <span className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white/[0.06]">
         {image && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={image} alt="" className="size-full object-contain p-1" draggable={false} />
+          <img {...storageImgProps(image, 48)} alt="" className="size-full object-contain p-1" draggable={false} />
         )}
       </span>
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -336,6 +337,8 @@ function HeroVideoBackground({
       // eslint-disable-next-line @next/next/no-img-element
       <img
         src={src}
+        srcSet={storageWidthSrcSet(src)}
+        sizes="100vw"
         alt=""
         loading={eager ? "eager" : "lazy"}
         fetchPriority={eager ? "high" : "auto"}
@@ -382,9 +385,17 @@ function HeroBackground({ slide, isCurrent, eager }: { slide: StoreHeroView; isC
   if (slide.imageDesktopUrl) {
     return (
       <picture>
-        {slide.imageMobileUrl && <source media="(max-width: 767px)" srcSet={slide.imageMobileUrl} />}
+        {slide.imageMobileUrl && (
+          <source
+            media="(max-width: 767px)"
+            srcSet={storageWidthSrcSet(slide.imageMobileUrl) ?? slide.imageMobileUrl}
+            sizes="100vw"
+          />
+        )}
         <img
           src={slide.imageDesktopUrl}
+          srcSet={storageWidthSrcSet(slide.imageDesktopUrl)}
+          sizes="100vw"
           alt=""
           loading={eager ? "eager" : "lazy"}
           fetchPriority={eager ? "high" : "auto"}
@@ -411,6 +422,9 @@ function HeroBackground({ slide, isCurrent, eager }: { slide: StoreHeroView; isC
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={image}
+          // Celular: até 260px; desktop: 84% da altura do hero (~480px).
+          srcSet={storageWidthSrcSet(image)}
+          sizes="(min-width: 768px) 520px, 260px"
           alt=""
           loading={eager ? "eager" : "lazy"}
           draggable={false}

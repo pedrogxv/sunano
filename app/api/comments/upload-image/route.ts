@@ -13,6 +13,7 @@ import {
   IMAGE_PRESETS,
   IMMUTABLE_CACHE_CONTROL,
 } from "@/lib/server/image-compression"
+import { createImageThumbnails } from "@/lib/server/image-thumbnails"
 
 /**
  * Upload de imagem anexada a um comentário — endpoint único reaproveitado
@@ -92,6 +93,10 @@ export async function POST(request: Request) {
       console.error("[comments/upload-image] upload no storage falhou:", uploadError)
       return NextResponse.json({ error: "Falha ao enviar o arquivo." }, { status: 500 })
     }
+
+    // Miniaturas por largura (lib/storage-thumb.ts): sem transformador em
+    // runtime, é o que evita servir o arquivo inteiro num card pequeno.
+    await createImageThumbnails(db, "comments", fileName, compressed.bytes, compressed.mime)
 
     const { data: publicData } = db.storage
       .from("comments")

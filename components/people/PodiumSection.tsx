@@ -163,7 +163,6 @@ function PodiumCard({
               src={miniBanner.src}
               alt=""
               fill
-              unoptimized={miniBanner.animated}
               freeze={miniBanner.needsFreeze}
               sizes="168px"
               style={mediaAdjustStyle(profile.media_adjustments.mini_banner)}

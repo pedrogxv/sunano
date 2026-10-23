@@ -7,6 +7,7 @@ import { useEffect, useState } from "react"
 
 import { MedalCard } from "@/components/events/MedalCard"
 import type { EventDisplay } from "@/lib/events"
+import { fetchRedeemableEvents } from "@/lib/client/redeemable-events"
 
 /**
  * Prévia de eventos na Home — estrutura de dados (lista de eventos ativos)
@@ -20,12 +21,9 @@ export function EventsShowcase({ events }: { events: EventDisplay[] }) {
 
   useEffect(() => {
     let mounted = true
-    fetch("/api/conquistas/resgataveis")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data: { claimedMedalIds?: string[] } | null) => {
-        if (mounted && data?.claimedMedalIds) setClaimedMedalIds(new Set(data.claimedMedalIds))
-      })
-      .catch(() => {})
+    void fetchRedeemableEvents().then((data) => {
+      if (mounted && data?.claimedMedalIds) setClaimedMedalIds(new Set(data.claimedMedalIds))
+    })
     return () => {
       mounted = false
     }

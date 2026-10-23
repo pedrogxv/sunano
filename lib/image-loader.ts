@@ -5,8 +5,8 @@ import { supabaseResizedImage } from "@/lib/storage-image"
  *
  * Substitui o otimizador da Vercel em todo o app: nenhum `<Image>` passa por
  * `/_next/image` nem por transformador nenhum — ver histórico e motivo em
- * `lib/storage-image.ts`. Isso faz o `width`/`quality` do `next/image` serem
- * ignorados; o navegador sempre recebe o arquivo original.
+ * `lib/storage-image.ts`. O `width` do `next/image` escolhe a miniatura
+ * gerada no upload (`lib/storage-thumb.ts`); `quality` é ignorado.
  *
  * Fazer isso pelo loader, e não caso a caso, garante que qualquer `<Image>`
  * novo já nasça no caminho certo.

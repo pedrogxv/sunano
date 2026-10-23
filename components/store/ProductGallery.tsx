@@ -9,6 +9,7 @@ import { markImageSettled } from "@/lib/image-settled"
 import { getCategoryIcon } from "@/lib/store-category-icons"
 import { cn } from "@/lib/utils"
 import { resolveStoreProductVideo, type StoreProductVideo } from "@/lib/store-product-video"
+import { storageImgProps, storageWidthSrcSet } from "@/lib/storage-thumb"
 
 type GalleryItem = { kind: "image"; src: string } | { kind: "video"; video: StoreProductVideo }
 
@@ -103,6 +104,9 @@ export function ProductGallery({ images, videoUrl, productName, category, soldOu
             <img
               key={current.src}
               src={current.src}
+              // Palco de até ~640px; o zoom (lightbox) segue com o original.
+              srcSet={storageWidthSrcSet(current.src)}
+              sizes="(min-width: 1024px) 640px, 100vw"
               alt={productName}
               ref={(el) => markImageSettled(el, () => setLoadedSrc(current.src))}
               onLoad={() => setLoadedSrc(current.src)}
@@ -168,7 +172,7 @@ export function ProductGallery({ images, videoUrl, productName, category, soldOu
             >
               {item.kind === "image" ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={item.src} alt="" className={cn("h-full w-full object-contain p-1.5", soldOut && "opacity-50 grayscale")} loading="lazy" decoding="async" />
+                <img {...storageImgProps(item.src, 76)} alt="" className={cn("h-full w-full object-contain p-1.5", soldOut && "opacity-50 grayscale")} loading="lazy" decoding="async" />
               ) : (
                 <>
                   {item.video.kind === "youtube" ? (

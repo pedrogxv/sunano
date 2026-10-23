@@ -6,6 +6,7 @@ import { Pause, Play } from "lucide-react"
 
 import { isInternalBannerLink } from "@/lib/banner-link"
 import { cn } from "@/lib/utils"
+import { storageWidthSrcSet } from "@/lib/storage-thumb"
 
 /**
  * Carrossel de banners de uma seção da Loja (Mais vendidos / Pré-venda /
@@ -139,6 +140,8 @@ function BannerSlide({
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={banner.imageUrl}
+          srcSet={storageWidthSrcSet(banner.imageUrl)}
+          sizes="100vw"
           alt=""
           loading={index === 0 ? "eager" : "lazy"}
           fetchPriority={index === 0 ? "high" : "auto"}

@@ -21,6 +21,7 @@ import { RouteLink } from "@/components/ui/route-link"
 import { LaunchCard } from "@/components/store/LaunchCard"
 import { PreorderCard } from "@/components/store/PreorderCard"
 import type { StoreCardRating, StoreProductCard } from "@/lib/server/repositories/store-repository"
+import { storageImgProps } from "@/lib/storage-thumb"
 
 const CONDITION_LABEL: Record<"new" | "used" | "opened", string> = {
   new: "Novo",
@@ -267,7 +268,7 @@ function StandardProductCard(props: ProductCardProps) {
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   key={image}
-                  src={image}
+                  {...storageImgProps(image, 320)}
                   alt={props.name}
                   ref={(el) => markImageSettled(el, () => setImageLoaded(image))}
                   onLoad={() => setImageLoaded(image)}

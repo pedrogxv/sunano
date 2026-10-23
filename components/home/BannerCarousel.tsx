@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight, Pause, Play } from "lucide-react"
 
 import { AnimatedCounter } from "@/components/animated-counter"
 import { isInternalBannerLink } from "@/lib/banner-link"
+import { storageWidthSrcSet } from "@/lib/storage-thumb"
 import { cn } from "@/lib/utils"
 
 /**
@@ -129,6 +130,9 @@ function whenIdleAfterLoad(callback: () => void) {
 }
 
 /** Imagem do slide + a camada clicável que a envolve (ou não, se não houver link). */
+/** O banner ocupa a largura do conteúdo da Home (`max-w-6xl`). */
+const BANNER_SIZES = "(min-width: 1200px) 1152px, 100vw"
+
 function BannerSlide({
   banner,
   isCurrent,
@@ -150,10 +154,18 @@ function BannerSlide({
   const image = (
     <picture>
       {banner.imageUrlMobile && (
-        <source media="(max-width: 767px)" srcSet={banner.imageUrlMobile} />
+        <source
+          media="(max-width: 767px)"
+          srcSet={storageWidthSrcSet(banner.imageUrlMobile) ?? banner.imageUrlMobile}
+          sizes="100vw"
+        />
       )}
+      {/* Por largura: o celular deixa de baixar a arte de 1920px do desktop
+          (lib/storage-thumb.ts); tela larga continua recebendo o original. */}
       <img
         src={banner.imageUrl}
+        srcSet={storageWidthSrcSet(banner.imageUrl)}
+        sizes={BANNER_SIZES}
         alt={banner.altText ?? ""}
         // O primeiro banner é o LCP da Home; os demais só carregam quando entram.
         loading={index === 0 ? "eager" : "lazy"}

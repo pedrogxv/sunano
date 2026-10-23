@@ -94,6 +94,7 @@ import {
   orderStatusLabel,
 } from "@/lib/order-status"
 import { storeCarrierTracking } from "@/lib/store-carriers"
+import { storageImgProps } from "@/lib/storage-thumb"
 
 const STATUS_STYLE: Record<UserOrder["status"], string> = {
   pending: "bg-amber-500/15 text-amber-400",
@@ -245,7 +246,7 @@ function ItemThumb({ image, className }: { image?: string | null; className?: st
   }
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={image} alt="" className={cn("object-cover", className)} loading="lazy" decoding="async" />
+    <img {...storageImgProps(image, 96)} alt="" className={cn("object-cover", className)} loading="lazy" decoding="async" />
   )
 }
 

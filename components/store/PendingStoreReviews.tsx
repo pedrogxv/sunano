@@ -7,6 +7,7 @@ import { AuraAmount } from "@/components/ui/AuraIcon"
 import { STORE_REVIEW_AURA, STORE_REVIEW_WITH_PHOTO_AURA } from "@/lib/store-review-aura"
 // `import type` é apagado no build: não puxa `server-only` para o bundle.
 import type { PendingProductReview } from "@/lib/server/repositories/store-reviews-repository"
+import { storageImgProps } from "@/lib/storage-thumb"
 
 async function fetchPending(): Promise<PendingProductReview[] | null> {
   try {
@@ -80,7 +81,7 @@ export function PendingStoreReviews({
           <li key={item.productId} className="flex items-center gap-3 px-4 py-2.5">
             {item.image ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={item.image} alt="" className="size-10 shrink-0 rounded-md bg-muted object-contain p-0.5" />
+              <img {...storageImgProps(item.image, 40)} alt="" className="size-10 shrink-0 rounded-md bg-muted object-contain p-0.5" />
             ) : (
               <span className="size-10 shrink-0 rounded-md bg-muted" />
             )}

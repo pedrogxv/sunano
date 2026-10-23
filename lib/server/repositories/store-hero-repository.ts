@@ -24,6 +24,7 @@ import {
   type StoreHeroTrust,
   type StoreHeroView,
 } from "@/lib/store-hero"
+import { withThumbnailPaths } from "@/lib/storage-thumb"
 
 /**
  * Repositório do Hero da Loja: única porta para `store_hero_slides`
@@ -386,7 +387,7 @@ async function removeUnreferencedMedia(urls: string[]): Promise<void> {
     }
 
     if (paths.length > 0) {
-      await db.storage.from(STORAGE_BUCKET).remove(paths)
+      await db.storage.from(STORAGE_BUCKET).remove(withThumbnailPaths(paths))
     }
   } catch (error) {
     console.error("[store-hero-repository] removeUnreferencedMedia:", error)

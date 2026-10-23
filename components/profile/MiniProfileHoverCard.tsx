@@ -3,8 +3,25 @@
 import { useCallback, useRef, useState, type ReactNode } from "react"
 import { HoverCard as HoverCardPrimitive } from "radix-ui"
 
-import { MiniProfileCard } from "./MiniProfileCard"
 import type { MiniProfile } from "@/lib/mini-profile"
+
+type CardComponent = (typeof import("./MiniProfileCard"))["MiniProfileCard"]
+
+/**
+ * O cartão (e o CSS dos Fundos de Mini Perfil, ~26KB, que vem junto dele) só
+ * baixa no primeiro hover — em paralelo com o fetch dos dados, então não
+ * acrescenta espera. Importado no topo, ele entrava no bundle e no CSS que
+ * bloqueia a pintura de toda página com um autor (fórum, notícias, rankings),
+ * mesmo para quem nunca passa o cursor num nome.
+ */
+let cardComponent: CardComponent | null = null
+let cardPromise: Promise<CardComponent> | null = null
+
+function loadCardComponent(): Promise<CardComponent> {
+  if (cardComponent) return Promise.resolve(cardComponent)
+  cardPromise ??= import("./MiniProfileCard").then((mod) => (cardComponent = mod.MiniProfileCard))
+  return cardPromise
+}
 
 /** Cache por slug, compartilhado entre todas as instâncias do cartão.
  *  Passar o cursor de novo sobre o mesmo perfil não repete a requisição.
@@ -59,12 +76,20 @@ export function MiniProfileHoverCard({
   const [profile, setProfile] = useState<MiniProfile | null>(() =>
     slug ? readCache(slug) : null
   )
+  const [Card, setCard] = useState<CardComponent | null>(() => cardComponent)
   // Evita disparar duas buscas quando o cursor entra e sai rápido.
   const pending = useRef(false)
 
   const load = useCallback(
     async (open: boolean) => {
       if (!open || !slug || pending.current) return
+      if (!Card) {
+        loadCardComponent()
+          .then((component) => setCard(() => component))
+          .catch(() => {
+            // Chunk indisponível: o link embaixo continua levando ao perfil.
+          })
+      }
       const cached = readCache(slug)
       if (cached) {
         setProfile(cached)
@@ -85,7 +110,7 @@ export function MiniProfileHoverCard({
         pending.current = false
       }
     },
-    [slug]
+    [slug, Card]
   )
 
   if (!slug) return <>{children}</>
@@ -97,7 +122,7 @@ export function MiniProfileHoverCard({
     // do próprio cartão.
     <HoverCardPrimitive.Root openDelay={100} closeDelay={120} onOpenChange={load}>
       <HoverCardPrimitive.Trigger asChild>{children}</HoverCardPrimitive.Trigger>
-      {profile && (
+      {profile && Card && (
         <HoverCardPrimitive.Portal>
           <HoverCardPrimitive.Content
             side={side}
@@ -106,7 +131,7 @@ export function MiniProfileHoverCard({
             collisionPadding={12}
             className="z-50 duration-150 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
           >
-            <MiniProfileCard profile={profile} />
+            <Card profile={profile} />
           </HoverCardPrimitive.Content>
         </HoverCardPrimitive.Portal>
       )}

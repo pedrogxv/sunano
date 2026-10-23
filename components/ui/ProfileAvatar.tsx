@@ -204,7 +204,12 @@ export type ProfileAvatarProps = {
   adjust?: MediaAdjust
   /** Primeiro quadro estático em vez do GIF (conta sem direito a animação). */
   freeze?: boolean
-  /** GIF anima — normalmente derivado do tier, explícito só quando já resolvido. */
+  /**
+   * GIF anima — normalmente derivado do tier, explícito só quando já resolvido.
+   * Não muda mais o caminho da imagem: a miniatura do loader
+   * (`lib/storage-thumb.ts`) é WebP ANIMADO, então o GIF continua animado e
+   * o avatar de 32px deixa de baixar o arquivo inteiro.
+   */
   animated?: boolean
   /** Conta que existiu e foi removida — desenho próprio, sem foto nem iniciais. */
   removed?: boolean
@@ -233,7 +238,6 @@ export function ProfileAvatar({
   frameOverride,
   adjust,
   freeze = false,
-  animated = false,
   removed = false,
   priority = false,
   className,
@@ -333,7 +337,6 @@ export function ProfileAvatar({
           alt={name}
           fill
           priority={priority}
-          unoptimized={animated}
           freeze={freeze}
           sizes={token.sizes}
           style={adjust ? mediaAdjustStyle(adjust) : undefined}

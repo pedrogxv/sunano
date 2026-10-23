@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react"
 
+import { isRetryableThumbUrl } from "@/lib/storage-thumb"
 import { cn } from "@/lib/utils"
 
 type ImageWithFallbackProps = Omit<ImageProps, "src" | "onError"> & {
@@ -61,7 +62,21 @@ export function ImageWithFallback({
     )
   }
 
-  return <Image {...imageProps} src={src} alt={alt} onError={() => setFailedSrc(src)} />
+  return (
+    <Image
+      {...imageProps}
+      src={src}
+      alt={alt}
+      onError={(event) => {
+        // Miniatura ausente: o script global já está trocando esta `<img>`
+        // pelo original (lib/storage-thumb.ts). Cair no fallback agora
+        // apagaria uma foto que existe; se o original também falhar, o
+        // próximo erro chega com a URL dele e aí sim vira fallback.
+        if (isRetryableThumbUrl(event.currentTarget.currentSrc)) return
+        setFailedSrc(src)
+      }}
+    />
+  )
 }
 
 /**

@@ -5,6 +5,7 @@ import Link from "next/link"
 import { RouteLink } from "@/components/ui/route-link"
 import { ArrowRight, Check, Crown, Keyboard, PackageCheck, Sparkles } from "lucide-react"
 
+import { storageImgProps } from "@/lib/storage-thumb"
 import { cn } from "@/lib/utils"
 import { AuraIcon, AuraIconHolder } from "@/components/ui/AuraIcon"
 import { CARD_SURFACE, CARD_SURFACE_INTERACTIVE } from "@/lib/ui-styles"
@@ -123,7 +124,7 @@ function PeripheralTeaser({ item }: { item: HomeAuraPeripheral }) {
         {item.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={item.imageUrl}
+            {...storageImgProps(item.imageUrl, 200)}
             alt={item.name}
             loading="lazy"
             decoding="async"

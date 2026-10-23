@@ -2,6 +2,7 @@ import "server-only"
 
 import { getStoragePublicOrigin } from "@/lib/server/storage-origin"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
+import { withThumbnailPaths } from "@/lib/storage-thumb"
 
 /**
  * Apaga do Storage a mídia que acabou de ser substituída.
@@ -106,7 +107,11 @@ export async function removeReplacedStorageObjects(
   try {
     const db = createSupabaseAdminClient()
     await Promise.all(
-      [...byBucket].map(([bucket, paths]) => db.storage.from(bucket).remove(paths))
+      // As miniaturas (`lib/storage-thumb.ts`) saem junto: o `canRemove` já
+      // aprovou o original, e elas são derivadas só do path dele.
+      [...byBucket].map(([bucket, paths]) =>
+        db.storage.from(bucket).remove(withThumbnailPaths(paths))
+      )
     )
   } catch (error) {
     console.error("[storage-cleanup] falha ao remover mídia substituída:", error)
@@ -143,7 +148,7 @@ export async function removeImageIfUnreferenced(
     // cleanup-orphaned-storage.ts recolhe depois.
     if (error || (count ?? 0) > 0) return
 
-    await db.storage.from(parsed.bucket).remove([parsed.path])
+    await db.storage.from(parsed.bucket).remove(withThumbnailPaths([parsed.path]))
   } catch (error) {
     console.error("[storage-cleanup] falha ao remover imagem de registro apagado:", error)
   }

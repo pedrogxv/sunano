@@ -11,6 +11,7 @@ import {
   ChevronsUpDown,
   ClipboardList,
   Clock,
+  Copy,
   CreditCard,
   ExternalLink,
   Eye,
@@ -86,7 +87,7 @@ import { formatBRL } from "@/lib/format"
 import { orderNumber } from "@/lib/order-number"
 import { ORDER_STATUS_GROUPS, orderStatusLabel, type OrderStatusGroup } from "@/lib/order-status"
 import { STORE_CARRIERS, findStoreCarrier, type StoreCarrier } from "@/lib/store-carriers"
-import { formatCpfInput } from "@/lib/br-format"
+import { formatCepInput, formatCpfInput, formatPhoneInput } from "@/lib/br-format"
 import { SHIPPING_RESIDENCE_TYPE_LABELS, isoToBirthDateInput } from "@/components/store/ShippingAddressFields"
 import { serviceFormLines } from "@/lib/store-service-form"
 import { ServiceFormAnswerValue } from "@/components/store/ServiceFormAnswerValue"
@@ -1276,6 +1277,63 @@ function CarrierSelect({
   )
 }
 
+/**
+ * Um dado do endereço de entrega, grande e com botão de copiar: é daqui que
+ * se copia campo a campo para a etiqueta e a importação. `hint` (âmbar) só
+ * aparece quando o valor falta; `empty` é o texto neutro de um campo opcional.
+ */
+function ShippingField({
+  label,
+  value,
+  hint,
+  empty = "Não informado",
+  className,
+}: {
+  label: string
+  value: string | null
+  hint?: string
+  empty?: string
+  className?: string
+}) {
+  const copy = () => {
+    if (!value) return
+    navigator.clipboard
+      .writeText(value)
+      .then(() => toast.success(`Copiado: ${label}`))
+      .catch(() => toast.error("Não foi possível copiar."))
+  }
+
+  return (
+    <div
+      className={cn(
+        "flex min-w-0 items-start justify-between gap-2 rounded-md border border-border/60 bg-background/40 px-3 py-2",
+        className,
+      )}
+    >
+      <div className="min-w-0">
+        <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
+        {value ? (
+          <p className="break-words text-base font-medium text-foreground select-all">{value}</p>
+        ) : (
+          <p className={cn("text-sm", hint ? "text-amber-400" : "text-muted-foreground")}>{hint ?? empty}</p>
+        )}
+      </div>
+      {value && (
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="size-8 shrink-0 text-muted-foreground hover:text-foreground"
+          aria-label={`Copiar ${label}`}
+          onClick={copy}
+        >
+          <Copy className="size-4" />
+        </Button>
+      )}
+    </div>
+  )
+}
+
 function OrderManageDialog({
   order,
   onOpenChange,
@@ -1771,8 +1829,8 @@ function OrderManageDialog({
           />
 
           {/* Endereço de entrega — snapshot do pedido, não o do perfil atual do cliente */}
-          <div className="space-y-1.5 rounded-lg border border-border/60 bg-muted/20 p-3">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <div className="space-y-2 rounded-lg border border-border/60 bg-muted/20 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Endereço de entrega
             </p>
             {!order.requires_shipping_address ? (
@@ -1801,53 +1859,64 @@ function OrderManageDialog({
                 )}
               </div>
             ) : order.shipping_address ? (
-              <>
-                <p className="text-sm text-foreground">{order.shipping_address.recipient}</p>
-                <p className="text-xs text-muted-foreground">
-                  {order.shipping_address.residence_type
-                    ? `${SHIPPING_RESIDENCE_TYPE_LABELS[order.shipping_address.residence_type]} · `
-                    : null}
-                  {[
-                    `${order.shipping_address.street}, ${order.shipping_address.number}`,
-                    order.shipping_address.complement || null,
-                    order.shipping_address.neighborhood,
-                    `${order.shipping_address.city}/${order.shipping_address.state}`,
-                    order.shipping_address.postal_code,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </p>
-                {!order.shipping_address.residence_type && (
-                  <p className="text-xs text-amber-400">
-                    Sem casa/apartamento (endereço informado antes do campo existir).
-                  </p>
-                )}
-                {order.shipping_address.cpf ? (
-                  <p className="text-xs text-muted-foreground">
-                    CPF: {formatCpfInput(order.shipping_address.cpf)}
-                  </p>
-                ) : order.customer_cpf ? (
+              <div className="grid gap-2 sm:grid-cols-2">
+                <ShippingField
+                  label="Nome completo"
+                  value={order.shipping_address.recipient}
+                  className="sm:col-span-2"
+                />
+                <ShippingField
+                  label="Celular"
+                  value={order.shipping_address.phone ? formatPhoneInput(order.shipping_address.phone) : null}
+                />
+                <ShippingField label="CEP" value={formatCepInput(order.shipping_address.postal_code)} />
+                <ShippingField label="Rua" value={order.shipping_address.street} className="sm:col-span-2" />
+                <ShippingField label="Número" value={order.shipping_address.number} />
+                <ShippingField
+                  label="Casa ou apartamento"
+                  value={
+                    order.shipping_address.residence_type
+                      ? SHIPPING_RESIDENCE_TYPE_LABELS[order.shipping_address.residence_type]
+                      : null
+                  }
+                  hint="Endereço informado antes do campo existir."
+                />
+                <ShippingField
+                  label="Complemento"
+                  value={order.shipping_address.complement || null}
+                  empty="Sem complemento"
+                  className="sm:col-span-2"
+                />
+                <ShippingField label="Bairro" value={order.shipping_address.neighborhood} />
+                <ShippingField
+                  label="Cidade/UF"
+                  value={`${order.shipping_address.city}/${order.shipping_address.state}`}
+                />
+                {order.shipping_address.cpf || !order.customer_cpf ? (
+                  <ShippingField
+                    label="CPF"
+                    value={order.shipping_address.cpf ? formatCpfInput(order.shipping_address.cpf) : null}
+                    hint="Sem CPF de quem recebe nem do comprador."
+                  />
+                ) : (
                   // Endereço anterior ao CPF de quem recebe: o do comprador é o
                   // melhor que há, mas pode não ser o do destinatário.
-                  <p className="text-xs text-amber-400">
-                    CPF do comprador (sem CPF de quem recebe): {formatCpfInput(order.customer_cpf)}
-                  </p>
-                ) : (
-                  <p className="text-xs text-amber-400">Sem CPF de quem recebe nem do comprador.</p>
+                  <ShippingField
+                    label="CPF do comprador"
+                    value={formatCpfInput(order.customer_cpf)}
+                    hint="Sem CPF de quem recebe; este é o de quem comprou."
+                  />
                 )}
-                {order.shipping_address.phone && (
-                  <p className="text-xs text-muted-foreground">Celular: {order.shipping_address.phone}</p>
-                )}
-                {order.shipping_address.birth_date ? (
-                  <p className="text-xs text-muted-foreground">
-                    Nascimento: {isoToBirthDateInput(order.shipping_address.birth_date)}
-                  </p>
-                ) : (
-                  <p className="text-xs text-amber-400">
-                    Sem data de nascimento (endereço informado antes do campo existir).
-                  </p>
-                )}
-              </>
+                <ShippingField
+                  label="Data de nascimento"
+                  value={
+                    order.shipping_address.birth_date
+                      ? isoToBirthDateInput(order.shipping_address.birth_date)
+                      : null
+                  }
+                  hint="Endereço informado antes do campo existir."
+                />
+              </div>
             ) : (
               <p className="text-xs text-amber-400">
                 Não informado; o cliente ainda precisa preencher em &ldquo;Meus Pedidos&rdquo;.

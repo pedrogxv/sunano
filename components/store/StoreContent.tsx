@@ -5,7 +5,6 @@ import { useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, ArrowRight, Boxes, ChevronLeft, ChevronRight, Flame, Handshake, Loader2, ShieldCheck, Sparkles, Star, Tag, Wrench } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { usePageHeader } from "@/components/providers/page-header-context"
 import { LaunchPreorderSection } from "@/components/store/LaunchPreorderSection"
 import { STORE_CARD_RAIL_CLASS, STORE_CARD_RAIL_HEADER_CLASS } from "@/components/store/card-rail"
 import { ProductCard, ProductCardSkeleton } from "@/components/store/ProductCard"
@@ -230,13 +229,6 @@ function ProductCarouselSection({
 
 export function StoreContent({ initialItems, initialTotal, initialFilterOptions, initialFeatured, preOrderItems = [], launchItems = [], heroSlides = [], heroTrust, comboItems = [], siteItems = [], serviceItems = [], bestSellingItems = [], categoryBanners = [], pageSize, banner, initialCategory = null }: StoreContentProps) {
   const searchParams = useSearchParams()
-
-  // A TopBar cai no fallback "Sunano" sem isso — /loja não está no mapa de
-  // títulos por rota (getPageDefaults em TopBar.tsx). Descrição curta de
-  // propósito: o grupo esquerdo da TopBar é `shrink-0` (TopBar.tsx), então
-  // o `truncate` do span nunca entra em ação — uma string longa empurra os
-  // botões da direita (carrinho/login) pra fora da tela no mobile.
-  usePageHeader("Loja", "PIX na hora, testado antes de anunciar")
 
   // A landing manda no recorte: em /loja/categoria/mouse o cliente está dentro
   // de "mouse" e ponto — a categoria some da barra de filtros em vez de virar
@@ -778,7 +770,7 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
                 quando a pessoa abre pelo botão "Filtros". Fechada, a grade
                 usa a largura toda. */}
             <div className={cn("hidden", showFilterSidebar && "lg:block")}>
-              <div className="sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto rounded-[16px] border border-[#262626] bg-card px-4 py-3.5 [scrollbar-width:thin]">
+              <div className="sticky top-[calc(var(--sticky-header-h)+1rem)] max-h-[calc(100vh-var(--sticky-header-h)-2rem)] overflow-y-auto rounded-[16px] border border-[#262626] bg-card px-4 py-3.5 [scrollbar-width:thin]">
                 <StoreCatalogSidebar
                   config={catalogConfig}
                   counts={catalogCounts}

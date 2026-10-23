@@ -1528,6 +1528,50 @@ export async function listAllStoreSlugsForSitemap(): Promise<{ slug: string; upd
   return (data ?? []).map((p) => ({ slug: p.slug, updated_at: p.updated_at ?? null }))
 }
 
+export type StoreProductFeedExtras = {
+  description: string | null
+  /** Galeria de cada variante ativa, na ordem das variantes. */
+  variants: { image_url: string | null; images: string[] }[]
+}
+
+/**
+ * Descrição e galeria das variantes por produto, para o feed do Merchant: o
+ * card não carrega nenhuma das duas, e é na galeria da cor que mora a maior
+ * parte das fotos.
+ */
+export async function getStoreProductFeedExtras(ids: string[]): Promise<Map<string, StoreProductFeedExtras>> {
+  const extras = new Map<string, StoreProductFeedExtras>()
+  if (ids.length === 0) return extras
+  const db = createSupabaseAdminClient()
+  const [productsResult, variantsResult] = await Promise.all([
+    db.from("store_products").select("id, description").in("id", ids),
+    db
+      .from("store_product_variants")
+      .select("product_id, image_url, variant_images:store_product_variant_images(url, position)")
+      .in("product_id", ids)
+      .eq("is_active", true)
+      .order("position", { ascending: true })
+      .order("id", { ascending: true }),
+  ])
+  if (productsResult.error) console.error("[store-repository] getStoreProductFeedExtras:", productsResult.error)
+  if (variantsResult.error) console.error("[store-repository] getStoreProductFeedExtras:", variantsResult.error)
+
+  for (const row of productsResult.data ?? []) extras.set(row.id, { description: row.description, variants: [] })
+  // Mesmo cast de `getStoreProductDetail`: o embed da galeria não está nos tipos gerados.
+  type RawFeedVariant = {
+    product_id: string
+    image_url: string | null
+    variant_images: { url: string; position: number }[] | null
+  }
+  for (const row of (variantsResult.data ?? []) as unknown as RawFeedVariant[]) {
+    extras.get(row.product_id)?.variants.push({
+      image_url: row.image_url,
+      images: [...(row.variant_images ?? [])].sort((a, b) => a.position - b.position).map((image) => image.url),
+    })
+  }
+  return extras
+}
+
 export const getStoreProductDetail = cache(async (
   slug: string
 ): Promise<StoreProductDetailResult | null> => {

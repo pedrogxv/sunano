@@ -4,7 +4,6 @@ import { useMemo, useState } from "react"
 import Link from "next/link"
 import { ArrowLeft, Star } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { usePageHeader } from "@/components/providers/page-header-context"
 import { StoreCategoryNav } from "@/components/store/StoreCategoryNav"
 import {
   entryFromReview,
@@ -28,8 +27,6 @@ interface StoreReviewsContentProps {
 }
 
 export function StoreReviewsContent({ filterOptions, aggregate, reviews, testimonials }: StoreReviewsContentProps) {
-  usePageHeader("Avaliações", "O que a galera está achando dos produtos da loja")
-
   // Um feed só, mais recentes primeiro: com o filtro por nota, duas seções
   // separadas obrigavam a procurar a mesma nota em dois lugares. Cada card
   // continua dizendo a origem pelo selo.

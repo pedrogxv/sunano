@@ -40,6 +40,11 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
   const isAdmin = pathname.startsWith("/admin")
   // Idem TopBar: a gaveta do carrinho não deve flutuar por cima do fluxo de checkout.
   const isCheckout = pathname.startsWith("/checkout")
+  // A Loja tem o próprio header (StoreCategoryNav: sidebar, busca, categorias,
+  // carrinho, sino e conta). Com a TopBar por cima, eram duas barras empilhadas
+  // repetindo pedidos, carrinho e conta. O aviso de changelog sai junto: ele é
+  // `sticky top-16`, colado embaixo da TopBar.
+  const isStore = pathname === "/loja" || pathname.startsWith("/loja/")
   const isAuthPage =
     pathname === "/login" ||
     pathname === "/register" ||
@@ -87,8 +92,12 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
           </div>
         ) : (
           <div className="flex-1 min-w-0 bg-card md:mx-2 md:mt-2 md:mb-2 rounded-none md:rounded-2xl md:ml-0">
-            <TopBar />
-            <ChangelogBanner />
+            {!isStore && (
+              <>
+                <TopBar />
+                <ChangelogBanner />
+              </>
+            )}
             {/* overflow-x-hidden (mesmo só no eixo X) força o overflow-y a
                 computar pra `auto` (regra do spec CSS Overflow), o que
                 transforma o <main> num scroll container próprio e quebra

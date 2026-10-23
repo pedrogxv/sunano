@@ -4,6 +4,8 @@ import { getReviewAggregate } from "@/lib/server/repositories/store-reviews-repo
 import { JsonLd } from "@/components/seo/JsonLd"
 import { ProductDetailContent } from "@/components/store/ProductDetailContent"
 import { hasFreeShipping } from "@/lib/store-shipping"
+import { isSinglePriceProduct } from "@/lib/store-pricing"
+import { productGalleryImages } from "@/lib/store-product-images"
 import { effectivePreorderStatus } from "@/lib/store-preorder"
 import { buildDescription } from "@/lib/seo"
 import { getCategoryLabel } from "@/lib/store-category-icons"
@@ -45,8 +47,8 @@ export async function StoreProductPageBody({ slug }: { slug: string }) {
     description: buildDescription(product.description, product.name, {
       context: `Disponível na Loja Sunano.`,
     }),
-    // Absolutas: o Google descarta imagem relativa no schema.
-    image: product.images.map((image) => new URL(image, SITE_URL).toString()),
+    // Inclui a galeria das cores: a maioria dos anúncios só tem 1 foto no produto.
+    image: productGalleryImages(product.images, detail.variants, SITE_URL),
     // Código de SKU quando o produto simples tem um; senão o id, que já era
     // o identificador estável que o Merchant Center via.
     sku: product.sku ?? product.id,
@@ -161,9 +163,11 @@ export async function StoreProductPageBody({ slug }: { slug: string }) {
 
   return (
     <>
-      {/* Sem schema de Product no complemento: a oferta diria o preço de
-          tabela (R$ 6), que nunca é o que se paga. */}
-      {!product.is_payment_complement && <JsonLd data={productJsonLd} />}
+      {/* Sem schema de Product no complemento nem em serviço: a oferta diria
+          o preço de tabela (R$ 6), que nunca é o que se paga, e o Merchant
+          Center importava o Xianyu Express como produto. Mesma régua do feed
+          em `app/merchant-feed.xml`. */}
+      {!product.is_payment_complement && !isSinglePriceProduct(product) && <JsonLd data={productJsonLd} />}
       <JsonLd data={breadcrumbJsonLd} />
       <ProductDetailContent
         {...detail}

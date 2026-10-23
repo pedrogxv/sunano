@@ -13,6 +13,9 @@ import { useCart } from "@/components/providers/cart-context"
 import { StoreSearchBox } from "@/components/store/StoreSearchBox"
 import { StoreCommerceBarSlot } from "@/components/store/StoreCommerceBar"
 import { RouteLink } from "@/components/ui/route-link"
+import { SidebarToggleButton } from "@/components/layout/SidebarToggleButton"
+import { AuthUser, NotificationBell } from "@/components/layout/topbar-account"
+import { useAuthUser } from "@/components/providers/auth-context"
 import type { StoreFilterOptions } from "@/lib/server/repositories/store-repository"
 
 /** O que o menu precisa das opções de filtro: categorias, marcas, contagens do catálogo e destaques. */
@@ -131,6 +134,10 @@ export function StoreCategoryNav({ data, activeCategory }: StoreCategoryNavProps
   const { categories, categoryCounts, brandsByCategory } = data
   const pathname = usePathname()
   const { count: cartCount, setOpen: setCartOpen } = useCart()
+  // Badge de pedidos que esperam a pessoa (endereço, resposta da equipe): o
+  // mesmo do MyOrdersButton da TopBar, que não aparece dentro da Loja.
+  const { user } = useAuthUser()
+  const ordersPending = user?.ordersNeedingAttention ?? 0
   const isHome = pathname === "/loja"
   const [hovered, setHovered] = useState<StoreNavGroup | null>(null)
   const [previewIndex, setPreviewIndex] = useState(0)
@@ -216,13 +223,18 @@ export function StoreCategoryNav({ data, activeCategory }: StoreCategoryNavProps
   return (
     <>
     {/* `@container`: o menu decide o layout pela PRÓPRIA largura, não pela
-        da tela: a sidebar do site (aberta ou recolhida) muda quanto sobra. */}
-    <div className="@container relative" onMouseLeave={() => hoverGroup(null)}>
+        da tela: a sidebar do site (aberta ou recolhida) muda quanto sobra.
+        Este menu É o header da Loja (a TopBar do site não aparece em /loja,
+        ver LayoutShell), por isso carrega a sidebar, o sino e a conta. Preso
+        ao rolar só no xl: abaixo disso o menu pode estar no layout de duas
+        linhas (busca + pílulas), alto demais para ficar fixo. */}
+    <div className="@container relative bg-card xl:sticky xl:top-0 xl:z-20" onMouseLeave={() => hoverGroup(null)}>
       {/* Desktop: 3 blocos: Busca | Home + categorias (centralizados) |
           Carrinho, Pedidos, Suporte. A busca mora à esquerda para
           o bloco de categorias ficar no meio com espaço dos dois lados. */}
       <nav className="hidden grid-cols-[1fr_auto_1fr] items-center gap-x-6 border-b border-[#262626] bg-card px-4 @min-[920px]:grid @min-[1100px]:px-8">
-        <div className="flex min-w-0" onMouseEnter={() => hoverGroup(null)}>
+        <div className="flex min-w-0 items-center gap-3" onMouseEnter={() => hoverGroup(null)}>
+          <SidebarToggleButton />
           <StoreSearchBox
             className="w-full max-w-[320px]"
             inputClassName="h-[34px] w-full rounded-[10px] border border-[#2a2a2a] bg-[#141414] pl-[34px] pr-3 text-[12.5px] text-white outline-none placeholder:text-[#6e6e6e] focus:border-foreground/25"
@@ -288,17 +300,44 @@ export function StoreCategoryNav({ data, activeCategory }: StoreCategoryNavProps
             item como na TopBar: dentro da Loja ele é navegação, não aviso. */}
         <div className="flex shrink-0 items-center justify-self-end gap-1.5" onMouseEnter={() => hoverGroup(null)}>
           <NavAction icon={ShoppingCart} label="Carrinho" onClick={() => setCartOpen(true)} badge={cartCount} />
-          <NavAction icon={Package} label="Pedidos" href="/conta/pedidos" />
+          <NavAction
+            icon={Package}
+            label="Pedidos"
+            href="/conta/pedidos"
+            badge={ordersPending}
+            active={pathname?.startsWith("/conta/pedidos")}
+          />
           <NavAction icon={LifeBuoy} label="Suporte" href="/suporte" />
+          <div className="mx-1 h-6 w-px shrink-0 bg-[#262626]" />
+          <NotificationBell />
+          <AuthUser layout="topbar" variant="public" />
         </div>
       </nav>
 
-      {/* Mobile / menu estreito: busca numa linha e o mesmo menu fixo em pills. */}
-      <div className="border-b border-[#1c1c1c] bg-card px-4 py-3 @min-[920px]:hidden">
+      {/* Mobile / menu estreito: sidebar + busca + carrinho/sino/conta numa
+          linha e o mesmo menu fixo em pills. */}
+      <div className="flex items-center gap-1.5 border-b border-[#1c1c1c] bg-card px-4 py-3 @min-[920px]:hidden">
+        <SidebarToggleButton className="-ml-2" />
         <StoreSearchBox
+          className="min-w-0 flex-1"
           inputClassName="h-11 w-full rounded-xl border border-[#2a2a2a] bg-[#141414] pl-[38px] pr-3.5 text-[13px] text-white outline-none placeholder:text-[#6e6e6e] focus:border-foreground/25"
           iconClassName="left-3.5 size-[15px]"
         />
+        <button
+          type="button"
+          onClick={() => setCartOpen(true)}
+          aria-label={cartCount > 0 ? `Carrinho (${cartCount})` : "Carrinho"}
+          className="relative flex size-11 shrink-0 items-center justify-center rounded-lg text-[#b4b4b4] transition-colors hover:text-white"
+        >
+          <ShoppingCart className="size-[18px]" strokeWidth={2.1} />
+          {cartCount > 0 && (
+            <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-500 px-1 text-[9px] font-bold leading-none text-white ring-2 ring-card">
+              {cartCount > 99 ? "99+" : cartCount}
+            </span>
+          )}
+        </button>
+        <NotificationBell />
+        <AuthUser layout="topbar" variant="public" />
       </div>
       <div className="flex gap-2 overflow-x-auto border-b border-[#1c1c1c] bg-card px-4 pb-3.5 pt-3 [scrollbar-width:none] @min-[920px]:hidden">
         <Link

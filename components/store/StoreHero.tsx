@@ -28,6 +28,7 @@ import { isInternalBannerLink } from "@/lib/banner-link"
 import { formatBRL } from "@/lib/format"
 import { getCategoryIcon } from "@/lib/store-category-icons"
 import {
+  isStoreHeroVideoUrl,
   productHref,
   type HeroSealIcon,
   type StoreHeroCta,
@@ -280,12 +281,103 @@ function CtaButton({ cta, variant, tabIndex }: { cta: StoreHeroCta; variant: "pr
   )
 }
 
+const MOBILE_HERO_QUERY = "(max-width: 767px)"
+
+function subscribeMobileHero(onChange: () => void) {
+  const query = window.matchMedia(MOBILE_HERO_QUERY)
+  query.addEventListener("change", onChange)
+  return () => query.removeEventListener("change", onChange)
+}
+
+/**
+ * Arte com vídeo em pelo menos um dos lados. `<picture>` não troca `<img>`
+ * por `<video>`, e desenhar os dois escondendo um por CSS baixaria os dois
+ * arquivos: aqui só o da largura atual é montado (o servidor desenha o de
+ * desktop, o mesmo padrão do `<img>` do `<picture>`).
+ *
+ * Só o slide atual toca: no carrossel os outros ficam montados, e vídeo
+ * rodando atrás de opacity-0 gasta CPU e bateria à toa.
+ */
+function HeroVideoBackground({
+  desktopUrl,
+  mobileUrl,
+  isCurrent,
+  eager,
+  className,
+}: {
+  desktopUrl: string
+  mobileUrl: string | null
+  isCurrent: boolean
+  eager: boolean
+  className: string
+}) {
+  const isMobile = useSyncExternalStore(
+    subscribeMobileHero,
+    () => window.matchMedia(MOBILE_HERO_QUERY).matches,
+    () => false
+  )
+  const src = isMobile && mobileUrl ? mobileUrl : desktopUrl
+  const videoRef = useRef<HTMLVideoElement>(null)
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    if (isCurrent && !reducedMotion) {
+      // Autoplay mudo pode ser recusado (economia de dados): fica o 1º quadro.
+      video.play().catch(() => {})
+    } else {
+      video.pause()
+    }
+  }, [isCurrent, src])
+
+  if (!isStoreHeroVideoUrl(src)) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={src}
+        alt=""
+        loading={eager ? "eager" : "lazy"}
+        fetchPriority={eager ? "high" : "auto"}
+        draggable={false}
+        className={className}
+      />
+    )
+  }
+
+  return (
+    <video
+      key={src}
+      ref={videoRef}
+      src={src}
+      muted
+      loop
+      playsInline
+      preload={eager || isCurrent ? "auto" : "metadata"}
+      aria-hidden
+      className={className}
+    />
+  )
+}
+
 /** Fundo do slide: a arte enviada (desktop/mobile) ou, sem arte, uma composição com a foto do produto. */
 function HeroBackground({ slide, isCurrent, eager }: { slide: StoreHeroView; isCurrent: boolean; eager: boolean }) {
   const kenBurns = cn(
     "absolute inset-0 size-full object-cover motion-safe:transition-transform motion-safe:duration-[7000ms] motion-safe:ease-out",
     isCurrent ? "scale-100" : "motion-safe:scale-[1.05]"
   )
+
+  if (slide.imageDesktopUrl && (isStoreHeroVideoUrl(slide.imageDesktopUrl) || isStoreHeroVideoUrl(slide.imageMobileUrl))) {
+    return (
+      <HeroVideoBackground
+        desktopUrl={slide.imageDesktopUrl}
+        mobileUrl={slide.imageMobileUrl}
+        isCurrent={isCurrent}
+        eager={eager}
+        className={kenBurns}
+      />
+    )
+  }
 
   if (slide.imageDesktopUrl) {
     return (
@@ -335,18 +427,36 @@ function HeroBackground({ slide, isCurrent, eager }: { slide: StoreHeroView; isC
   )
 }
 
+/** Lado de onde o slide novo entra: `next` vem da direita, `prev` da esquerda. */
+type SlideDirection = "next" | "prev"
+
+const SLIDE_ANIMATION: Record<"in" | "out", Record<SlideDirection, string>> = {
+  in: { next: "animate-hero-in-next", prev: "animate-hero-in-prev" },
+  out: { next: "animate-hero-out-next", prev: "animate-hero-out-prev" },
+}
+
 function HeroSlide({
   slide,
   index,
   total,
   isCurrent,
+  isLeaving,
+  direction,
+  onSlideInEnd,
 }: {
   slide: StoreHeroView
   index: number
   total: number
   isCurrent: boolean
+  /** O slide que acabou de sair: continua visível enquanto desliza para fora. */
+  isLeaving: boolean
+  /** `null` na primeira pintura: o slide inicial aparece parado. */
+  direction: SlideDirection | null
+  onSlideInEnd: () => void
 }) {
   const tabIndex = isCurrent ? 0 : -1
+  const animation =
+    direction && isCurrent ? SLIDE_ANIMATION.in[direction] : direction && isLeaving ? SLIDE_ANIMATION.out[direction] : null
 
   return (
     <div
@@ -355,12 +465,18 @@ function HeroSlide({
       aria-label={`${index + 1} de ${total}: ${slide.title}`}
       aria-hidden={!isCurrent}
       inert={!isCurrent}
+      onAnimationEnd={(event) => {
+        // Só o fim do deslize do próprio slide (os filhos também animam).
+        if (event.target === event.currentTarget && isCurrent) onSlideInEnd()
+      }}
       // Sem overflow-hidden aqui: com etiqueta, prazo, botões e produto o
       // texto pode passar do 3:4 de um celular estreito, e aí o slide cresce
       // em vez de cortar o título. Quem recorta o zoom da arte é a <section>.
       className={cn(
-        "relative col-start-1 row-start-1 aspect-[3/4] max-h-[620px] w-full transition-opacity duration-700 ease-out motion-reduce:transition-none md:aspect-[16/5] md:max-h-none md:min-h-[380px]",
-        isCurrent ? "opacity-100" : "pointer-events-none opacity-0"
+        "relative col-start-1 row-start-1 aspect-[3/4] max-h-[620px] w-full md:aspect-[16/5] md:max-h-none md:min-h-[380px]",
+        isCurrent ? "opacity-100" : "pointer-events-none",
+        !isCurrent && (isLeaving ? "opacity-100 motion-reduce:opacity-0" : "opacity-0"),
+        animation
       )}
     >
       <HeroBackground slide={slide} isCurrent={isCurrent} eager={index === 0} />
@@ -415,6 +531,10 @@ function HeroSlide({
 
 function HeroCarousel({ slides }: { slides: StoreHeroView[] }) {
   const [current, setCurrent] = useState(0)
+  // Quem saiu e para que lado, para o deslize: o que entra vem do lado da
+  // navegação e o que sai vai para o oposto, inclusive na volta do último
+  // para o primeiro (autoplay é sempre "next").
+  const [transition, setTransition] = useState<{ from: number; direction: SlideDirection } | null>(null)
   const [isHoverPaused, setIsHoverPaused] = useState(false)
   const [isStopped, setIsStopped] = useState(false)
   const prefersReducedMotion = usePrefersReducedMotion()
@@ -425,28 +545,31 @@ function HeroCarousel({ slides }: { slides: StoreHeroView[] }) {
   const shouldAutoRotate = total > 1 && !isHoverPaused && !isStopped && !prefersReducedMotion
 
   const goTo = useCallback(
-    (index: number) => {
+    (index: number, direction: SlideDirection) => {
       if (total === 0) return
-      setCurrent(((index % total) + total) % total)
+      const next = ((index % total) + total) % total
+      if (next === currentIndex) return
+      setTransition({ from: currentIndex, direction })
+      setCurrent(next)
     },
-    [total]
+    [total, currentIndex]
   )
 
   useEffect(() => {
     if (!shouldAutoRotate) return
-    const timer = window.setInterval(() => setCurrent((value) => (value + 1) % total), AUTOPLAY_MS)
+    const timer = window.setInterval(() => goTo(currentIndex + 1, "next"), AUTOPLAY_MS)
     return () => window.clearInterval(timer)
     // `currentIndex` de propósito: navegação manual reinicia a contagem.
-  }, [shouldAutoRotate, total, currentIndex])
+  }, [shouldAutoRotate, goTo, currentIndex])
 
   function onKeyDown(event: React.KeyboardEvent) {
     if (total <= 1) return
     if (event.key === "ArrowRight") {
       event.preventDefault()
-      goTo(currentIndex + 1)
+      goTo(currentIndex + 1, "next")
     } else if (event.key === "ArrowLeft") {
       event.preventDefault()
-      goTo(currentIndex - 1)
+      goTo(currentIndex - 1, "prev")
     }
   }
 
@@ -463,7 +586,8 @@ function HeroCarousel({ slides }: { slides: StoreHeroView[] }) {
     const deltaY = event.clientY - start.y
     // Gesto mais vertical que horizontal é rolagem da página, não swipe.
     if (Math.abs(deltaX) < SWIPE_THRESHOLD_PX || Math.abs(deltaX) <= Math.abs(deltaY)) return
-    goTo(currentIndex + (deltaX < 0 ? 1 : -1))
+    if (deltaX < 0) goTo(currentIndex + 1, "next")
+    else goTo(currentIndex - 1, "prev")
   }
 
   const hasControls = total > 1
@@ -486,33 +610,48 @@ function HeroCarousel({ slides }: { slides: StoreHeroView[] }) {
       }}
       className="group/hero relative touch-pan-y overflow-hidden border-b border-[#1c1c1c] bg-[#0b0f14]"
     >
-      {/* Todos os slides na mesma célula do grid: o crossfade é só opacidade. */}
+      {/* Todos os slides na mesma célula do grid: o que entra e o que sai
+          deslizam lado a lado, e a <section> (overflow-hidden) recorta. */}
       <div className="relative grid w-full">
         {slides.map((slide, index) => (
-          <HeroSlide key={slide.id} slide={slide} index={index} total={total} isCurrent={index === currentIndex} />
+          <HeroSlide
+            key={slide.id}
+            slide={slide}
+            index={index}
+            total={total}
+            isCurrent={index === currentIndex}
+            isLeaving={transition?.from === index && index !== currentIndex}
+            direction={transition?.direction ?? null}
+            // Terminado o deslize, nenhum slide guarda transform: com o estado
+            // final da animação preso no slide (fill-mode), o Chrome desenhava
+            // a camada do <video> deslocada, com uma faixa preta do lado.
+            onSlideInEnd={() => setTransition(null)}
+          />
         ))}
       </div>
 
+      {/* z-20: o slide em animação cria camada própria (transform) e não
+          pode cobrir setas, bolinhas e pausa. */}
       {hasControls && (
         <>
           <button
             type="button"
-            onClick={() => goTo(currentIndex - 1)}
+            onClick={() => goTo(currentIndex - 1, "prev")}
             aria-label="Slide anterior"
-            className="absolute left-4 top-1/2 hidden size-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/40 text-white opacity-0 backdrop-blur-sm transition-opacity hover:bg-black/60 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 group-hover/hero:opacity-100 md:flex"
+            className="absolute left-4 top-1/2 z-20 hidden size-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/40 text-white opacity-0 backdrop-blur-sm transition-opacity hover:bg-black/60 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 group-hover/hero:opacity-100 md:flex"
           >
             <ChevronLeft className="size-5" />
           </button>
           <button
             type="button"
-            onClick={() => goTo(currentIndex + 1)}
+            onClick={() => goTo(currentIndex + 1, "next")}
             aria-label="Próximo slide"
-            className="absolute right-4 top-1/2 hidden size-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/40 text-white opacity-0 backdrop-blur-sm transition-opacity hover:bg-black/60 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 group-hover/hero:opacity-100 md:flex"
+            className="absolute right-4 top-1/2 z-20 hidden size-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/40 text-white opacity-0 backdrop-blur-sm transition-opacity hover:bg-black/60 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 group-hover/hero:opacity-100 md:flex"
           >
             <ChevronRight className="size-5" />
           </button>
 
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-center pb-4">
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex items-center justify-center pb-4">
             <div className="pointer-events-auto flex items-center gap-2">
               {slides.map((slide, index) => {
                 const isCurrent = index === currentIndex
@@ -520,7 +659,7 @@ function HeroCarousel({ slides }: { slides: StoreHeroView[] }) {
                   <button
                     key={slide.id}
                     type="button"
-                    onClick={() => goTo(index)}
+                    onClick={() => goTo(index, index > currentIndex ? "next" : "prev")}
                     aria-label={`Ir para o slide ${index + 1}: ${slide.title}`}
                     aria-current={isCurrent}
                     className={cn(

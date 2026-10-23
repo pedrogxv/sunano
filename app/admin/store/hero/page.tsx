@@ -19,6 +19,7 @@ import {
   EyeOff,
   GripVertical,
   ImagePlus,
+  Maximize2,
   MousePointerClick,
   PanelTop,
   Pencil,
@@ -28,6 +29,7 @@ import {
   Tag,
   Trash2,
   Upload,
+  X,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -47,9 +49,18 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { MediaViewer } from "@/components/ui/media-viewer"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { BANNER_LINK_HINT, isValidBannerLink } from "@/lib/banner-link"
+import {
+  formatBytes,
+  formatEta,
+  UploadAbortedError,
+  UploadError,
+  uploadWithProgress,
+  type UploadProgress,
+} from "@/lib/client/upload-with-progress"
 import { formatShortDateTime, fromLocalInput, toLocalInput } from "@/lib/datetime-local"
 import type { StoreProductCard } from "@/lib/server/repositories/store-repository"
 import {
@@ -62,11 +73,14 @@ import {
   HERO_SUBTITLE_MAX,
   HERO_TITLE_MAX,
   heroSlideStatus,
+  isStoreHeroVideoUrl,
   STORE_HERO_HIGHLIGHTS,
+  STORE_HERO_VIDEO_MAX_BYTES,
   type AdminStoreHeroSlide,
   type StoreHeroHighlightKind,
   type StoreHeroStatus,
 } from "@/lib/store-hero"
+import { formatUploadLimit } from "@/lib/upload-limits"
 import { cn } from "@/lib/utils"
 
 type FormState = {
@@ -117,6 +131,157 @@ function statusHint(slide: AdminStoreHeroSlide, status: StoreHeroStatus): string
   return null
 }
 
+/** Tipos que os campos de arte aceitam, no seletor de arquivo e ao soltar. */
+const MEDIA_ACCEPT = ["image/webp", "image/png", "image/jpeg", "video/mp4", "video/quicktime"]
+
+/**
+ * Arrastar e soltar arquivo de arte. Mesmo comportamento nos campos de
+ * desktop/mobile e na prévia grande, que recebe a arte de desktop.
+ */
+function useMediaDrop(disabled: boolean, onFile: (file: File) => void) {
+  const [dragOver, setDragOver] = useState(false)
+
+  const handlers = {
+    onDragOver(event: React.DragEvent<HTMLDivElement>) {
+      if (disabled || !event.dataTransfer.types.includes("Files")) return
+      event.preventDefault()
+      event.dataTransfer.dropEffect = "copy"
+      setDragOver(true)
+    },
+    onDragLeave(event: React.DragEvent<HTMLDivElement>) {
+      // Sair para um filho (o <img>, o texto) também dispara dragleave.
+      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragOver(false)
+    },
+    onDrop(event: React.DragEvent<HTMLDivElement>) {
+      event.preventDefault()
+      setDragOver(false)
+      if (disabled) return
+      const file = event.dataTransfer.files?.[0]
+      if (!file) return
+      if (!MEDIA_ACCEPT.includes(file.type)) {
+        toast.error("Formato não aceito", { description: "Envie WebP, PNG, JPG, MP4 ou MOV" })
+        return
+      }
+      onFile(file)
+    },
+  }
+
+  return { dragOver, handlers }
+}
+
+function DropOverlay({ label }: { label: string }) {
+  return (
+    <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-1 bg-black/60 text-white">
+      <Upload className="size-5" />
+      <span className="text-[11px] font-semibold">{label}</span>
+    </div>
+  )
+}
+
+type UploadPhase = "preparing" | "sending" | "processing"
+
+/** Envio em andamento: qual campo, o arquivo local (para a prévia) e onde ele está. */
+type UploadState = {
+  kind: "desktop" | "mobile"
+  isVideo: boolean
+  /** `blob:` do arquivo local, mostrado enquanto sobe. */
+  localUrl: string
+  phase: UploadPhase
+  progress: UploadProgress | null
+}
+
+function phaseLabel(state: UploadState): string {
+  if (state.phase === "preparing") return "Preparando o envio"
+  if (state.phase === "processing") return state.isVideo ? "Conferindo o vídeo" : "Otimizando a imagem"
+  return state.isVideo ? "Enviando o vídeo" : "Enviando a imagem"
+}
+
+/**
+ * O arquivo sobe por cima da própria prévia: a versão local aparece em preto
+ * e branco e ganha cor da esquerda para a direita conforme os bytes saem. A
+ * fronteira da cor É a barra de progresso, e o número embaixo diz quanto
+ * falta em MB e em tempo. Nas fases sem byte para contar (gerar a URL,
+ * conferir/otimizar no servidor) a barra vira um brilho correndo, em vez de
+ * fingir um percentual.
+ */
+function UploadOverlay({ state, compact, onCancel }: { state: UploadState; compact?: boolean; onCancel: () => void }) {
+  const sending = state.phase === "sending"
+  const fraction = state.phase === "processing" ? 1 : sending ? (state.progress?.fraction ?? 0) : 0
+  const percent = Math.floor(fraction * 100)
+  const progress = state.progress
+  const clip = `inset(0 ${(1 - fraction) * 100}% 0 0)`
+
+  const media = (className: string, style?: React.CSSProperties) =>
+    state.isVideo ? (
+      <video src={state.localUrl} muted loop autoPlay playsInline className={className} style={style} />
+    ) : (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={state.localUrl} alt="" className={className} style={style} />
+    )
+
+  return (
+    <div className="absolute inset-0 z-20 overflow-hidden bg-black" role="status" aria-live="polite">
+      {media("absolute inset-0 size-full object-cover opacity-35 grayscale")}
+      {media("absolute inset-0 size-full object-cover transition-[clip-path] duration-300 ease-out", { clipPath: clip })}
+      {/* Fio de luz na fronteira entre o que já subiu e o que falta. */}
+      {sending && fraction > 0 && fraction < 1 && (
+        <div
+          className="absolute inset-y-0 w-px bg-white/80 shadow-[0_0_12px_2px_rgba(255,255,255,0.6)] transition-[left] duration-300 ease-out"
+          style={{ left: `${fraction * 100}%` }}
+        />
+      )}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-black/20" />
+
+      <button
+        type="button"
+        onClick={onCancel}
+        aria-label="Cancelar envio"
+        className="absolute right-1.5 top-1.5 z-10 flex size-6 items-center justify-center rounded-full bg-black/60 text-white/80 transition-colors hover:bg-black/80 hover:text-white"
+      >
+        <X className="size-3.5" />
+      </button>
+
+      <div className={cn("absolute inset-x-0 bottom-0 text-white", compact ? "space-y-1.5 p-2" : "space-y-2 p-4")}>
+        <div className="flex items-end justify-between gap-2">
+          <div className="min-w-0">
+            <p className={cn("font-semibold text-white/80", compact ? "text-[10px]" : "text-xs")}>{phaseLabel(state)}</p>
+            {sending && progress && progress.total > 0 && (
+              <p className={cn("tabular-nums text-white/60", compact ? "text-[10px]" : "text-[11px]")}>
+                {formatBytes(progress.loaded)} de {formatBytes(progress.total)}
+                {!compact && progress.bytesPerSecond ? ` · ${formatBytes(progress.bytesPerSecond)}/s` : ""}
+              </p>
+            )}
+          </div>
+          {sending && (
+            <span className={cn("font-bold tabular-nums leading-none", compact ? "text-lg" : "text-3xl")}>
+              {percent}
+              <span className="text-[0.55em] font-semibold text-white/70">%</span>
+            </span>
+          )}
+        </div>
+
+        <div className="relative h-1 overflow-hidden rounded-full bg-white/15">
+          {sending ? (
+            <div
+              className="h-full rounded-full bg-white transition-[width] duration-300 ease-out"
+              style={{ width: `${fraction * 100}%` }}
+            />
+          ) : (
+            <div className="absolute inset-y-0 w-1/3 animate-[upload-shimmer_1.1s_ease-in-out_infinite] rounded-full bg-gradient-to-r from-transparent via-white to-transparent" />
+          )}
+        </div>
+
+        {sending && (
+          <p className={cn("tabular-nums text-white/60", compact ? "text-[10px]" : "text-[11px]")}>
+            {progress?.etaSeconds != null ? formatEta(progress.etaSeconds) : "Calculando o tempo..."}
+          </p>
+        )}
+      </div>
+      <style>{`@keyframes upload-shimmer { 0% { left: -33% } 100% { left: 100% } }`}</style>
+    </div>
+  )
+}
+
 /** Largura em que a prévia é desenhada antes de ser reduzida: a de um desktop comum. */
 const PREVIEW_WIDTH = 1280
 
@@ -125,7 +290,23 @@ const PREVIEW_WIDTH = 1280
  * editor. É o próprio componente da Loja, não uma imitação: o que aparece
  * aqui é o que vai ao ar.
  */
-function HeroPreview({ form, now }: { form: FormState; now: number }) {
+function HeroPreview({
+  form,
+  now,
+  upload,
+  disabled,
+  onDropDesktop,
+  onCancelUpload,
+}: {
+  form: FormState
+  now: number
+  /** Envio da arte de desktop em andamento, desenhado por cima da prévia. */
+  upload: UploadState | null
+  disabled: boolean
+  onDropDesktop: (file: File) => void
+  onCancelUpload: () => void
+}) {
+  const { dragOver, handlers } = useMediaDrop(disabled, onDropDesktop)
   const frameRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const [scale, setScale] = useState(0.5)
@@ -170,7 +351,11 @@ function HeroPreview({ form, now }: { form: FormState; now: number }) {
   return (
     <div
       ref={frameRef}
-      className="relative w-full overflow-hidden rounded-lg border border-border bg-[#0b0f14]"
+      {...handlers}
+      className={cn(
+        "relative w-full overflow-hidden rounded-lg border border-border bg-[#0b0f14] transition-colors",
+        dragOver && "border-foreground/60"
+      )}
       style={{ height: hasView ? contentHeight * scale : undefined }}
     >
       {view ? (
@@ -185,8 +370,14 @@ function HeroPreview({ form, now }: { form: FormState; now: number }) {
       ) : (
         <div ref={contentRef} className="flex aspect-[16/5] flex-col items-center justify-center gap-1.5 text-muted-foreground">
           <ImagePlus className="size-6" />
-          <span className="text-xs">Envie a imagem de desktop ou escolha um produto para ver a prévia.</span>
+          <span className="text-xs">
+            Arraste a imagem ou o vídeo de desktop para cá, ou escolha um produto, para ver a prévia
+          </span>
         </div>
+      )}
+      {upload && <UploadOverlay state={upload} onCancel={onCancelUpload} />}
+      {dragOver && (
+        <DropOverlay label={form.imageDesktopUrl ? "Solte para trocar a arte de desktop" : "Solte para usar como arte de desktop"} />
       )}
     </div>
   )
@@ -198,9 +389,10 @@ function ImageField({
   icon: Icon,
   value,
   aspectClassName,
-  uploading,
+  upload,
   disabled,
   onUpload,
+  onCancelUpload,
   onClear,
 }: {
   label: string
@@ -208,33 +400,68 @@ function ImageField({
   icon: typeof ImagePlus
   value: string
   aspectClassName: string
-  uploading: boolean
+  /** Envio deste campo em andamento. */
+  upload: UploadState | null
   disabled: boolean
   onUpload: (file: File) => void
+  onCancelUpload: () => void
   onClear: () => void
 }) {
+  const uploading = upload !== null
   const inputRef = useRef<HTMLInputElement>(null)
+  const [viewing, setViewing] = useState(false)
+  const isVideo = isStoreHeroVideoUrl(value)
+  const { dragOver, handlers } = useMediaDrop(disabled, onUpload)
+
   return (
     <div className="space-y-2">
       <Label className="flex items-center gap-1.5">
         <Icon className="size-3.5" />
         {label}
       </Label>
-      <div className={cn("w-full overflow-hidden rounded-lg border border-dashed border-border bg-muted/40", aspectClassName)}>
-        {value ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={value} alt="" className="size-full object-cover" />
-        ) : (
-          <div className="flex size-full flex-col items-center justify-center gap-1 text-muted-foreground">
-            <ImagePlus className="size-5" />
-            <span className="text-[11px]">Nenhuma imagem</span>
-          </div>
+      <div
+        {...handlers}
+        className={cn(
+          "group relative w-full overflow-hidden rounded-lg border border-dashed border-border bg-muted/40 transition-colors",
+          dragOver && "border-solid border-foreground/60 bg-muted",
+          aspectClassName
         )}
+      >
+        {value ? (
+          <button
+            type="button"
+            aria-label={isVideo ? "Ver vídeo em tela cheia" : "Ver imagem em tela cheia"}
+            onClick={() => setViewing(true)}
+            className="block size-full cursor-zoom-in"
+          >
+            {isVideo ? (
+              <video src={value} muted loop autoPlay playsInline className="size-full object-cover" />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={value} alt="" className="size-full object-cover" />
+            )}
+            <span className="absolute right-1.5 top-1.5 flex size-6 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100">
+              <Maximize2 className="size-3" />
+            </span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => inputRef.current?.click()}
+            className="flex size-full flex-col items-center justify-center gap-1 px-2 text-center text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none"
+          >
+            <ImagePlus className="size-5" />
+            <span className="text-[11px]">Arraste ou clique para enviar imagem ou vídeo</span>
+          </button>
+        )}
+        {upload && <UploadOverlay state={upload} compact onCancel={onCancelUpload} />}
+        {dragOver && <DropOverlay label={value ? "Solte para trocar" : "Solte para enviar"} />}
       </div>
       <input
         ref={inputRef}
         type="file"
-        accept="image/webp,image/png,image/jpeg"
+        accept={MEDIA_ACCEPT.join(",")}
         className="hidden"
         onChange={(event) => {
           const file = event.target.files?.[0]
@@ -252,7 +479,7 @@ function ImageField({
           onClick={() => inputRef.current?.click()}
         >
           <Upload className="size-3.5" />
-          {uploading ? "Enviando..." : value ? "Trocar" : "Enviar"}
+          {uploading ? `Enviando ${Math.floor((upload.progress?.fraction ?? 0) * 100)}%` : value ? "Trocar" : "Enviar"}
         </Button>
         {value && (
           <Button type="button" variant="ghost" size="sm" className="text-muted-foreground" onClick={onClear}>
@@ -261,6 +488,22 @@ function ImageField({
         )}
       </div>
       <p className="text-[11px] text-muted-foreground">{hint}</p>
+
+      {value && !isVideo && (
+        <MediaViewer
+          items={[{ src: value, alt: label, unoptimized: true }]}
+          open={viewing}
+          onOpenChange={setViewing}
+        />
+      )}
+      {value && isVideo && (
+        <Dialog open={viewing} onOpenChange={setViewing}>
+          <DialogContent className="border border-border bg-black p-0 sm:max-w-4xl">
+            <DialogTitle className="sr-only">{label}</DialogTitle>
+            <video src={value} controls autoPlay muted loop playsInline className="max-h-[80vh] w-full rounded-lg" />
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   )
 }
@@ -374,7 +617,11 @@ function SortableSlideRow({
       <span className="w-5 shrink-0 text-center text-xs font-bold text-muted-foreground">{position}</span>
 
       <div className="relative h-14 w-28 shrink-0 overflow-hidden rounded-lg bg-muted">
-        {thumbnail ? (
+        {thumbnail && isStoreHeroVideoUrl(thumbnail) ? (
+          // Sem tocar, o <video> mostra o 1º quadro, que em vídeo de campanha
+          // quase sempre é preto (fade de entrada). `#t=1` posiciona em 1s.
+          <video src={`${thumbnail}#t=1`} muted playsInline preload="metadata" className="size-full object-cover" />
+        ) : thumbnail ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={thumbnail}
@@ -467,7 +714,9 @@ export default function AdminStoreHeroPage() {
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<AdminStoreHeroSlide | null>(null)
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
-  const [uploading, setUploading] = useState<"desktop" | "mobile" | null>(null)
+  const [upload, setUpload] = useState<UploadState | null>(null)
+  const uploadAbortRef = useRef<AbortController | null>(null)
+  const uploading = upload?.kind ?? null
   const [saving, setSaving] = useState(false)
 
   const [deleteTarget, setDeleteTarget] = useState<AdminStoreHeroSlide | null>(null)
@@ -543,21 +792,126 @@ export default function AdminStoreHeroPage() {
     setFormOpen(true)
   }
 
-  async function handleUpload(file: File, kind: "desktop" | "mobile") {
-    setUploading(kind)
+  /** Cancela com o usuário OU depois de `ms`: chamada ao nosso servidor não pode prender a tela. */
+  const withTimeout = (signal: AbortSignal, ms: number) => AbortSignal.any([signal, AbortSignal.timeout(ms)])
+
+  const patchUpload = (patch: Partial<UploadState>) => setUpload((prev) => (prev ? { ...prev, ...patch } : prev))
+
+  function cancelUpload() {
+    uploadAbortRef.current?.abort()
+  }
+
+  /**
+   * Vídeo vai do navegador direto para o Storage por signed URL (a Vercel
+   * corta o corpo em ~4.5MB); a rota gera a URL e depois confere o que chegou.
+   * Ver /api/admin/store-hero/upload-video.
+   *
+   * Corpo cru com `content-type: video/mp4`, e não o `uploadToSignedUrl` do
+   * supabase-js: com um `File` ele monta multipart e ignora o `contentType`
+   * pedido, então um .mov chegava como `video/quicktime` e o bucket (que só
+   * libera `video/mp4`) recusava.
+   */
+  async function uploadVideo(file: File, signal: AbortSignal): Promise<string> {
+    if (file.size > STORE_HERO_VIDEO_MAX_BYTES) {
+      throw new Error(`O vídeo deve ter no máximo ${formatUploadLimit(STORE_HERO_VIDEO_MAX_BYTES)}`)
+    }
+    const startRes = await fetch("/api/admin/store-hero/upload-video", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contentType: file.type, sizeBytes: file.size }),
+      signal: withTimeout(signal, 30_000),
+    })
+    const start = (await startRes.json().catch(() => null)) as { path?: string; signedUrl?: string; error?: string } | null
+    if (!startRes.ok || !start?.path || !start.signedUrl) throw new Error(start?.error ?? "Erro ao iniciar o envio")
+
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ""
+    patchUpload({ phase: "sending" })
     try {
-      const body = new FormData()
-      body.append("file", file)
-      // Mesmo bucket e rota dos banners de seção da Loja.
-      const res = await fetch("/api/admin/store-banners/upload-image", { method: "POST", body })
-      const data = (await res.json()) as { publicUrl?: string; error?: string }
-      if (!res.ok || !data.publicUrl) throw new Error(data.error ?? "Erro ao enviar a imagem.")
-      patchForm(kind === "desktop" ? { imageDesktopUrl: data.publicUrl } : { imageMobileUrl: data.publicUrl })
-      toast.success("Imagem enviada")
+      await uploadWithProgress({
+        method: "PUT",
+        url: start.signedUrl,
+        body: file,
+        headers: {
+          "content-type": "video/mp4",
+          "cache-control": "max-age=31536000",
+          "x-upsert": "false",
+          apikey: anonKey,
+          authorization: `Bearer ${anonKey}`,
+        },
+        signal,
+        onProgress: (progress) => patchUpload({ progress }),
+        onUploaded: () => patchUpload({ phase: "processing" }),
+      })
     } catch (err) {
-      toast.error("Erro no upload", { description: err instanceof Error ? err.message : "Erro ao enviar a imagem." })
+      if (err instanceof UploadError && (err.status === 413 || /maximum allowed size/i.test(err.message))) {
+        throw new Error(
+          "O Storage recusou pelo tamanho. Confira o limite global de upload em Supabase → Storage → Settings"
+        )
+      }
+      throw err
+    }
+
+    patchUpload({ phase: "processing" })
+    let finishRes: Response
+    try {
+      finishRes = await fetch("/api/admin/store-hero/upload-video", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: start.path }),
+        signal: withTimeout(signal, 30_000),
+      })
+    } catch (err) {
+      if (signal.aborted) throw err
+      throw new Error("A conferência do vídeo não respondeu. Tente de novo")
+    }
+    const finish = (await finishRes.json().catch(() => null)) as { publicUrl?: string; error?: string } | null
+    if (!finishRes.ok || !finish?.publicUrl) throw new Error(finish?.error ?? "Erro ao confirmar o envio")
+    return finish.publicUrl
+  }
+
+  /** Imagem passa pela rota (que recomprime); o progresso é o do envio até ela. */
+  async function uploadImage(file: File, signal: AbortSignal): Promise<string> {
+    const body = new FormData()
+    body.append("file", file)
+    patchUpload({ phase: "sending" })
+    // Mesmo bucket e rota dos banners de seção da Loja.
+    const data = await uploadWithProgress<{ publicUrl?: string; error?: string }>({
+      method: "POST",
+      url: "/api/admin/store-banners/upload-image",
+      body,
+      signal,
+      onProgress: (progress) => patchUpload({ progress }),
+      onUploaded: () => patchUpload({ phase: "processing" }),
+    })
+    if (!data?.publicUrl) throw new Error(data?.error ?? "Erro ao enviar a imagem")
+    return data.publicUrl
+  }
+
+  async function handleUpload(file: File, kind: "desktop" | "mobile") {
+    if (uploadAbortRef.current) return
+    const isVideo = file.type.startsWith("video/")
+    const controller = new AbortController()
+    uploadAbortRef.current = controller
+    const localUrl = URL.createObjectURL(file)
+    setUpload({ kind, isVideo, localUrl, phase: "preparing", progress: null })
+
+    try {
+      const publicUrl = isVideo ? await uploadVideo(file, controller.signal) : await uploadImage(file, controller.signal)
+      patchForm(kind === "desktop" ? { imageDesktopUrl: publicUrl } : { imageMobileUrl: publicUrl })
+      toast.success(isVideo ? "Vídeo enviado" : "Imagem enviada")
+    } catch (err) {
+      const aborted = err instanceof UploadAbortedError || (err instanceof DOMException && err.name === "AbortError")
+      if (aborted) {
+        toast("Envio cancelado")
+      } else {
+        toast.error("Erro no upload", {
+          description: err instanceof Error ? err.message : isVideo ? "Erro ao enviar o vídeo" : "Erro ao enviar a imagem",
+        })
+      }
     } finally {
-      setUploading(null)
+      URL.revokeObjectURL(localUrl)
+      uploadAbortRef.current = null
+      setUpload(null)
     }
   }
 
@@ -568,7 +922,7 @@ export default function AdminStoreHeroPage() {
       return
     }
     if (!form.imageDesktopUrl && !form.product) {
-      toast.error("Envie a imagem de desktop ou escolha um produto relacionado.")
+      toast.error("Envie a imagem ou o vídeo de desktop, ou escolha um produto relacionado.")
       return
     }
     for (const link of [form.primaryCtaLink.trim(), form.secondaryCtaLink.trim()]) {
@@ -769,14 +1123,28 @@ export default function AdminStoreHeroPage() {
       <StoreHeroSealsEditor />
 
       {/* Editor */}
-      <Dialog open={formOpen} onOpenChange={setFormOpen}>
+      <Dialog
+        open={formOpen}
+        onOpenChange={(open) => {
+          // Fechar o editor no meio do envio cancela: o arquivo não teria onde cair.
+          if (!open) cancelUpload()
+          setFormOpen(open)
+        }}
+      >
         <DialogContent className="max-h-[92vh] overflow-y-auto border border-border bg-card sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>{editing ? "Editar slide" : "Novo slide"}</DialogTitle>
             <DialogDescription>Prévia de como o slide aparece no desktop.</DialogDescription>
           </DialogHeader>
 
-          <HeroPreview form={form} now={now} />
+          <HeroPreview
+            form={form}
+            now={now}
+            upload={upload?.kind === "desktop" ? upload : null}
+            disabled={uploading !== null}
+            onDropDesktop={(file) => handleUpload(file, "desktop")}
+            onCancelUpload={cancelUpload}
+          />
 
           <div className="space-y-5">
             {/* Etiqueta */}
@@ -847,24 +1215,26 @@ export default function AdminStoreHeroPage() {
             {/* Imagens */}
             <div className="grid gap-4 sm:grid-cols-[1.6fr_1fr]">
               <ImageField
-                label="Imagem desktop"
-                hint="1920×600px (16:5). O texto fica à esquerda: deixe esse lado mais limpo. Opcional se houver produto."
+                label="Imagem ou vídeo desktop"
+                hint={`1920×600px (16:5). O texto fica à esquerda: deixe esse lado mais limpo. Vídeo: MP4 ou MOV mudo, em loop, até ${formatUploadLimit(STORE_HERO_VIDEO_MAX_BYTES)}. Opcional se houver produto.`}
                 icon={ImagePlus}
                 value={form.imageDesktopUrl}
                 aspectClassName="aspect-[16/5]"
-                uploading={uploading === "desktop"}
+                upload={upload?.kind === "desktop" ? upload : null}
                 disabled={uploading !== null}
+                onCancelUpload={cancelUpload}
                 onUpload={(file) => handleUpload(file, "desktop")}
                 onClear={() => patchForm({ imageDesktopUrl: "" })}
               />
               <ImageField
-                label="Imagem mobile, opcional"
+                label="Imagem ou vídeo mobile, opcional"
                 hint="1080×1440px (3:4). O texto ocupa os ~60% de baixo: deixe a arte no topo. Sem ela, o celular usa a de desktop."
                 icon={Smartphone}
                 value={form.imageMobileUrl}
                 aspectClassName="aspect-[3/4] max-h-44 mx-auto max-w-[132px]"
-                uploading={uploading === "mobile"}
+                upload={upload?.kind === "mobile" ? upload : null}
                 disabled={uploading !== null}
+                onCancelUpload={cancelUpload}
                 onUpload={(file) => handleUpload(file, "mobile")}
                 onClear={() => patchForm({ imageMobileUrl: "" })}
               />

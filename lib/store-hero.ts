@@ -37,6 +37,48 @@ export function isHeroHighlightKind(value: unknown): value is StoreHeroHighlight
 
 export type StoreHeroHighlight = { kind: StoreHeroHighlightKind; label: string }
 
+/**
+ * Vídeo no lugar da arte. Não tem coluna própria: `image_desktop_url` e
+ * `image_mobile_url` guardam a arte do slide, seja imagem ou MP4, e a vitrine
+ * decide como desenhar pelo nome do arquivo. Mora no bucket `store-banners`
+ * (o mesmo das imagens, que já libera `video/mp4`), então a limpeza de arte
+ * trocada do repositório vale para o vídeo sem caminho à parte.
+ *
+ * O arquivo vai do navegador direto para o Storage por signed URL
+ * (`/api/admin/store-hero/upload-video`): a Vercel corta o corpo em ~4.5MB.
+ */
+export const STORE_HERO_VIDEO_BUCKET = "store-banners"
+
+/**
+ * O `file_size_limit` do bucket (migration 20270103000000): quem barra de
+ * verdade é o Storage. Mexer nos dois juntos.
+ */
+export const STORE_HERO_VIDEO_MAX_BYTES = 60 * 1024 * 1024
+
+const STORE_HERO_VIDEO_NAME_RE =
+  /^store-hero-video-\d+-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.mp4$/i
+
+export function newStoreHeroVideoName(): string {
+  return `store-hero-video-${Date.now()}-${crypto.randomUUID()}.mp4`
+}
+
+export function isStoreHeroVideoName(name: string): boolean {
+  return STORE_HERO_VIDEO_NAME_RE.test(name)
+}
+
+const HERO_VIDEO_PATH_PREFIX = `/storage/v1/object/public/${STORE_HERO_VIDEO_BUCKET}/`
+
+/** `true` se a arte do slide é um vídeo enviado pelo painel (decide `<video>` x `<img>`). */
+export function isStoreHeroVideoUrl(url: string | null | undefined): boolean {
+  if (!url) return false
+  try {
+    const { pathname } = new URL(url)
+    return pathname.startsWith(HERO_VIDEO_PATH_PREFIX) && isStoreHeroVideoName(pathname.slice(HERO_VIDEO_PATH_PREFIX.length))
+  } catch {
+    return false
+  }
+}
+
 /** Linha do painel, espelho de `store_hero_slides` em camelCase. */
 export type StoreHeroSlide = {
   id: string

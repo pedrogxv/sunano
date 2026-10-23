@@ -9,7 +9,12 @@ const HEADER_BYTES = 64
  * arquivo inteiro para olhar 12 bytes seria desperdício.
  */
 export async function readVideoObjectHeader(publicUrl: string): Promise<Uint8Array | null> {
-  const res = await fetch(publicUrl, { headers: { Range: `bytes=0-${HEADER_BYTES - 1}` }, cache: "no-store" })
+  // Com prazo: sem ele, um Storage lento prendia a confirmação (e a tela do painel) sem erro.
+  const res = await fetch(publicUrl, {
+    headers: { Range: `bytes=0-${HEADER_BYTES - 1}` },
+    cache: "no-store",
+    signal: AbortSignal.timeout(15_000),
+  })
   if (!res.ok || !res.body) return null
   const reader = res.body.getReader()
   const chunks: Uint8Array[] = []

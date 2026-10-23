@@ -1067,6 +1067,8 @@ export type Database = {
           user_id: string
           balance: number
           total_earned: number
+          /** Fração do bônus de Ofensiva/VIP ainda não creditada, em 1/10000 de Aura. */
+          bonus_carry: number
           updated_at: string
         }
         Insert: Database["public"]["Tables"]["user_aura_wallet"]["Row"]

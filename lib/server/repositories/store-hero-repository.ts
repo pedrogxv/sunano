@@ -116,7 +116,7 @@ function toRowPatch(input: Partial<StoreHeroWriteInput>): Database["public"]["Ta
  */
 function validateMerged(slide: Pick<StoreHeroSlide, "imageDesktopUrl" | "productId" | "startsAt" | "endsAt">): string | null {
   if (!slide.imageDesktopUrl && !slide.productId) {
-    return "Envie a imagem de desktop ou escolha um produto relacionado."
+    return "Envie a imagem ou o vídeo de desktop, ou escolha um produto relacionado."
   }
   if (slide.startsAt && slide.endsAt && new Date(slide.endsAt).getTime() <= new Date(slide.startsAt).getTime()) {
     return "O fim da campanha precisa ser depois do início."

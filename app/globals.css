@@ -1609,6 +1609,18 @@ button:not(:disabled):hover .aura-icon-holder {
   }
 }
 
+/* Mascote flutuando nos capítulos do guia (/informacoes/central-de-aura). */
+@keyframes aura-guide-float {
+  0%, 100% { transform: translateY(0) rotate(-1deg); }
+  50%      { transform: translateY(-6px) rotate(1deg); }
+}
+.aura-guide-float {
+  animation: aura-guide-float 4.5s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .aura-guide-float { animation: none; }
+}
+
 /* Holder do ícone hero da Central de Aura. O tremor que existia aqui
    (`aura-hero-icon-flame`) saiu quando o hero passou a usar a chama viva de
    `components/ui/AuraFlame.tsx`, que anima as camadas por dentro — girar o

@@ -36,7 +36,7 @@ const mediaUrl = z
   .string()
   .nullable()
   .transform((value) => value?.trim() || null)
-  .refine((value) => value === null || /^https:\/\//i.test(value), "A imagem precisa ser uma URL https.")
+  .refine((value) => value === null || /^https:\/\//i.test(value), "A arte precisa ser uma URL https.")
 
 const dateTime = z.iso.datetime({ offset: true, message: "Data inválida." }).nullable()
 

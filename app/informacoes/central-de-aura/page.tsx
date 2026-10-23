@@ -1,8 +1,6 @@
-import Link from "next/link"
 import type { Metadata } from "next"
-import { ArrowLeft } from "lucide-react"
 import { buildMetadata } from "@/lib/seo"
-import { AuraFaqSection } from "@/components/aura/AuraFaqSection"
+import { AuraGuide } from "@/components/aura/AuraGuide"
 
 export const metadata: Metadata = buildMetadata({
   title: "Central de Aura",
@@ -14,54 +12,11 @@ export const metadata: Metadata = buildMetadata({
 })
 
 /**
- * Versão de referência (texto genérico, sem os números do usuário) do FAQ que
- * antes vivia dentro da Central de Aura (`/aura`). A página `/aura` agora só
- * mantém uma chamada apontando para cá. `AuraFaqSection` é a fonte única: aqui
- * sem `streak`/`isVip` (só a regra), lá com os valores reais do usuário.
+ * Guia de referência da Aura (texto genérico, sem os números do usuário).
+ * `AuraGuide` conta a regra em capítulos interativos e termina no
+ * `AuraFaqSection`, que segue sendo a fonte única do texto completo — aqui
+ * sem `streak`/`isVip`, na Central (`/aura`) com os valores reais.
  */
 export default function CentralDeAuraInfoPage() {
-  return (
-    <article className="mx-auto max-w-3xl px-2 py-10 sm:px-4 md:px-6">
-      <Link
-        href="/aura"
-        className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <ArrowLeft className="size-4" />
-        Voltar à Central de Aura
-      </Link>
-
-      <header className="mb-8 border-b border-border pb-6">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-primary">
-          Central de Aura
-        </p>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">
-          Como o sistema de Aura funciona
-        </h1>
-        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-          Aura é a moeda da comunidade do Sunano: você ganha participando e troca por itens
-          exclusivos de perfil. Abaixo estão todas as formas de ganhar e gastar, o que influencia
-          o multiplicador e o que não gera Aura. Para ver seu saldo, suas tarefas do dia e a loja,
-          acesse a{" "}
-          <Link href="/aura" className="text-primary hover:underline">
-            Central de Aura
-          </Link>
-          .
-        </p>
-      </header>
-
-      <AuraFaqSection hideHeading />
-
-      <footer className="mt-10 border-t border-border pt-6 text-xs text-muted-foreground">
-        <p>
-          <Link href="/informacoes" className="text-primary hover:underline">
-            Central de Informações
-          </Link>
-          {" · "}
-          <Link href="/informacoes/trust-factor" className="text-primary hover:underline">
-            Como funciona o Trust Factor
-          </Link>
-        </p>
-      </footer>
-    </article>
-  )
+  return <AuraGuide />
 }

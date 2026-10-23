@@ -50,6 +50,24 @@ export function totalAuraMultiplierBps(streakDays: number, isVip: boolean): numb
   return streakBps + vipBps
 }
 
+/**
+ * Bônus de Ofensiva/VIP sobre uma base de atividade — espelha `apply_aura_gain`
+ * (20270104000000_aura_bonus_carry.sql): a fração não é arredondada por
+ * ganho, fica guardada na carteira (`bonus_carry`) e vira +1 ao completar um
+ * inteiro. Somar as bases e aplicar uma vez dá o mesmo resultado que ganho a
+ * ganho. `exact` é o bônus com a fração; `credited`, a parte inteira que já
+ * entra no saldo. Só exibição (simulador do guia); quem credita é o banco.
+ */
+export function auraActivityBonus(
+  base: number,
+  streakDays: number,
+  isVip: boolean
+): { exact: number; credited: number } {
+  if (base <= 0) return { exact: 0, credited: 0 }
+  const raw = base * totalAuraMultiplierBps(streakDays, isVip)
+  return { exact: raw / 10000, credited: Math.floor(raw / 10000) }
+}
+
 /** Ex.: 175 bps -> "1,75%". */
 export function formatTotalAuraMultiplier(streakDays: number, isVip: boolean): string {
   const bps = totalAuraMultiplierBps(streakDays, isVip)

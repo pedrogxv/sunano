@@ -2,11 +2,12 @@
 
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { useEffect, useState, type CSSProperties } from "react"
+import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { Bird, Check, ChevronRight, HelpCircle, MessageSquare, Snowflake, Sparkles, SquarePen, Trophy } from "lucide-react"
 import { AURA_BRAND_FILL_CLASS, AuraAmount, AuraIcon } from "@/components/ui/AuraIcon"
 import { AuraFlame } from "@/components/ui/AuraFlame"
+import { AURA_EMBERS as EMBERS } from "@/components/aura/aura-embers"
 
 import { AuraRankingModal } from "@/components/aura/AuraRankingModal"
 import { AuraVipDiscountBanner } from "@/components/aura/AuraVipDiscountBanner"
@@ -129,24 +130,6 @@ const TASKS: Array<{ key: DailyMissionKey; icon: React.ElementType; text: string
   { key: "created_post", icon: SquarePen, text: "Criar um post no fórum", href: "/forum" },
   { key: "wrote_comment", icon: MessageSquare, text: "Comentar em um post ou notícia", href: "/forum" },
   { key: "gave_aura", icon: Sparkles, text: "Dar aura em um post ou comentário", href: "/forum" },
-]
-
-type EmberStyle = CSSProperties & {
-  "--ember-size"?: string
-  "--ember-color"?: string
-  "--ember-duration"?: string
-  "--ember-delay"?: string
-  "--ember-drift"?: string
-}
-
-const EMBERS: Array<{ left: string; style: EmberStyle }> = [
-  { left: "8%", style: { "--ember-size": "3px", "--ember-color": "#ff8f00", "--ember-duration": "2.8s", "--ember-delay": "0s", "--ember-drift": "10px" } },
-  { left: "22%", style: { "--ember-size": "2px", "--ember-color": "#ffb703", "--ember-duration": "3.4s", "--ember-delay": "0.6s", "--ember-drift": "-8px" } },
-  { left: "38%", style: { "--ember-size": "4px", "--ember-color": "#ff5f1f", "--ember-duration": "3s", "--ember-delay": "1.1s", "--ember-drift": "6px" } },
-  { left: "55%", style: { "--ember-size": "2px", "--ember-color": "#ffb703", "--ember-duration": "2.6s", "--ember-delay": "1.6s", "--ember-drift": "-12px" } },
-  { left: "68%", style: { "--ember-size": "3px", "--ember-color": "#ff8f00", "--ember-duration": "3.6s", "--ember-delay": "0.3s", "--ember-drift": "8px" } },
-  { left: "82%", style: { "--ember-size": "2px", "--ember-color": "#ff3d00", "--ember-duration": "3.1s", "--ember-delay": "2s", "--ember-drift": "-6px" } },
-  { left: "92%", style: { "--ember-size": "3px", "--ember-color": "#ffb703", "--ember-duration": "2.9s", "--ember-delay": "1.4s", "--ember-drift": "4px" } },
 ]
 
 export function AuraCenterContent({
@@ -350,9 +333,9 @@ export function AuraCenterContent({
         >
           <div className="relative z-[1] flex items-center gap-2 text-muted-foreground">
             <AuraFlame size="lg" />
-            <span className="text-xs font-semibold uppercase tracking-wider">Aura atual</span>
+            <span className="aura-title-text text-xs font-semibold uppercase tracking-wider">Aura atual</span>
           </div>
-          <p className="relative z-[1] font-display text-3xl font-bold text-foreground tabular-nums">
+          <p className="aura-title-text relative z-[1] font-display text-3xl font-bold tabular-nums">
             {currentBalance.toLocaleString("pt-BR")}
           </p>
           {rank && (

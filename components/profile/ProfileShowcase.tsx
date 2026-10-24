@@ -174,11 +174,7 @@ export function ProfileShowcase({
             bio={profile.bio}
             isOwner={isOwner}
           />
-          <SocialLinks
-            youtubeHandle={profile.youtube_handle}
-            tiktokHandle={profile.tiktok_handle}
-            className="mt-3 justify-center"
-          />
+          <SocialLinks handles={profile} className="mt-3 justify-center" />
 
           {/* Versão de fluxo normal do botão de ação + medalhas, só até `sm`
               (a versão ancorada nos cantos da capa assume dali pra cima). */}

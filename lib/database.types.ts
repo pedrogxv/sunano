@@ -201,6 +201,9 @@ export type Database = {
           /** Handle sem "@" — exibido como ícone clicável no perfil público. */
           youtube_handle: string | null
           tiktok_handle: string | null
+          instagram_handle: string | null
+          /** URL personalizada da Steam ou SteamID64 (ver `lib/profile-socials.ts`). */
+          steam_handle: string | null
           /** Incrementado só via RPC `increment_profile_views` — nunca escrito direto. */
           profile_views: number
           /**

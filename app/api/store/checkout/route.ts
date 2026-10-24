@@ -767,7 +767,7 @@ export async function POST(request: NextRequest) {
       db
         .from("store_products")
         .select(
-          "id, slug, name, price_cents, promo_price_cents, stock, images, type, condition, is_active, is_sold_out, requires_shipping, sale_type, category, service_form_fields, is_payment_complement"
+          "id, slug, name, price_cents, promo_price_cents, stock, images, type, condition, is_active, is_sold_out, requires_shipping, sale_type, category, service_form_fields, is_payment_complement, sale_window_ends_at"
         )
         .in("id", productIds),
       getVariantsForCheckout(variantIds),
@@ -795,6 +795,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "Não foi possível carregar os produtos do carrinho." },
         { status: 503 }
+      )
+    }
+
+    // Prazo de pré-venda/lançamento vencido que o cron (a cada 5 min) ainda
+    // não fechou: o preço da oferta segue gravado até lá, e esta rota cobraria
+    // a oferta depois de a contagem da página zerar (ou para sempre, com o
+    // cron parado). Fecha agora, pela mesma RPC idempotente do cron, e manda
+    // o carrinho buscar o preço novo em vez de cobrar o antigo.
+    const now = Date.now()
+    const expiredWindows = products.filter(
+      (product) => product.sale_window_ends_at && Date.parse(product.sale_window_ends_at) <= now
+    )
+    if (expiredWindows.length > 0) {
+      const { error: closeError } = await db.rpc("close_store_sale_windows")
+      if (closeError) console.error("[checkout] close_store_sale_windows:", closeError)
+      revalidateStoreProducts(expiredWindows.map((product) => product.slug))
+      return NextResponse.json(
+        {
+          error: `O prazo da oferta de "${expiredWindows[0].name}" terminou e o preço foi atualizado. Recarregue a página para conferir o valor novo.`,
+        },
+        { status: 409 }
       )
     }
 

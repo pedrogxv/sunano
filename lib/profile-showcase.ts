@@ -224,9 +224,12 @@ export type ProfileShowcase = {
   reviews_integrity_accepted_at: string | null
   /** Ids de todos os periféricos já avaliados pelo usuário, sem cap — fecha o picker de criação de review não sugerir um já avaliado (o `reviewsByCategory` acima é capado). */
   reviewed_peripheral_ids: string[]
-  /** Handle sem "@" — link exibido como ícone clicável no perfil público. */
+  /** Handle sem "@" — link exibido como ícone clicável no perfil público (ver `lib/profile-socials.ts`). */
   youtube_handle: string | null
   tiktok_handle: string | null
+  instagram_handle: string | null
+  /** URL personalizada ou SteamID64. */
+  steam_handle: string | null
   /** Se confirmou inscrição no canal do YouTube (conquista especial "Inscrito", ver `AchievementsGrid`). */
   youtube_subscribed: boolean
   /** Se confirmou participação no servidor do Discord (conquista especial "No Discord", ver `AchievementsGrid`). */
@@ -294,22 +297,4 @@ export function normalizeBio(bio: string): string {
     .replace(/\n{3,}/g, "\n\n")
     .trim()
   return limitBioLines(cleaned)
-}
-
-/** Limite de caracteres dos handles de redes sociais (espelha o CHECK constraint da tabela). */
-export const SOCIAL_HANDLE_MAX_LENGTH = 30
-
-/** Formato aceito para um handle já normalizado (espelha o CHECK constraint da tabela). */
-export const SOCIAL_HANDLE_PATTERN = /^[A-Za-z0-9._-]{1,30}$/
-
-/**
- * Normaliza um handle de rede social digitado ou colado como URL —
- * "@usuario", "usuario" ou "https://tiktok.com/@usuario" viram só "usuario".
- * Módulo puro: mesma função valida no client (preview) e no servidor (defesa em profundidade).
- */
-export function normalizeSocialHandle(input: string): string {
-  const trimmed = input.trim()
-  if (!trimmed) return ""
-  const lastSegment = trimmed.split(/[/?]/).filter(Boolean).pop() ?? trimmed
-  return lastSegment.replace(/^@/, "").trim().slice(0, SOCIAL_HANDLE_MAX_LENGTH)
 }

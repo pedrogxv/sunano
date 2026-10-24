@@ -4,6 +4,15 @@ import { cache } from "react"
 
 import type { AccountTier } from "@/lib/account-tier"
 import { reviewCategoryKeyFor, REVIEW_CATEGORY_GROUPS } from "@/lib/peripheral-review-categories"
+import {
+  EMPTY_RATING_DISTRIBUTION,
+  normalizeReviewSearch,
+  POSITIVE_REVIEW_MIN_RATING,
+  ratingBucketOf,
+  type RatingBucket,
+  type RatingDistribution,
+  type ReviewListOrder,
+} from "@/lib/peripheral-review-list"
 import type {
   PeripheralReviewSummary,
   ShowcaseReview,
@@ -16,8 +25,13 @@ import {
   toShowcasePeripheral,
   type PeripheralShowcaseRow,
 } from "@/lib/server/repositories/peripheral-showcase-mapping"
-import { isUuid } from "@/lib/server/repositories/_shared"
-import { authorFrameFields, buildProfileMap, type AuthorFrameFields } from "@/lib/server/repositories/profile-enrichment"
+import { escapeLikePattern, isUuid, onlyUuids } from "@/lib/server/repositories/_shared"
+import {
+  authorFrameFields,
+  buildProfileMap,
+  type AuthorFrameFields,
+  type EnrichedProfile,
+} from "@/lib/server/repositories/profile-enrichment"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 
 /**
@@ -66,25 +80,40 @@ function toShowcaseReview(
 
 export type ReviewRepositoryResult =
   | { ok: true; review: ShowcaseReview }
-  | { ok: false; error: string; status: number }
+  | { ok: false; error: string; status: number; code?: "integrity_required" }
 
-/** Cria a review do usuário atual pra um periférico. Falha se ele já avaliou esse periférico (unique). */
+/**
+ * Cria a review do usuário atual pra um periférico. Falha se ele já avaliou esse periférico (unique).
+ *
+ * Exige o termo de integridade aceito. Antes só o formulário conferia, e um
+ * POST direto na rota criava a review (e levava a Aura) sem o aceite que a
+ * moderação usa como base para remover review de quem nunca usou o produto.
+ */
 export async function addPeripheralReview(params: {
   peripheralId: string
   userId: string
   rating: number
   body: string | null
 }): Promise<ReviewRepositoryResult> {
+  if (!isUuid(params.peripheralId)) return { ok: false, error: "Periférico não encontrado.", status: 404 }
+
   const db = createSupabaseAdminClient()
 
-  const { data: peripheral } = await db
-    .from("peripherals")
-    .select("id, category")
-    .eq("id", params.peripheralId)
-    .maybeSingle()
+  const [{ data: peripheral }, { data: author }] = await Promise.all([
+    db.from("peripherals").select("id, category").eq("id", params.peripheralId).maybeSingle(),
+    db.from("user_profiles").select("reviews_integrity_accepted_at").eq("id", params.userId).maybeSingle(),
+  ])
   if (!peripheral) return { ok: false, error: "Periférico não encontrado.", status: 404 }
   if (!reviewCategoryKeyFor(peripheral.category)) {
     return { ok: false, error: "Este tipo de periférico ainda não pode ser avaliado.", status: 400 }
+  }
+  if (!(author as { reviews_integrity_accepted_at: string | null } | null)?.reviews_integrity_accepted_at) {
+    return {
+      ok: false,
+      error: "Aceite o termo de integridade antes de avaliar.",
+      status: 403,
+      code: "integrity_required",
+    }
   }
 
   const { data, error } = await db
@@ -383,54 +412,64 @@ export type PeripheralReviewDetail = {
   my_vote: "like" | "dislike" | null
 } & AuthorFrameFields
 
+/**
+ * As duas reviews que a comunidade mais marcou como úteis de cada lado: uma
+ * que aprova (nota >= `POSITIVE_REVIEW_MIN_RATING`) e uma crítica. Só sai com
+ * os DOIS lados: o valor do bloco é o contraste, e uma só repetiria o topo de
+ * "Mais úteis".
+ */
+export type PeripheralReviewSpotlight = {
+  positive: PeripheralReviewDetail
+  critical: PeripheralReviewDetail
+}
+
 export type PeripheralReviewStats = {
   reviews: PeripheralReviewDetail[]
   /** Média das notas (1 casa decimal) de todos os reviews visíveis, ou `null` se não houver nenhum. */
   average: number | null
+  /** Todas as reviews visíveis do periférico, sem filtro. */
   totalCount: number
+  /**
+   * Quantas casam com o filtro de nota/busca: é sobre esta lista que a
+   * paginação anda. Sem filtro, igual a `totalCount`.
+   */
+  matchCount: number
+  /** Reviews por faixa de estrelas (`ratingBucketOf`), sem filtro. */
+  distribution: RatingDistribution
+  /** Reviews com nota >= `POSITIVE_REVIEW_MIN_RATING`, sem filtro. */
+  positiveCount: number
   hasMore: boolean
+  /** Só quando pedido (`includeSpotlight`) e o periférico tem volume para isso. */
+  spotlight: PeripheralReviewSpotlight | null
+}
+
+const REVIEW_DETAIL_COLUMNS = "id, user_id, rating, body, created_at, edited_at, is_edited, score"
+
+type ReviewDetailRow = {
+  id: string
+  user_id: string
+  rating: number
+  body: string | null
+  created_at: string
+  edited_at: string | null
+  is_edited: boolean
+  score: number
 }
 
 /**
- * Uma review pontual (por id), já enriquecida com dados do autor — usada para
- * abrir a página do periférico direto numa review específica (link "Meus
- * Reviews" do perfil) sem depender de em qual página da lista paginada
- * (ordenada por Aura do autor) ela cairia.
+ * Linha + perfil enriquecido → `PeripheralReviewDetail`. Um mapper só para a
+ * lista, a review avulsa (link compartilhado) e a review do próprio visitante:
+ * eram três cópias, e campo novo de autor (moldura, recorde) chegava a uma e
+ * não às outras.
  */
-export async function getPeripheralReviewById(
-  reviewId: string,
-  viewerId?: string | null
-): Promise<PeripheralReviewDetail | null> {
-  const db = createSupabaseAdminClient()
-  const { data, error } = await db
-    .from("peripheral_reviews")
-    .select("id, user_id, rating, body, created_at, edited_at, is_edited, score")
-    .eq("id", reviewId)
-    .eq("is_hidden", false)
-    .maybeSingle()
-
-  if (error || !data) return null
-
-  const row = data as {
-    id: string
-    user_id: string
-    rating: number
-    body: string | null
-    created_at: string
-    edited_at: string | null
-    is_edited: boolean
-    score: number
-  }
-
-  const [profileMap, myVote] = await Promise.all([
-    buildProfileMap([row.user_id]),
-    getOwnPeripheralReviewVote(db, viewerId, [row.id]),
-  ])
-  const profile = profileMap[row.user_id]
-
+function toReviewDetail(
+  row: ReviewDetailRow,
+  profile: EnrichedProfile | undefined,
+  myVote: "like" | "dislike" | null
+): PeripheralReviewDetail {
   return {
     id: row.id,
-    rating: row.rating,
+    rating: Number(row.rating),
     body: row.body,
     created_at: row.created_at,
     edited_at: row.edited_at,
@@ -444,8 +483,46 @@ export async function getPeripheralReviewById(
     ...authorFrameFields(profile),
     author_streak: profile?.streak ?? 0,
     score: row.score ?? 0,
-    my_vote: myVote.get(row.id) ?? null,
+    my_vote: myVote,
   }
+}
+
+/**
+ * Uma review pontual (por id), já enriquecida com dados do autor — usada para
+ * abrir a lista direto numa review específica (link "Meus Reviews" do perfil,
+ * botão "Copiar link") sem depender de em qual página ela cairia.
+ *
+ * `peripheralId` amarra a review ao periférico da URL: sem ele,
+ * `/perifericos/A#review-<review do B>` desenhava a review do produto B na
+ * página do A, como se fosse sobre ele.
+ */
+export async function getPeripheralReviewById(
+  reviewId: string,
+  viewerId: string | null | undefined,
+  peripheralId: string
+): Promise<PeripheralReviewDetail | null> {
+  // Os dois vêm crus da URL; sem a checagem o Postgres recusa o cast (22P02)
+  // e cada link malformado vira erro no log.
+  if (!isUuid(reviewId) || !isUuid(peripheralId)) return null
+
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("peripheral_reviews")
+    .select(REVIEW_DETAIL_COLUMNS)
+    .eq("id", reviewId)
+    .eq("peripheral_id", peripheralId)
+    .eq("is_hidden", false)
+    .maybeSingle()
+
+  if (error || !data) return null
+
+  const row = data as ReviewDetailRow
+  const [profileMap, myVote] = await Promise.all([
+    buildProfileMap([row.user_id]),
+    getOwnPeripheralReviewVote(db, viewerId, [row.id]),
+  ])
+
+  return toReviewDetail(row, profileMap[row.user_id], myVote.get(row.id) ?? null)
 }
 
 /** Votos (like/dislike) do usuário atual num conjunto de reviews — vazio (sem query) se `viewerId` for nulo (visitante anônimo). */
@@ -469,17 +546,97 @@ async function getOwnPeripheralReviewVote(
   return votes
 }
 
+/**
+ * O que a página de reviews precisa saber do visitante logado, numa chamada.
+ *
+ * A página é ISR (o HTML é o mesmo para todo mundo), então os votos do HTML
+ * saem sempre `null`. Sem isto, quem já tinha votado via a seta apagada,
+ * clicava de novo achando que estava votando, e o toggle do servidor REMOVIA
+ * o voto: a tela mostrava +1 e voltava ao número anterior.
+ */
+export type PeripheralReviewViewerState = {
+  /** Voto do visitante em cada review pedida (só as que ele votou). */
+  votes: Record<string, "like" | "dislike">
+  /**
+   * A review do visitante neste periférico, se existir. Vem mesmo quando
+   * oculta pela moderação (`hidden`), para a tela explicar por que não há
+   * botão de avaliar: o slot único `(user, peripheral)` já está ocupado.
+   */
+  myReview: (PeripheralReviewDetail & { hidden: boolean }) | null
+  /** Já aceitou o termo de integridade (pré-requisito de criar review). */
+  integrityAccepted: boolean
+}
+
+export async function getPeripheralReviewViewerState(
+  peripheralId: string,
+  viewerId: string,
+  reviewIds: string[]
+): Promise<PeripheralReviewViewerState> {
+  const empty: PeripheralReviewViewerState = { votes: {}, myReview: null, integrityAccepted: false }
+  if (!isUuid(peripheralId)) return empty
+
+  const db = createSupabaseAdminClient()
+  const [votes, mine, profileRow, profileMap] = await Promise.all([
+    getOwnPeripheralReviewVote(db, viewerId, onlyUuids(reviewIds, 100)),
+    db
+      .from("peripheral_reviews")
+      .select(`${REVIEW_DETAIL_COLUMNS}, is_hidden`)
+      .eq("peripheral_id", peripheralId)
+      .eq("user_id", viewerId)
+      .maybeSingle(),
+    db.from("user_profiles").select("reviews_integrity_accepted_at").eq("id", viewerId).maybeSingle(),
+    buildProfileMap([viewerId]),
+  ])
+
+  const mineRow = mine.data as (ReviewDetailRow & { is_hidden: boolean }) | null
+  return {
+    votes: Object.fromEntries(votes),
+    myReview: mineRow
+      ? { ...toReviewDetail(mineRow, profileMap[viewerId], null), hidden: Boolean(mineRow.is_hidden) }
+      : null,
+    integrityAccepted: Boolean(
+      (profileRow.data as { reviews_integrity_accepted_at: string | null } | null)?.reviews_integrity_accepted_at
+    ),
+  }
+}
+
 export type ToggleReviewVoteResult =
   | { ok: true; reaction: "like" | "dislike" | null; score: number }
   | { ok: false; error: string; status: number }
 
-/** Dá, troca ou remove (toggle) o upvote/downvote do usuário atual numa review — estilo Reddit, mutuamente exclusivo. */
+/**
+ * Dá, troca ou remove (toggle) o upvote/downvote do usuário atual numa review — estilo Reddit, mutuamente exclusivo.
+ *
+ * Autor não vota na própria review. A RPC não barra isso, e o voto do autor
+ * inflava o "Mais úteis" e o destaque positiva × crítica, que ordenam por
+ * score. A checagem mora aqui, não na rota: é o repositório que fala com a
+ * RPC, e a próxima rota que votar herdaria o furo.
+ */
 export async function togglePeripheralReviewVote(
   voterId: string,
   reviewId: string,
-  kind: "like" | "dislike"
+  kind: "like" | "dislike",
+  peripheralId: string
 ): Promise<ToggleReviewVoteResult> {
+  if (!isUuid(reviewId) || !isUuid(peripheralId)) {
+    return { ok: false, error: "Review não encontrada.", status: 404 }
+  }
+
   const db = createSupabaseAdminClient()
+
+  const { data: target } = await db
+    .from("peripheral_reviews")
+    .select("user_id, peripheral_id")
+    .eq("id", reviewId)
+    .eq("is_hidden", false)
+    .maybeSingle()
+  const targetRow = target as { user_id: string; peripheral_id: string } | null
+  if (!targetRow || targetRow.peripheral_id !== peripheralId) {
+    return { ok: false, error: "Review não encontrada.", status: 404 }
+  }
+  if (targetRow.user_id === voterId) {
+    return { ok: false, error: "Você não pode votar na sua própria review.", status: 403 }
+  }
 
   const { data, error } = await db.rpc("toggle_peripheral_review_vote", {
     p_voter_id: voterId,
@@ -504,17 +661,8 @@ export async function togglePeripheralReviewVote(
 
 export const PERIPHERAL_REVIEWS_PAGE_SIZE = 4
 
-/**
- * Ordenação da lista de reviews de um periférico.
- *
- * - `aura`: ordem padrão (saldo de Aura do autor desc, empate por mais recente).
- * - `random`: embaralhada de forma estável dentro de uma mesma `seed` — usada
- *   pelo carrossel de flashcards da página do periférico, onde a graça é cada
- *   visita começar por uma review diferente, mas a paginação da mesma visita
- *   precisa continuar de onde parou (uma ordem sorteada a cada request
- *   repetiria/puliria cards entre páginas).
- */
-export type PeripheralReviewsOrder = "aura" | "random"
+/** Abaixo disto o destaque positiva × crítica não aparece: com poucas reviews ele só repete a lista. */
+const SPOTLIGHT_MIN_REVIEWS = 5
 
 /**
  * Embaralhamento determinístico: mesma `seed` + mesmo conjunto de ids produz
@@ -536,14 +684,45 @@ function seededShuffle<T extends { id: string }>(rows: T[], seed: string): T[] {
     .map((entry) => entry.row)
 }
 
+type ReviewIndexRow = { id: string; user_id: string; rating: number; created_at: string; score: number }
+
+const byRecent = (a: ReviewIndexRow, b: ReviewIndexRow) => Date.parse(b.created_at) - Date.parse(a.created_at)
+const byScore = (a: ReviewIndexRow, b: ReviewIndexRow) => (b.score ?? 0) - (a.score ?? 0)
+
+/** A mais votada como útil de um lado, ou `null` se ninguém a marcou (score <= 0 não é "mais útil"). */
+function mostHelpful(rows: ReviewIndexRow[]): ReviewIndexRow | null {
+  const best = rows.filter((r) => (r.score ?? 0) > 0).sort((a, b) => byScore(a, b) || byRecent(a, b))[0]
+  return best ?? null
+}
+
+function emptyStats(): PeripheralReviewStats {
+  return {
+    reviews: [],
+    average: null,
+    totalCount: 0,
+    matchCount: 0,
+    distribution: { ...EMPTY_RATING_DISTRIBUTION },
+    positiveCount: 0,
+    hasMore: false,
+    spotlight: null,
+  }
+}
+
 /**
- * Reviews visíveis de um periférico + média/contagem, ordenadas por Aura do
- * autor (desc, empate por mais recente) ou embaralhadas (`order: "random"`).
- * PostgREST não ordena por coluna de tabela relacionada, então a ordenação é
- * feita em duas etapas: busca todas as linhas (colunas mínimas) + saldo de
- * Aura de cada autor, ordena em JS, aí sim busca os dados completos só da
- * página pedida — mesma estratégia de `getTopAuraProfiles`
- * (users-repository.ts).
+ * Reviews visíveis de um periférico + média/contagem/distribuição, numa das
+ * ordens de `ReviewListOrder`, opcionalmente filtradas por faixa de estrelas
+ * (`stars`) e por texto (`query`).
+ *
+ * PostgREST não ordena por coluna de tabela relacionada (Aura do autor), então
+ * a ordenação é feita em duas etapas: busca o índice de todas as linhas
+ * (colunas mínimas), ordena e filtra em JS, aí sim busca os dados completos só
+ * da página pedida — mesma estratégia de `getTopAuraProfiles`
+ * (users-repository.ts). Média e distribuição saem desse mesmo índice, então
+ * o resumo da página não custa consulta a mais.
+ *
+ * As agregadas (`average`, `totalCount`, `distribution`) são SEMPRE do
+ * periférico inteiro, nunca do filtro: o resumo continua o mesmo enquanto a
+ * pessoa navega pelas faixas.
  */
 export async function getPeripheralReviewsWithStats(
   peripheralId: string,
@@ -553,122 +732,157 @@ export async function getPeripheralReviewsWithStats(
     viewerId,
     order = "aura",
     seed,
+    stars = null,
+    query = null,
+    includeSpotlight = false,
   }: {
     page?: number
     limit?: number
     viewerId?: string | null
-    order?: PeripheralReviewsOrder
+    order?: ReviewListOrder
     seed?: string
+    stars?: RatingBucket | null
+    query?: string | null
+    includeSpotlight?: boolean
   } = {}
 ): Promise<PeripheralReviewStats> {
   // O id vem cru do segmento da URL em `GET /api/peripherals/[id]/reviews`
   // (crawler, link antigo com slug). Sem esta checagem o Postgres recusa o
   // cast para uuid (22P02) e cada acesso vira um erro no log de produção.
-  if (!isUuid(peripheralId)) {
-    return { reviews: [], average: null, totalCount: 0, hasMore: false }
-  }
+  if (!isUuid(peripheralId)) return emptyStats()
 
   const db = createSupabaseAdminClient()
+  const search = normalizeReviewSearch(query)
 
-  const { data: allRows, error } = await db
-    .from("peripheral_reviews")
-    .select("id, user_id, rating, created_at")
-    .eq("peripheral_id", peripheralId)
-    .eq("is_hidden", false)
-    .order("created_at", { ascending: false })
-    // Defesa contra periférico com volume anormal de reviews — a ordenação
-    // por Aura do autor só é possível em memória (ver comentário da função),
-    // então precisa de todas as linhas da página de ranking, mas não precisa
-    // de mais que isso.
-    .limit(2000)
+  const [indexResult, searchResult] = await Promise.all([
+    db
+      .from("peripheral_reviews")
+      .select("id, user_id, rating, created_at, score")
+      .eq("peripheral_id", peripheralId)
+      .eq("is_hidden", false)
+      .order("created_at", { ascending: false })
+      // Defesa contra periférico com volume anormal de reviews — a ordenação
+      // por Aura do autor só é possível em memória (ver comentário da função),
+      // então precisa de todas as linhas da página de ranking, mas não precisa
+      // de mais que isso.
+      .limit(2000),
+    // `.ilike` grava UM parâmetro (sem a gramática do `.or()`), mas os
+    // curingas continuam valendo: sem `escapeLikePattern`, buscar "_" ou "%"
+    // casaria com todas as reviews.
+    search
+      ? db
+          .from("peripheral_reviews")
+          .select("id")
+          .eq("peripheral_id", peripheralId)
+          .eq("is_hidden", false)
+          .ilike("body", `%${escapeLikePattern(search)}%`)
+          .limit(2000)
+      : Promise.resolve(null),
+  ])
 
-  if (error) {
-    console.error("[peripheral-reviews-repository] getPeripheralReviewsWithStats:", error)
-    return { reviews: [], average: null, totalCount: 0, hasMore: false }
+  if (indexResult.error) {
+    console.error("[peripheral-reviews-repository] getPeripheralReviewsWithStats:", indexResult.error)
+    return emptyStats()
+  }
+  if (searchResult?.error) {
+    console.error("[peripheral-reviews-repository] getPeripheralReviewsWithStats (search):", searchResult.error)
   }
 
-  const rows = (allRows ?? []) as Array<{ id: string; user_id: string; rating: number; created_at: string }>
+  // `numeric(2,1)` pode chegar como string do PostgREST; normaliza uma vez.
+  const rows = ((indexResult.data ?? []) as ReviewIndexRow[]).map((r) => ({ ...r, rating: Number(r.rating) }))
   const totalCount = rows.length
-  if (totalCount === 0) {
-    return { reviews: [], average: null, totalCount: 0, hasMore: false }
-  }
+  if (totalCount === 0) return emptyStats()
 
   const average = Math.round((rows.reduce((sum, r) => sum + r.rating, 0) / totalCount) * 10) / 10
+  const distribution: RatingDistribution = { ...EMPTY_RATING_DISTRIBUTION }
+  let positiveCount = 0
+  for (const row of rows) {
+    distribution[ratingBucketOf(row.rating)] += 1
+    if (row.rating >= POSITIVE_REVIEW_MIN_RATING) positiveCount += 1
+  }
 
-  let sorted: typeof rows
-  if (order === "random") {
-    // Sem seed a ordem muda a cada request — só é seguro quando o chamador
-    // pede uma página só (o carrossel sempre manda a sua).
-    sorted = seededShuffle(rows, seed ?? String(Date.now()))
-  } else {
-    const userIds = [...new Set(rows.map((r) => r.user_id))]
-    const { data: wallets } = await db.from("user_aura_wallet").select("user_id, balance").in("user_id", userIds)
-    const auraByUser = new Map(
-      ((wallets ?? []) as Array<{ user_id: string; balance: number }>).map((w) => [w.user_id, w.balance])
-    )
+  const searchIds = searchResult
+    ? new Set(((searchResult.data ?? []) as Array<{ id: string }>).map((r) => r.id))
+    : null
+  const filtered = rows.filter(
+    (r) => (stars === null || ratingBucketOf(r.rating) === stars) && (searchIds === null || searchIds.has(r.id))
+  )
+  const matchCount = filtered.length
 
-    sorted = [...rows].sort((a, b) => {
-      const auraDiff = (auraByUser.get(b.user_id) ?? 0) - (auraByUser.get(a.user_id) ?? 0)
-      if (auraDiff !== 0) return auraDiff
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    })
+  let sorted: ReviewIndexRow[]
+  switch (order) {
+    case "random":
+      // Sem seed a ordem muda a cada request — só é seguro quando o chamador
+      // pede uma página só (o carrossel sempre manda a sua).
+      sorted = seededShuffle(filtered, seed ?? String(Date.now()))
+      break
+    case "helpful":
+      sorted = [...filtered].sort((a, b) => byScore(a, b) || byRecent(a, b))
+      break
+    case "recent":
+      sorted = [...filtered].sort(byRecent)
+      break
+    case "rating_desc":
+      sorted = [...filtered].sort((a, b) => b.rating - a.rating || byScore(a, b) || byRecent(a, b))
+      break
+    case "rating_asc":
+      sorted = [...filtered].sort((a, b) => a.rating - b.rating || byScore(a, b) || byRecent(a, b))
+      break
+    default: {
+      const userIds = [...new Set(filtered.map((r) => r.user_id))]
+      const { data: wallets } = userIds.length
+        ? await db.from("user_aura_wallet").select("user_id, balance").in("user_id", userIds)
+        : { data: [] }
+      const auraByUser = new Map(
+        ((wallets ?? []) as Array<{ user_id: string; balance: number }>).map((w) => [w.user_id, w.balance])
+      )
+      sorted = [...filtered].sort(
+        (a, b) => (auraByUser.get(b.user_id) ?? 0) - (auraByUser.get(a.user_id) ?? 0) || byRecent(a, b)
+      )
+    }
   }
 
   const from = (page - 1) * limit
   const pageIds = sorted.slice(from, from + limit).map((r) => r.id)
-  const hasMore = from + limit < totalCount
+  const hasMore = from + limit < matchCount
 
-  if (pageIds.length === 0) {
-    return { reviews: [], average, totalCount, hasMore: false }
+  // O destaque sai do índice já carregado: nenhuma consulta própria, e os dois
+  // ids entram no MESMO lote de detalhes/perfis da página.
+  let spotlightIds: { positive: string; critical: string } | null = null
+  if (includeSpotlight && totalCount >= SPOTLIGHT_MIN_REVIEWS) {
+    const positive = mostHelpful(rows.filter((r) => r.rating >= POSITIVE_REVIEW_MIN_RATING))
+    const critical = mostHelpful(rows.filter((r) => r.rating < POSITIVE_REVIEW_MIN_RATING))
+    if (positive && critical) spotlightIds = { positive: positive.id, critical: critical.id }
   }
 
-  const { data: pageRows, error: pageError } = await db
+  const detailIds = [...new Set([...pageIds, ...(spotlightIds ? [spotlightIds.positive, spotlightIds.critical] : [])])]
+  const base = { average, totalCount, matchCount, distribution, positiveCount, hasMore }
+  if (detailIds.length === 0) return { ...base, reviews: [], hasMore: false, spotlight: null }
+
+  const { data: detailRows, error: detailError } = await db
     .from("peripheral_reviews")
-    .select("id, user_id, rating, body, created_at, edited_at, is_edited, score")
-    .in("id", pageIds)
+    .select(REVIEW_DETAIL_COLUMNS)
+    .in("id", detailIds)
 
-  if (pageError) {
-    console.error("[peripheral-reviews-repository] getPeripheralReviewsWithStats (page):", pageError)
-    return { reviews: [], average, totalCount, hasMore }
+  if (detailError) {
+    console.error("[peripheral-reviews-repository] getPeripheralReviewsWithStats (page):", detailError)
+    return { ...base, reviews: [], spotlight: null }
   }
 
-  type PageRow = {
-    id: string
-    user_id: string
-    rating: number
-    body: string | null
-    created_at: string
-    edited_at: string | null
-    is_edited: boolean
-    score: number
-  }
-  const rowById = new Map(((pageRows ?? []) as PageRow[]).map((r) => [r.id, r]))
+  const rowById = new Map(((detailRows ?? []) as ReviewDetailRow[]).map((r) => [r.id, r]))
   const [profileMap, myVotes] = await Promise.all([
-    buildProfileMap(pageIds.map((id) => rowById.get(id)?.user_id ?? null)),
-    getOwnPeripheralReviewVote(db, viewerId, pageIds),
+    buildProfileMap(detailIds.map((id) => rowById.get(id)?.user_id ?? null)),
+    getOwnPeripheralReviewVote(db, viewerId, detailIds),
   ])
 
-  const reviews = pageIds
-    .map((id) => rowById.get(id))
-    .filter((r): r is PageRow => Boolean(r))
-    .map((r) => ({
-      id: r.id,
-      rating: r.rating,
-      body: r.body,
-      created_at: r.created_at,
-      edited_at: r.edited_at,
-      is_edited: r.is_edited ?? false,
-      user_id: r.user_id,
-      author_display_name: profileMap[r.user_id]?.display_name ?? "Usuário",
-      author_avatar_url: profileMap[r.user_id]?.avatar_url ?? null,
-      author_account_tier: profileMap[r.user_id]?.account_tier ?? "common",
-      author_vip_expires_at: profileMap[r.user_id]?.vip_expires_at ?? null,
-      author_display_slug: profileMap[r.user_id]?.display_slug ?? null,
-      ...authorFrameFields(profileMap[r.user_id]),
-      author_streak: profileMap[r.user_id]?.streak ?? 0,
-      score: r.score ?? 0,
-      my_vote: myVotes.get(r.id) ?? null,
-    }))
+  const detailOf = (id: string): PeripheralReviewDetail | null => {
+    const row = rowById.get(id)
+    return row ? toReviewDetail(row, profileMap[row.user_id], myVotes.get(id) ?? null) : null
+  }
 
-  return { reviews, average, totalCount, hasMore }
+  const reviews = pageIds.map(detailOf).filter((r): r is PeripheralReviewDetail => r !== null)
+  const positive = spotlightIds ? detailOf(spotlightIds.positive) : null
+  const critical = spotlightIds ? detailOf(spotlightIds.critical) : null
+
+  return { ...base, reviews, spotlight: positive && critical ? { positive, critical } : null }
 }

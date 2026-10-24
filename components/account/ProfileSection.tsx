@@ -11,7 +11,6 @@ import {
   Pencil,
   Sparkles,
   UserRound,
-  Youtube,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -30,7 +29,7 @@ import {
   type ProfileMediaAdjustments,
 } from "@/lib/profile-media-adjust"
 import { FrozenFrame } from "@/components/ui/image-with-fallback"
-import { TikTokIcon } from "@/components/icons/social-icons"
+import { SocialNetworkIcon } from "@/components/profile/SocialLinks"
 import { resolveProfileMedia, type ProfileMedia } from "@/lib/account-tier"
 import { getSpecialTag } from "@/lib/special-tag"
 import { Button } from "@/components/ui/button"
@@ -49,13 +48,17 @@ import {
   BIO_MAX_LENGTH,
   BIO_MAX_LINES,
   limitBioLines,
-  normalizeSocialHandle,
   type ProfileShowcase,
   type SetupItem,
   type SetupSlot,
   type ShowcaseMedal,
   type ShowcasePeripheral,
 } from "@/lib/profile-showcase"
+import {
+  PROFILE_SOCIALS,
+  socialHandlesOf,
+  type ProfileSocialHandles,
+} from "@/lib/profile-socials"
 import { MiniProfileBgPicker } from "@/components/account/MiniProfileBgPicker"
 import { ProfileFramePicker } from "@/components/account/ProfileFramePicker"
 import { MINI_PROFILE_BG_THEMES } from "@/lib/mini-profile-backgrounds"
@@ -63,7 +66,7 @@ import { CARD_SURFACE } from "@/lib/ui-styles"
 import { profileAccentHue } from "@/lib/user-directory"
 import { cn } from "@/lib/utils"
 
-export type ProfileData = {
+export type ProfileData = Partial<ProfileSocialHandles> & {
   id?: string
   email: string | null
   display_name: string
@@ -79,8 +82,6 @@ export type ProfileData = {
   bio?: string | null
   account_tier?: string | null
   vip_expires_at?: string | null
-  youtube_handle?: string | null
-  tiktok_handle?: string | null
   media_adjustments?: unknown
 }
 
@@ -263,8 +264,9 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
     profile.mini_banner_url ?? null
   )
   const [bio, setBio] = useState(profile.bio ?? "")
-  const [youtubeHandle, setYoutubeHandle] = useState(profile.youtube_handle ?? "")
-  const [tiktokHandle, setTiktokHandle] = useState(profile.tiktok_handle ?? "")
+  const [socialHandles, setSocialHandles] = useState<ProfileSocialHandles>(() =>
+    socialHandlesOf(profile)
+  )
   const [uploading, setUploading] = useState(false)
   const [uploadingBanner, setUploadingBanner] = useState(false)
   const [uploadingMiniBanner, setUploadingMiniBanner] = useState(false)
@@ -481,8 +483,7 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
           mini_banner_url: miniBannerUrl,
           media_adjustments: adjustments,
           bio,
-          youtube_handle: youtubeHandle,
-          tiktok_handle: tiktokHandle,
+          ...socialHandles,
         }),
       })
       const data = (await res.json().catch(() => null)) as
@@ -497,8 +498,7 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
       setMiniBannerUrl(data.profile.mini_banner_url ?? null)
       setAdjustments(coerceMediaAdjustments(data.profile.media_adjustments))
       setBio(data.profile.bio ?? "")
-      setYoutubeHandle(data.profile.youtube_handle ?? "")
-      setTiktokHandle(data.profile.tiktok_handle ?? "")
+      setSocialHandles(socialHandlesOf(data.profile))
       onProfileChange(data.profile)
       return null
     } catch {
@@ -613,8 +613,7 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
                   previewFrame={previewFrame}
                   specialTag={specialTag}
                   bio={bio}
-                  youtubeHandle={youtubeHandle}
-                  tiktokHandle={tiktokHandle}
+                  socialHandles={socialHandles}
                   uploadingAvatar={uploading}
                   onEditAvatar={() => setPicker("avatar")}
                   uploadingBanner={uploadingBanner}
@@ -761,30 +760,29 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      <Youtube className="size-3.5" />
-                      YouTube
-                    </label>
-                    <Input
-                      value={youtubeHandle}
-                      onChange={(e) => setYoutubeHandle(normalizeSocialHandle(e.target.value))}
-                      className="border-border bg-background"
-                      placeholder="@seucanal"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      <TikTokIcon className="size-3.5" />
-                      TikTok
-                    </label>
-                    <Input
-                      value={tiktokHandle}
-                      onChange={(e) => setTiktokHandle(normalizeSocialHandle(e.target.value))}
-                      className="border-border bg-background"
-                      placeholder="@seuusuario"
-                    />
-                  </div>
+                  {PROFILE_SOCIALS.map((social) => (
+                    <div key={social.column} className="space-y-1.5">
+                      <label
+                        htmlFor={`social-${social.column}`}
+                        className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                      >
+                        <SocialNetworkIcon column={social.column} className="size-3.5" />
+                        {social.label}
+                      </label>
+                      <Input
+                        id={`social-${social.column}`}
+                        value={socialHandles[social.column] ?? ""}
+                        onChange={(e) =>
+                          setSocialHandles((prev) => ({
+                            ...prev,
+                            [social.column]: social.normalize(e.target.value) || null,
+                          }))
+                        }
+                        className="border-border bg-background"
+                        placeholder={social.placeholder}
+                      />
+                    </div>
+                  ))}
                 </div>
               </CardContent>
             </Card>
@@ -1206,8 +1204,7 @@ function ProfilePagePreview({
   previewFrame,
   specialTag,
   bio,
-  youtubeHandle,
-  tiktokHandle,
+  socialHandles,
   uploadingAvatar,
   onEditAvatar,
   uploadingBanner,
@@ -1225,8 +1222,7 @@ function ProfilePagePreview({
   specialTag: ReturnType<typeof getSpecialTag>
   /** Bio e handles em edição: o preview mostra o rascunho, não o salvo. */
   bio: string
-  youtubeHandle: string
-  tiktokHandle: string
+  socialHandles: ProfileSocialHandles
   uploadingAvatar: boolean
   onEditAvatar: () => void
   uploadingBanner: boolean
@@ -1362,18 +1358,16 @@ function ProfilePagePreview({
             {bio.trim() || "Sua bio aparece aqui."}
           </p>
 
-          {(youtubeHandle || tiktokHandle) && (
+          {PROFILE_SOCIALS.some((social) => socialHandles[social.column]) && (
             <div className="mt-2.5 flex items-center gap-2">
-              {youtubeHandle && (
-                <span className="flex size-7 items-center justify-center rounded-lg border border-border bg-card/60 text-muted-foreground">
-                  <Youtube className="size-3.5" />
+              {PROFILE_SOCIALS.filter((social) => socialHandles[social.column]).map((social) => (
+                <span
+                  key={social.column}
+                  className="flex size-7 items-center justify-center rounded-lg border border-border bg-card/60 text-muted-foreground"
+                >
+                  <SocialNetworkIcon column={social.column} className="size-3.5" />
                 </span>
-              )}
-              {tiktokHandle && (
-                <span className="flex size-7 items-center justify-center rounded-lg border border-border bg-card/60 text-muted-foreground">
-                  <TikTokIcon className="size-3.5" />
-                </span>
-              )}
+              ))}
             </div>
           )}
 

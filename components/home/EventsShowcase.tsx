@@ -54,16 +54,19 @@ export function EventsShowcase({ events }: { events: EventDisplay[] }) {
         </RouteLink>
       </div>
 
-      {/* flex-wrap com cards de largura fixa (não grid de colunas fixas): a
-          fileira acompanha a quantidade real de eventos em vez de reservar
-          um número fixo de "slots" vazios quando há só 1 ou 2. */}
-      <div className="flex flex-wrap gap-6">
+      {/* Celular: duas colunas que dividem a largura. Com a largura fixa, duas
+          cartas pediam 408px (w-48 + gap-6 + w-48) e telas de 360–430px
+          ficavam com uma carta por fileira, a seção virando uma coluna longa.
+          A partir de sm: flex-wrap com cards de largura fixa (não grid de
+          colunas fixas): a fileira acompanha a quantidade real de eventos em
+          vez de reservar um número fixo de "slots" vazios quando há só 1 ou 2. */}
+      <div className="grid grid-cols-2 gap-4 sm:flex sm:flex-wrap sm:gap-6">
         {events.map((event) => (
           <Link
             key={event.id}
             href="/conquistas"
             aria-label={`${event.name} — ver conquistas`}
-            className="w-48 shrink-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:w-48 sm:shrink-0"
           >
             <MedalCard
               event={event}

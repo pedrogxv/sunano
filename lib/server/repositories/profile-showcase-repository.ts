@@ -70,7 +70,7 @@ export {
 } from "@/lib/profile-showcase"
 
 const PUBLIC_PROFILE_COLUMNS =
-  "id, display_name, display_slug, avatar_url, banner_url, mini_banner_url, bio, account_tier, vip_expires_at, youtube_handle, tiktok_handle, created_at, profile_views, reviews_integrity_accepted_at, avatar_frame_opt_out, equipped_avatar_frame_id, trust_level, trust_status, aura_items!user_profiles_equipped_avatar_frame_id_fkey ( slug, frame_asset_url )"
+  "id, display_name, display_slug, avatar_url, banner_url, mini_banner_url, bio, account_tier, vip_expires_at, youtube_handle, tiktok_handle, instagram_handle, steam_handle, created_at, profile_views, reviews_integrity_accepted_at, avatar_frame_opt_out, equipped_avatar_frame_id, trust_level, trust_status, aura_items!user_profiles_equipped_avatar_frame_id_fkey ( slug, frame_asset_url )"
 
 const PERIPHERAL_COLUMNS = PERIPHERAL_SHOWCASE_COLUMNS
 type PeripheralRow = PeripheralShowcaseRow
@@ -120,6 +120,8 @@ export const getProfileShowcase = cache(async (userId: string): Promise<ProfileS
     trust_status: string | null
     youtube_handle: string | null
     tiktok_handle: string | null
+    instagram_handle: string | null
+    steam_handle: string | null
     created_at: string
     profile_views: number | null
     reviews_integrity_accepted_at: string | null
@@ -210,6 +212,8 @@ export const getProfileShowcase = cache(async (userId: string): Promise<ProfileS
     trust_status: (row.trust_status as ProfileShowcase["trust_status"]) ?? "active",
     youtube_handle: row.youtube_handle,
     tiktok_handle: row.tiktok_handle,
+    instagram_handle: row.instagram_handle,
+    steam_handle: row.steam_handle,
     youtube_subscribed: youtubeSubscribed,
     discord_member: discordMember,
     equipped_avatar_frame_url: equippedFrame?.frame_asset_url ?? null,

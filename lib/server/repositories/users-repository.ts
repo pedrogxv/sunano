@@ -16,6 +16,7 @@ import {
   type ProfileMediaAdjustments,
 } from "@/lib/profile-media-adjust"
 import type { MiniProfile } from "@/lib/mini-profile"
+import type { ProfileSocialHandles } from "@/lib/profile-socials"
 import type {
   DirectoryPeriod,
   PublicProfileSummary,
@@ -1706,6 +1707,8 @@ export type UserProfileSettings = {
   vip_expires_at: string | null
   youtube_handle: string | null
   tiktok_handle: string | null
+  instagram_handle: string | null
+  steam_handle: string | null
   /** Enquadramento das imagens. Padrão quando a coluna ainda não existe. */
   media_adjustments: ProfileMediaAdjustments
 }
@@ -1770,7 +1773,7 @@ export async function getUserProfileSettings(
     db
       .from("user_profiles")
       .select(
-        "display_name, display_slug, avatar_url, theme, locale, lgpd_consent_at, lgpd_consent_version, banner_url, mini_banner_url, bio, account_tier, vip_expires_at, youtube_handle, tiktok_handle"
+        "display_name, display_slug, avatar_url, theme, locale, lgpd_consent_at, lgpd_consent_version, banner_url, mini_banner_url, bio, account_tier, vip_expires_at, youtube_handle, tiktok_handle, instagram_handle, steam_handle"
       )
       .eq("id", userId)
       .maybeSingle(),
@@ -1802,8 +1805,7 @@ export async function updateUserProfileSettings(
     bannerUrl?: string | null
     miniBannerUrl?: string | null
     bio?: string | null
-    youtubeHandle?: string | null
-    tiktokHandle?: string | null
+    socialHandles?: Partial<ProfileSocialHandles>
     mediaAdjustments?: ProfileMediaAdjustments
   }
 ): Promise<void> {
@@ -1836,10 +1838,8 @@ export async function updateUserProfileSettings(
   if (changes.miniBannerUrl !== undefined)
     payload.mini_banner_url = changes.miniBannerUrl
   if (changes.bio !== undefined) payload.bio = changes.bio
-  if (changes.youtubeHandle !== undefined)
-    payload.youtube_handle = changes.youtubeHandle
-  if (changes.tiktokHandle !== undefined)
-    payload.tiktok_handle = changes.tiktokHandle
+  // Só as redes enviadas: rede ausente do objeto fica como estava.
+  if (changes.socialHandles) Object.assign(payload, changes.socialHandles)
   if (changes.mediaAdjustments !== undefined)
     payload.media_adjustments = changes.mediaAdjustments
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

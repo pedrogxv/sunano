@@ -1,3 +1,5 @@
+import type { ChangelogArea, ChangelogEntryData } from "@/lib/changelog"
+
 export type LocaleCode = "pt-BR" | "en-US"
 
 export type LanguageEntry = {
@@ -1175,13 +1177,44 @@ export type Translations = {
   changelog: {
     title: string
     description: string
-    entries: {
+    /** Textos da página de Patch Notes (`components/changelog/PatchNotes.tsx`). */
+    ui: {
+      searchLabel: string
+      searchPlaceholder: string
+      clearSearch: string
+      surprise: string
+      statVersions: string
+      statChanges: string
+      statSpecialEditions: string
+      newVersionBadge: string
+      goToVersion: string
+      latest: string
+      newForYou: string
+      copyLink: string
+      copyLinkOf: string
+      linkCopied: string
+      change: string
+      changes: string
+      viewChanges: string
+      areaTabsLabel: string
+      all: string
+      historyEyebrow: string
+      historyTitle: string
+      expandAll: string
+      collapseAll: string
+      versionsNav: string
+      result: string
+      results: string
       version: string
-      date: string
-      title: string
-      description: string
-      items: string[]
-    }[]
+      versions: string
+      resultsFor: string
+      noResults: string
+      noResultsHint: string
+      openVersion: string
+      searchSuggestions: string[]
+      areas: Record<ChangelogArea, string>
+    }
+    entries: ChangelogEntryData[]
   }
   errorPages: {
     notFoundTitle: string

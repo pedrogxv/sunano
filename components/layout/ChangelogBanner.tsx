@@ -9,6 +9,20 @@ import { useT } from "@/lib/use-t"
 const STORAGE_KEY = "sunano_changelog_banner_dismissed"
 
 /**
+ * Quem abriu as Patch Notes já viu a novidade: grava a versão como dispensada
+ * e esconde o aviso na hora pelo mesmo atributo do script abaixo (o CSS o
+ * tira da tela sem esperar o banner remontar).
+ */
+export function markChangelogBannerSeen(version: string) {
+  try {
+    localStorage.setItem(STORAGE_KEY, version)
+  } catch {
+    // localStorage pode estar indisponível em alguns ambientes
+  }
+  document.documentElement.setAttribute("data-changelog-dismissed", "")
+}
+
+/**
  * Marca o <html> ANTES da primeira pintura quando a versão atual já foi
  * dispensada; `html[data-changelog-dismissed] .changelog-banner` (globals.css)
  * esconde o aviso. Roda inline, no ponto do HTML em que o aviso entraria.

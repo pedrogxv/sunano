@@ -11,7 +11,7 @@ import { listPublishedPostsByPeripheral } from "@/lib/server/repositories/blog-r
 import { getPostsForPeripheral } from "@/lib/server/repositories/forum-peripherals-repository"
 import {
   countPeripheralReviews,
-  getPeripheralReviewsWithStats,
+  getPeripheralReviewSummaries,
 } from "@/lib/server/repositories/peripheral-reviews-repository"
 import { isPeripheralRecordIndexable } from "@/lib/indexability"
 import { BreadcrumbJsonLd, JsonLd } from "@/components/seo/JsonLd"
@@ -112,7 +112,7 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
   // As quatro buscas abaixo só dependem de `data`/`details`, não umas das
   // outras — rodam em paralelo em vez de em série para não empilhar 4
   // round-trips sequenciais numa página com revalidate=30.
-  const [linkedSwitch, linkedProducts, relatedPosts, allPeripherals, reviewStats, forumPosts] = await Promise.all([
+  const [linkedSwitch, linkedProducts, relatedPosts, allPeripherals, reviewSummaries, forumPosts] = await Promise.all([
     // Switch vinculado: se o admin apontou este teclado/mouse a um Switch
     // cadastrado, a linha "Switch" vira um link para a página daquele switch.
     details.switchPeripheralId
@@ -122,9 +122,11 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
     listPublishedPostsByPeripheral(data.id),
     listAllPeripherals(),
     // Só as agregadas interessam aqui (média + total) para o `aggregateRating`
-    // do JSON-LD; a lista paginada de reviews é carregada pelo próprio
-    // componente de detalhe.
-    getPeripheralReviewsWithStats(data.id, { limit: 1 }),
+    // do JSON-LD; a lista de reviews é carregada pelo próprio componente de
+    // detalhe. A lista paginada (`getPeripheralReviewsWithStats`) custava o
+    // índice inteiro + carteiras de Aura + perfis dos autores para usar só
+    // estes dois números.
+    getPeripheralReviewSummaries([data.id]),
     // Tópicos do fórum que citam este periférico — o link reverso do vínculo
     // criado ao publicar/editar um post.
     getPostsForPeripheral(data.id),
@@ -168,6 +170,11 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
   const canonicalUrl = `${SITE_URL}/perifericos/${buildPeripheralSlug(data.name, data.id)}`
   const fullProductName = buildPeripheralDisplayName(data.brand, data.name)
 
+  const reviewSummary = reviewSummaries.get(data.id)
+  const reviewStats = {
+    average: reviewSummary?.average != null ? Math.round(reviewSummary.average * 10) / 10 : null,
+    totalCount: reviewSummary?.count ?? 0,
+  }
   const hasRating = reviewStats.average != null && reviewStats.totalCount > 0
 
   /**

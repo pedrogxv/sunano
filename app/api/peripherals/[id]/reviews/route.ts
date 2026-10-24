@@ -11,6 +11,7 @@ import {
   updateOwnPeripheralReview,
 } from "@/lib/server/repositories/peripheral-reviews-repository"
 import { REVIEW_BODY_MAX_LENGTH, REVIEW_BODY_MIN_LENGTH } from "@/lib/peripheral-review-categories"
+import { parseReviewListQuery } from "@/lib/peripheral-review-list"
 
 /**
  * Review é um recurso singleton por `(user, peripheral)` (constraint unique
@@ -22,29 +23,41 @@ import { REVIEW_BODY_MAX_LENGTH, REVIEW_BODY_MIN_LENGTH } from "@/lib/peripheral
 const MAX_LIMIT = 50
 
 /**
- * Lista paginada dos reviews de um periférico + média/contagem
+ * Lista paginada dos reviews de um periférico + média/contagem/distribuição
  * (`?page=1&limit=4`).
  *
- * Ordem padrão: Aura do autor. Com `?order=random&seed=<algo>` a lista vem
- * embaralhada — o carrossel de flashcards da página do periférico sorteia a
- * seed uma vez por visita e a repete nas páginas seguintes, para não repetir
- * nem pular cards enquanto o usuário avança.
+ * Ordem padrão: Aura do autor. `order`, `stars` e `q` seguem
+ * `parseReviewListQuery` (a mesma query string da página de reviews). Com
+ * `?order=random&seed=<algo>` a lista vem embaralhada — o carrossel de
+ * flashcards da página do periférico sorteia a seed uma vez por visita e a
+ * repete nas páginas seguintes, para não repetir nem pular cards enquanto o
+ * usuário avança.
  */
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params
   const searchParams = request.nextUrl.searchParams
-  const page = Math.max(1, Number(searchParams.get("page")) || 1)
+  // Inteiro e limitado: `page=1.5` deslocava a janela pela metade e
+  // `page=1e9` só gastava a ordenação inteira para devolver lista vazia.
+  const page = Math.min(500, Math.max(1, Math.floor(Number(searchParams.get("page"))) || 1))
   const limitParam = Number(searchParams.get("limit"))
   const limit =
     Number.isFinite(limitParam) && limitParam > 0
       ? Math.min(Math.floor(limitParam), MAX_LIMIT)
       : PERIPHERAL_REVIEWS_PAGE_SIZE
-  const order = searchParams.get("order") === "random" ? "random" : "aura"
+  const { order, stars, q } = parseReviewListQuery(searchParams)
   const seed = searchParams.get("seed")?.slice(0, 64) || undefined
 
   try {
     const viewer = await getRequestUser(request)
-    const stats = await getPeripheralReviewsWithStats(id, { page, limit, viewerId: viewer?.id, order, seed })
+    const stats = await getPeripheralReviewsWithStats(id, {
+      page,
+      limit,
+      viewerId: viewer?.id,
+      order,
+      seed,
+      stars,
+      query: q,
+    })
     return NextResponse.json({ ok: true, ...stats })
   } catch {
     return NextResponse.json({ error: "Erro ao carregar avaliações." }, { status: 500 })
@@ -104,7 +117,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     })
 
     if (!result.ok) {
-      return NextResponse.json({ error: result.error }, { status: result.status })
+      return NextResponse.json({ error: result.error, code: result.code }, { status: result.status })
     }
     return NextResponse.json({ ok: true, review: result.review })
   } catch {

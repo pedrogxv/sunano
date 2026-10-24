@@ -32,7 +32,9 @@ interface MedalCardProps extends React.ComponentPropsWithoutRef<"div"> {
   /**
    * Halo pulsante em volta da carta. A Home usa a variante `strong` porque
    * seus cards ficam soltos numa fileira só; em /conquistas, com a grade
-   * cheia, o halo forte de cada carta invadiria a vizinha.
+   * cheia, o halo forte de cada carta invadiria a vizinha. No celular a Home
+   * também vira grade de duas colunas, então o CSS só aplica o `strong` a
+   * partir de sm (globals.css).
    */
   glow?: "default" | "strong"
   /**

@@ -2467,15 +2467,28 @@ export async function setOrderShippingAddress(
   }
   if (currentStatus === "awaiting_shipping_info") update.status = "paid"
 
-  const { error } = await db
+  const { data: updatedRows, error } = await db
     .from("store_orders")
     .update(update)
     .eq("id", orderId)
     .eq("metadata->>user_id", userId)
+    // O status lido acima, de novo no UPDATE: entre as duas idas o admin pode
+    // ter despachado ou estornado o pedido, e sem isto o endereço novo (e o
+    // `status: "paid"` de quem estava em `awaiting_shipping_info`) cairia por
+    // cima de um pedido `shipped` ou `refunded`.
+    .eq("status", currentStatus)
+    .select("id")
 
   if (error) {
     console.error("[orders-repository] setOrderShippingAddress:", error)
     return { ok: false, error: "Não foi possível salvar o endereço de entrega.", status: 500 }
+  }
+  if (!updatedRows?.length) {
+    return {
+      ok: false,
+      error: "O pedido mudou de status enquanto você preenchia. Recarregue a página e confira.",
+      status: 409,
+    }
   }
 
   // Sem notificação para o cliente: foi ele mesmo que acabou de preencher, e

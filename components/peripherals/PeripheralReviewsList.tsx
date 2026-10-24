@@ -55,7 +55,7 @@ export function PeripheralReviewsList({ peripheralId, peripheralSlug }: Peripher
   const [highlightId, setHighlightId] = useState<string | null>(null)
   const [highlightReview, setHighlightReview] = useState<PeripheralReviewRow | null>(null)
   const [highlighted, setHighlighted] = useState(false)
-  const highlightRef = useRef<HTMLDivElement>(null)
+  const highlightRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -69,7 +69,10 @@ export function PeripheralReviewsList({ peripheralId, peripheralSlug }: Peripher
     fetch(`/api/peripherals/${peripheralId}/reviews?page=1&limit=${BATCH_SIZE}&order=random&seed=${seed}`, {
       cache: "no-store",
     })
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        return res.json()
+      })
       .then((data: { reviews?: PeripheralReviewRow[]; totalCount?: number; hasMore?: boolean }) => {
         if (!active) return
         setReviews(data.reviews ?? [])
@@ -120,8 +123,14 @@ export function PeripheralReviewsList({ peripheralId, peripheralSlug }: Peripher
         `/api/peripherals/${peripheralId}/reviews?page=${nextPage}&limit=${BATCH_SIZE}&order=random&seed=${seed}`,
         { cache: "no-store" }
       )
+      // Sem esta checagem, um 500 caía no `?? false` abaixo, zerava `hasMore`
+      // e a seta de avançar travava no fim do lote para sempre.
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = (await res.json()) as { reviews?: PeripheralReviewRow[]; hasMore?: boolean }
-      setReviews((prev) => [...prev, ...(data.reviews ?? [])])
+      setReviews((prev) => {
+        const known = new Set(prev.map((r) => r.id))
+        return [...prev, ...(data.reviews ?? []).filter((r) => !known.has(r.id))]
+      })
       setHasMore(data.hasMore ?? false)
       setPage(nextPage)
     } catch {
@@ -213,6 +222,7 @@ export function PeripheralReviewsList({ peripheralId, peripheralSlug }: Peripher
             rowRef={highlightRef}
             highlighted={highlighted}
             variant="card"
+            permalink={`/perifericos/${peripheralSlug}/reviews#review-${highlightReview.id}`}
             onVoteChange={patchReview}
           />
           <div className="border-b border-border" />
@@ -248,6 +258,7 @@ export function PeripheralReviewsList({ peripheralId, peripheralSlug }: Peripher
               peripheralId={peripheralId}
               review={current}
               variant="card"
+              permalink={`/perifericos/${peripheralSlug}/reviews#review-${current.id}`}
               onVoteChange={patchReview}
             />
           )}

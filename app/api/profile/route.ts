@@ -6,12 +6,13 @@ import { checkContent, CONTENT_FILTER_MESSAGE } from "@/lib/content-filter"
 import { dbErrorResponse } from "@/lib/db-errors"
 import { coerceMediaAdjustments, DEFAULT_ADJUSTMENTS } from "@/lib/profile-media-adjust"
 import { slugifyDisplayName } from "@/lib/profile-name"
+import { BIO_MAX_LENGTH, normalizeBio } from "@/lib/profile-showcase"
 import {
-  BIO_MAX_LENGTH,
-  normalizeBio,
-  normalizeSocialHandle,
-  SOCIAL_HANDLE_PATTERN,
-} from "@/lib/profile-showcase"
+  PROFILE_SOCIALS,
+  socialHandlesOf,
+  type ProfileSocial,
+  type ProfileSocialHandles,
+} from "@/lib/profile-socials"
 import {
   isAllowedProfileMediaUrl,
   isOurStorageUrl,
@@ -53,6 +54,8 @@ const profileSchema = z.object({
   // Aceita handle solto ("@user") ou URL colada — normalizado abaixo antes de salvar.
   youtube_handle: z.string().trim().max(200).nullable().optional(),
   tiktok_handle: z.string().trim().max(200).nullable().optional(),
+  instagram_handle: z.string().trim().max(200).nullable().optional(),
+  steam_handle: z.string().trim().max(200).nullable().optional(),
   // Enquadramento das imagens. O schema só exige "é um objeto": faixa e
   // arredondamento ficam com `coerceMediaAdjustments`, que é o mesmo código
   // que o editor usa no client — assim os dois nunca discordam sobre o que é
@@ -62,12 +65,13 @@ const profileSchema = z.object({
 
 /** Normaliza e valida um handle de rede social. Retorna `undefined` (sem mudança), `null` (limpar) ou o handle válido. */
 function parseSocialHandle(
+  social: ProfileSocial,
   raw: string | null | undefined
 ): { value: string | null | undefined; error: string | null } {
   if (raw === undefined) return { value: undefined, error: null }
   if (raw === null || raw.trim() === "") return { value: null, error: null }
-  const normalized = normalizeSocialHandle(raw)
-  if (!SOCIAL_HANDLE_PATTERN.test(normalized)) {
+  const normalized = social.normalize(raw)
+  if (!social.pattern.test(normalized)) {
     return { value: undefined, error: "Use apenas letras, números, ponto, hífen ou underscore." }
   }
   return { value: normalized, error: null }
@@ -135,8 +139,7 @@ export async function GET() {
         bio: settings?.bio ?? null,
         account_tier: coerceAccountTier(settings?.account_tier),
         vip_expires_at: settings?.vip_expires_at ?? null,
-        youtube_handle: settings?.youtube_handle ?? null,
-        tiktok_handle: settings?.tiktok_handle ?? null,
+        ...socialHandlesOf(settings),
         media_adjustments: settings?.media_adjustments ?? DEFAULT_ADJUSTMENTS,
       },
     })
@@ -219,13 +222,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: CONTENT_FILTER_MESSAGE, field: "bio" }, { status: 400 })
     }
 
-    const youtubeHandle = parseSocialHandle(parsed.data.youtube_handle)
-    if (youtubeHandle.error) {
-      return NextResponse.json({ error: youtubeHandle.error, field: "youtube_handle" }, { status: 400 })
-    }
-    const tiktokHandle = parseSocialHandle(parsed.data.tiktok_handle)
-    if (tiktokHandle.error) {
-      return NextResponse.json({ error: tiktokHandle.error, field: "tiktok_handle" }, { status: 400 })
+    const socialHandles: Partial<ProfileSocialHandles> = {}
+    for (const social of PROFILE_SOCIALS) {
+      const handle = parseSocialHandle(social, parsed.data[social.column])
+      if (handle.error) {
+        return NextResponse.json(
+          { error: `${social.label}: ${handle.error}`, field: social.column },
+          { status: 400 }
+        )
+      }
+      if (handle.value !== undefined) socialHandles[social.column] = handle.value
     }
 
     // Perfil que ainda não existe (conta antiga, ou primeira mudança de tema
@@ -246,8 +252,7 @@ export async function POST(request: Request) {
       miniBannerUrl: parsed.data.mini_banner_url,
       // Bio vazia é limpeza do campo, não string vazia no banco.
       bio: parsed.data.bio === undefined ? undefined : parsed.data.bio || null,
-      youtubeHandle: youtubeHandle.value,
-      tiktokHandle: tiktokHandle.value,
+      socialHandles,
       mediaAdjustments:
         parsed.data.media_adjustments === undefined
           ? undefined
@@ -280,8 +285,7 @@ export async function POST(request: Request) {
         bio: settings?.bio ?? null,
         account_tier: coerceAccountTier(settings?.account_tier),
         vip_expires_at: settings?.vip_expires_at ?? null,
-        youtube_handle: settings?.youtube_handle ?? null,
-        tiktok_handle: settings?.tiktok_handle ?? null,
+        ...socialHandlesOf(settings),
         media_adjustments: settings?.media_adjustments ?? DEFAULT_ADJUSTMENTS,
       },
     })

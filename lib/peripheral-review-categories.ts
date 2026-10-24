@@ -40,3 +40,11 @@ export const REVIEWABLE_CATALOG_CATEGORIES = REVIEW_CATEGORY_GROUPS.flatMap((g) 
  */
 export const REVIEW_BODY_MIN_LENGTH = 10
 export const REVIEW_BODY_MAX_LENGTH = 400
+
+/**
+ * Aura por criar a primeira review de um periférico (1 vez por usuário e
+ * periférico, mesmo excluindo e recriando). Precisa bater com o valor fixo de
+ * `credit_peripheral_review_creation_aura` (SQL, migration 20260901000000):
+ * é o banco que credita, a tela só anuncia.
+ */
+export const PERIPHERAL_REVIEW_CREATION_AURA = 10

@@ -703,19 +703,26 @@ button,
   }
 }
 
-/* Variante mais intensa para os cards de destaque na Home (maiores, pedem mais brilho). */
-.event-card-glow-strong::before {
-  inset: -12px;
-  filter: blur(18px);
-}
-
+/* Variante mais intensa para os cards de destaque na Home (maiores, pedem mais brilho).
+   Só a partir de sm: no celular a Home põe duas cartas lado a lado com 16px de
+   vão, e o halo forte (-12px + blur 18px) invadiria a vizinha — o mesmo motivo
+   de /conquistas usar o halo padrão. Abaixo disso vale o `.event-card-glow`. */
 @keyframes event-card-glow-pulse-strong {
   0%, 100% { opacity: 0.65; transform: scale(1); }
   50%      { opacity: 1; transform: scale(1.08); }
 }
 
-.event-card-glow-strong::before {
-  animation: event-card-glow-pulse-strong 2.8s ease-in-out infinite;
+@media (width >= 40rem) {
+  .event-card-glow-strong::before {
+    inset: -12px;
+    filter: blur(18px);
+  }
+}
+
+@media (width >= 40rem) and (prefers-reduced-motion: no-preference) {
+  .event-card-glow-strong::before {
+    animation: event-card-glow-pulse-strong 2.8s ease-in-out infinite;
+  }
 }
 
 /* Medalha holográfica (/conquistas) — foil que segue o PONTEIRO, não o relógio.

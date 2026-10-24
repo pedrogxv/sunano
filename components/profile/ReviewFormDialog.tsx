@@ -18,11 +18,15 @@ import {
 import { StarRating } from "@/components/ui/star-rating"
 import { Textarea } from "@/components/ui/textarea"
 import {
+  PERIPHERAL_REVIEW_CREATION_AURA,
   REVIEW_BODY_MAX_LENGTH as BODY_MAX_LENGTH,
   REVIEW_BODY_MIN_LENGTH as BODY_MIN_LENGTH,
   REVIEWABLE_CATALOG_CATEGORIES,
 } from "@/lib/peripheral-review-categories"
 import type { ShowcasePeripheral, ShowcaseReview } from "@/lib/profile-showcase"
+
+/** O que o formulário desenha do periférico escolhido — o picker devolve mais, mas só isto é lido. */
+export type ReviewFormPeripheral = Pick<ShowcasePeripheral, "id" | "name" | "brand" | "image_url">
 
 interface ReviewFormDialogProps {
   open: boolean
@@ -30,8 +34,11 @@ interface ReviewFormDialogProps {
   mode: "create" | "edit"
   /** create: periféricos já avaliados, ocultados do picker (a review é 1x por periférico). */
   excludePeripheralIds?: string[]
-  /** edit: periférico fixo (sem picker) + valores atuais. */
-  peripheral?: ShowcasePeripheral
+  /**
+   * Periférico fixo, sem picker. Obrigatório no `edit`; no `create` é a
+   * página de reviews do próprio produto, onde escolher outro não faz sentido.
+   */
+  peripheral?: ReviewFormPeripheral
   initialRating?: number
   initialBody?: string | null
   onSaved: (review: ShowcaseReview) => void
@@ -47,20 +54,31 @@ export function ReviewFormDialog({
   initialBody,
   onSaved,
 }: ReviewFormDialogProps) {
-  const [selected, setSelected] = useState<ShowcasePeripheral | null>(mode === "edit" ? (peripheral ?? null) : null)
+  const [selected, setSelected] = useState<ReviewFormPeripheral | null>(peripheral ?? null)
+  const peripheralLocked = Boolean(peripheral)
   const [rating, setRating] = useState(initialRating ?? 0)
   const [body, setBody] = useState(initialBody ?? "")
   const [saving, setSaving] = useState(false)
   const bodyLength = body.trim().length
   const bodyTooShort = bodyLength < BODY_MIN_LENGTH
 
-  function handleOpenChange(next: boolean) {
-    onOpenChange(next)
-    if (!next) {
-      setSelected(mode === "edit" ? (peripheral ?? null) : null)
+  // Os campos se reiniciam a partir das props A CADA ABERTURA. O diálogo fica
+  // montado o tempo todo (o pai só troca `open`/`mode`), então o `useState`
+  // acima lia as props uma vez só: o primeiro "Editar" do perfil abria vazio,
+  // e "Criar" logo depois de editar herdava o periférico e a nota da edição
+  // (o POST ia para o produto já avaliado e voltava 409).
+  const [wasOpen, setWasOpen] = useState(open)
+  if (open !== wasOpen) {
+    setWasOpen(open)
+    if (open) {
+      setSelected(peripheral ?? null)
       setRating(initialRating ?? 0)
       setBody(initialBody ?? "")
     }
+  }
+
+  function handleOpenChange(next: boolean) {
+    onOpenChange(next)
   }
 
   async function handleSubmit() {
@@ -76,7 +94,7 @@ export function ReviewFormDialog({
       if (!res.ok || !data?.ok) throw new Error(data?.error ?? "Erro ao salvar sua avaliação")
       onSaved(data.review as ShowcaseReview)
       handleOpenChange(false)
-      toast.success(mode === "create" ? "Review criada! +10 de Aura." : "Review atualizada!")
+      toast.success(mode === "create" ? `Review criada! +${PERIPHERAL_REVIEW_CREATION_AURA} de Aura.` : "Review atualizada!")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro ao salvar sua avaliação")
     } finally {
@@ -90,8 +108,8 @@ export function ReviewFormDialog({
         <DialogHeader>
           <DialogTitle>{mode === "create" ? "Criar review" : "Editar review"}</DialogTitle>
           <DialogDescription>
-            Escolha o periférico, dê sua nota (1 a 5 estrelas, meia estrela vale) e conte sua
-            experiência ({BODY_MIN_LENGTH} a {BODY_MAX_LENGTH} caracteres).
+            {peripheralLocked ? "Dê" : "Escolha o periférico, dê"} sua nota (1 a 5 estrelas, meia estrela
+            vale) e conte sua experiência ({BODY_MIN_LENGTH} a {BODY_MAX_LENGTH} caracteres).
           </DialogDescription>
         </DialogHeader>
 
@@ -118,7 +136,7 @@ export function ReviewFormDialog({
                   <p className="truncate text-sm font-medium text-foreground">{selected.name}</p>
                   <p className="truncate text-xs text-muted-foreground">{selected.brand}</p>
                 </div>
-                {mode === "create" && (
+                {!peripheralLocked && (
                   <Button type="button" variant="ghost" size="sm" onClick={() => setSelected(null)}>
                     <X className="size-4" />
                   </Button>

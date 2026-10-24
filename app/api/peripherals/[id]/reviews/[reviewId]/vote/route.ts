@@ -10,8 +10,8 @@ const voteSchema = z.object({
 })
 
 /** Dá, troca ou remove (toggle) o upvote/downvote do usuário atual numa review — estilo Reddit. */
-export async function POST(request: NextRequest, context: { params: Promise<{ reviewId: string }> }) {
-  const { reviewId } = await context.params
+export async function POST(request: NextRequest, context: { params: Promise<{ id: string; reviewId: string }> }) {
+  const { id, reviewId } = await context.params
 
   const user = await getRequestUser(request)
   if (!user) {
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ re
     return NextResponse.json({ error: "Aguarde um pouco antes de votar novamente.", code: "rate_limited" }, { status: 429 })
   }
 
-  const result = await togglePeripheralReviewVote(user.id, reviewId, parsed.data.kind)
+  const result = await togglePeripheralReviewVote(user.id, reviewId, parsed.data.kind, id)
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: result.status })
   }

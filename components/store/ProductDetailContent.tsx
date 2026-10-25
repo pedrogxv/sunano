@@ -20,7 +20,7 @@ import { PREORDER_CTA_LABEL, PREORDER_STATUS_HINT, PREORDER_STATUS_LABEL, preord
 import { purchaseAuraFor } from "@/lib/store-purchase-aura"
 import { cartLineMaxQuantity } from "@/lib/store-cart-limits"
 import { getColorSwatchStyle } from "@/lib/color-swatch"
-import type { LinkedPeripheralRef, StoreProductDetailResult, StoreFilterOptions } from "@/lib/server/repositories/store-repository"
+import type { LinkedPeripheralRef, StoreProductCard, StoreProductDetailResult, StoreFilterOptions } from "@/lib/server/repositories/store-repository"
 import { ProductReviews } from "@/components/store/ProductReviews"
 import { RestockAlertButton } from "@/components/store/RestockAlertButton"
 import { ProductDeliveryInfo } from "@/components/store/ProductDeliveryInfo"
@@ -35,6 +35,8 @@ import { StoreCategoryNav } from "@/components/store/StoreCategoryNav"
 import { ProductBreadcrumb } from "@/components/store/ProductBreadcrumb"
 import { AffiliateShareButton } from "@/components/affiliates/AffiliateShareButton"
 import { ProductStickyBuyBar } from "@/components/store/ProductStickyBuyBar"
+import { ProductRecommendations } from "@/components/store/ProductRecommendations"
+import { PRODUCT_SECTION_SCROLL_MARGIN, ProductSectionNav, type ProductSectionLink } from "@/components/store/ProductSectionNav"
 
 function LinkedPeripheralCard({ peripheral }: { peripheral: LinkedPeripheralRef }) {
   return (
@@ -83,9 +85,11 @@ interface ProductDetailContentProps extends StoreProductDetailResult {
   filterOptions: StoreFilterOptions
   /** Nota das avaliações publicadas; `null` = ninguém avaliou ainda. */
   rating: { average: number; count: number } | null
+  /** Trilho "Você também pode gostar" (ver `listProductRecommendations`). */
+  recommendations: StoreProductCard[]
 }
 
-export function ProductDetailContent({ filterOptions, rating, ...detail }: ProductDetailContentProps) {
+export function ProductDetailContent({ filterOptions, rating, recommendations, ...detail }: ProductDetailContentProps) {
   const { product, linkedPeripheral, linkedPeripherals, specs, variants, variantGroups } = detail
   const router = useRouter()
   const { add, setOpen } = useCart()
@@ -194,15 +198,35 @@ export function ProductDetailContent({ filterOptions, rating, ...detail }: Produ
     : null
   const LaunchIcon = STORE_CARD_BADGE.launch.icon
 
+  // Índice da parte de baixo: só o que a página de fato tem. Com uma seção só
+  // não há o que navegar.
+  const sectionLinks: ProductSectionLink[] = [
+    ...(product.description ? [{ id: "descricao" as const, label: "Descrição" }] : []),
+    ...(specs.length > 0 ? [{ id: "especificacoes" as const, label: "Especificações" }] : []),
+    ...(recommendations.length > 0 ? [{ id: "relacionados" as const, label: "Relacionados" }] : []),
+    ...(!complement ? [{ id: "avaliacoes" as const, label: "Avaliações", count: rating?.count ?? 0 }] : []),
+  ]
+  const showSectionNav = sectionLinks.length > 1
+
   return (
     <>
       <StoreCategoryNav data={filterOptions} activeCategory={product.category} />
       <div className="mx-auto max-w-7xl px-4 pb-28 pt-5 md:px-6 lg:pb-16">
         <ProductBreadcrumb productName={product.name} category={product.category} brand={product.brand} />
 
-        <div className="grid gap-8 lg:grid-cols-[minmax(0,1.08fr)_minmax(0,1fr)] lg:items-start lg:gap-12">
-          {/* Galeria: presa no topo enquanto a coluna de compra rola. */}
-          <div className="lg:sticky lg:top-[calc(var(--sticky-header-h)+1.5rem)] lg:self-start">
+        <div
+          id="produto"
+          className={cn(
+            // Duas linhas no desktop: galeria e, logo embaixo dela, a descrição;
+            // a compra ocupa as duas à direita. A segunda linha é `1fr` para a
+            // altura da coluna de compra cair nela, e não abrir um vão entre a
+            // galeria e a descrição. No celular a ordem do DOM vale: galeria,
+            // compra, descrição.
+            "grid gap-8 lg:grid-cols-[minmax(0,1.08fr)_minmax(0,1fr)] lg:grid-rows-[auto_1fr] lg:items-start lg:gap-x-12 lg:gap-y-8",
+            PRODUCT_SECTION_SCROLL_MARGIN,
+          )}
+        >
+          <div className="min-w-0 lg:col-start-1 lg:row-start-1">
             <ProductGallery
               key={images[0] ?? "sem-foto"}
               images={images}
@@ -214,7 +238,7 @@ export function ProductDetailContent({ filterOptions, rating, ...detail }: Produ
           </div>
 
           {/* Compra */}
-          <div className="space-y-5">
+          <div className="space-y-5 lg:col-start-2 lg:row-span-2 lg:row-start-1">
             <div className="space-y-3">
               {(isPreOrder || product.is_launch || product.condition !== "new") && (
                 <div className="flex flex-wrap items-center gap-2">
@@ -537,41 +561,59 @@ export function ProductDetailContent({ filterOptions, rating, ...detail }: Produ
               </div>
             )}
           </div>
-        </div>
 
-        {/* Descrição, ficha e avaliações: depois da decisão de compra, em
-            largura cheia, em vez de espremidos embaixo da galeria. */}
-        <div className="mt-14 grid gap-10 lg:grid-cols-[minmax(0,1.08fr)_minmax(0,1fr)] lg:gap-12">
-          {product.description && (
-            <section className="space-y-4">
-              <h2 className="font-display text-2xl font-bold text-foreground">Descrição</h2>
-              <div className="whitespace-pre-line text-[16px] leading-relaxed text-foreground/85">
-                <FormattedText text={product.description} />
-              </div>
-            </section>
-          )}
+          {/* Índice, descrição e ficha: direto embaixo da galeria, em vez de
+              esperar a coluna de compra acabar. */}
+          {(showSectionNav || product.description || specs.length > 0) && (
+            <div className="min-w-0 space-y-10 lg:col-start-1 lg:row-start-2">
+              {/* {showSectionNav && (
+                <ProductSectionNav
+                  sections={sectionLinks}
+                  thumbUrl={images[0]}
+                  productName={product.name}
+                  backToId="produto"
+                  className="-mb-4"
+                />
+              )} */}
 
-          {specs.length > 0 && (
-            <section className={cn(!product.description && "lg:col-span-2")}>
-              <h2 className="font-display mb-5 text-2xl font-bold text-foreground">Especificação Técnica</h2>
-              <dl className="overflow-hidden rounded-2xl border border-border">
-                {specs.map((spec, idx) => (
-                  <div
-                    key={spec.id}
-                    className={cn("grid grid-cols-2 gap-2 px-5 py-3.5 text-[14.5px]", idx % 2 === 0 ? "bg-muted/20" : "bg-transparent")}
-                  >
-                    <dt className="text-muted-foreground">{spec.label}</dt>
-                    <dd className="font-medium text-foreground">{spec.value}</dd>
+              {product.description && (
+                <section id="descricao" className={cn("space-y-4", PRODUCT_SECTION_SCROLL_MARGIN)}>
+                  <h2 className="font-display text-2xl font-bold text-foreground">Descrição</h2>
+                  <div className="whitespace-pre-line text-[16px] leading-relaxed text-foreground/85">
+                    <FormattedText text={product.description} />
                   </div>
-                ))}
-              </dl>
-            </section>
+                </section>
+              )}
+
+              {specs.length > 0 && (
+                <section id="especificacoes" className={PRODUCT_SECTION_SCROLL_MARGIN}>
+                  <h2 className="font-display mb-5 text-2xl font-bold text-foreground">Especificação Técnica</h2>
+                  <dl className="overflow-hidden rounded-2xl border border-border">
+                    {specs.map((spec, idx) => (
+                      <div
+                        key={spec.id}
+                        className={cn("grid grid-cols-2 gap-2 px-5 py-3.5 text-[14.5px]", idx % 2 === 0 ? "bg-muted/20" : "bg-transparent")}
+                      >
+                        <dt className="text-muted-foreground">{spec.label}</dt>
+                        <dd className="font-medium text-foreground">{spec.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </section>
+              )}
+            </div>
           )}
         </div>
+
+        {recommendations.length > 0 && (
+          <div id="relacionados" className={cn("mt-14", PRODUCT_SECTION_SCROLL_MARGIN)}>
+            <ProductRecommendations items={recommendations} />
+          </div>
+        )}
 
         {/* Complemento é pagamento de outro pedido, não um produto para avaliar. */}
         {!complement && (
-          <section id="avaliacoes" className="mt-14 scroll-mt-24">
+          <section id="avaliacoes" className={cn("mt-14", PRODUCT_SECTION_SCROLL_MARGIN)}>
             <ProductReviews
               productId={product.id}
               productSlug={product.slug}

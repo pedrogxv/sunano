@@ -64,6 +64,8 @@ import {
   skuDraftKey,
   type SkuDraft,
 } from "@/components/admin/store/ProductSkuMatrix"
+import { FileDropArea, FileDropLabel } from "@/components/admin/FileDropLabel"
+import { useFileDrop, usePreventFileDropNavigation } from "@/lib/hooks/use-file-drop"
 import { CardHighlightPicker } from "@/components/admin/store/CardHighlightPicker"
 import { ServiceFormFieldsEditor } from "@/components/admin/store/ServiceFormFieldsEditor"
 import { isSinglePriceProduct } from "@/lib/store-pricing"
@@ -403,6 +405,9 @@ const NO_BATCH = "__none__"
 const MAX_STOCK = 999_999
 const MAX_IMAGES = 8
 const MAX_VARIANT_IMAGES = 3
+// Grupo "Capa"/"Galeria" da variante inteiro aceita arquivo arrastado
+const VARIANT_DROP_AREA =
+  "-m-1 flex items-center gap-1.5 rounded-lg border border-dashed border-transparent p-1 transition-colors"
 const MAX_VARIANTS = 12
 const MAX_VARIANT_GROUPS = 6
 const VARIANT_COLOR_PRESETS: { label: string; color: string }[] = [
@@ -818,8 +823,8 @@ export function StoreProductForm({
     )
   }
 
-  async function handleVariantImageAdd(index: number, e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
+  async function handleVariantImageAdd(index: number, files: File[]) {
+    const file = files[0]
     if (!file) return
 
     setUploadingVariantImage(index)
@@ -833,7 +838,6 @@ export function StoreProductForm({
       toast.error("Erro ao enviar imagem", { description: message })
     } finally {
       setUploadingVariantImage(null)
-      e.target.value = ""
     }
   }
 
@@ -841,30 +845,29 @@ export function StoreProductForm({
     setVariants((prev) => prev.map((v, i) => (i === index ? { ...v, image_url: null } : v)))
   }
 
-  async function handleVariantGalleryImageAdd(index: number, e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    if ((variants[index]?.images.length ?? 0) >= MAX_VARIANT_IMAGES) {
+  async function handleVariantGalleryImageAdd(index: number, files: File[]) {
+    const room = MAX_VARIANT_IMAGES - (variants[index]?.images.length ?? 0)
+    if (files.length === 0) return
+    if (room <= 0 || files.length > room) {
       toast.error("Limite de imagens atingido", {
         description: `Cada variante pode ter no máximo ${MAX_VARIANT_IMAGES} imagens.`,
       })
-      e.target.value = ""
-      return
+      if (room <= 0) return
     }
 
     setUploadingVariantImage(index)
     setError(null)
     try {
-      const url = await uploadImage(await prepareProductImage(file))
-      setVariants((prev) => prev.map((v, i) => (i === index ? { ...v, images: [...v.images, url] } : v)))
+      for (const file of files.slice(0, room)) {
+        const url = await uploadImage(await prepareProductImage(file))
+        setVariants((prev) => prev.map((v, i) => (i === index ? { ...v, images: [...v.images, url] } : v)))
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao enviar imagem"
       setError(message)
       toast.error("Erro ao enviar imagem", { description: message })
     } finally {
       setUploadingVariantImage(null)
-      e.target.value = ""
     }
   }
 
@@ -1065,32 +1068,36 @@ export function StoreProductForm({
     return prepared
   }
 
-  async function handleImageAdd(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    if (images.length >= MAX_IMAGES) {
+  // Aceita vários arquivos (seleção múltipla ou arrastados do computador):
+  // envia um por vez, na ordem, até completar MAX_IMAGES.
+  async function handleImageAdd(files: File[]) {
+    const room = MAX_IMAGES - images.length
+    if (files.length === 0) return
+    if (room <= 0 || files.length > room) {
       toast.error("Limite de imagens atingido", {
         description: `Cada produto pode ter no máximo ${MAX_IMAGES} imagens.`,
       })
-      e.target.value = ""
-      return
+      if (room <= 0) return
     }
 
     setUploading(true)
     setError(null)
     try {
-      const url = await uploadImage(await prepareProductImage(file))
-      setImages((prev) => [...prev, url])
+      for (const file of files.slice(0, room)) {
+        const url = await uploadImage(await prepareProductImage(file))
+        setImages((prev) => [...prev, url])
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao enviar imagem"
       setError(message)
       toast.error("Erro ao enviar imagem", { description: message })
     } finally {
       setUploading(false)
-      e.target.value = ""
     }
   }
+
+  const imageDrop = useFileDrop(handleImageAdd, { disabled: uploading || images.length >= MAX_IMAGES })
+  usePreventFileDropNavigation()
 
   /**
    * Vídeo do anúncio: vai do navegador direto para o Storage por signed URL
@@ -1877,7 +1884,13 @@ export function StoreProductForm({
             <Label>Fotos Principais do Anúncio</Label>
             <span className="text-[10px] text-muted-foreground">{images.length}/{MAX_IMAGES}</span>
           </div>
-          <div className="flex flex-wrap gap-3">
+          <div
+            {...imageDrop.dropProps}
+            className={cn(
+              "-m-2 flex flex-wrap gap-3 rounded-xl border-2 border-dashed border-transparent p-2 transition-colors",
+              imageDrop.dragging && "border-primary bg-primary/5"
+            )}
+          >
             <DndContext
               sensors={imageSensors}
               collisionDetection={closestCenter}
@@ -1904,8 +1917,13 @@ export function StoreProductForm({
                 <input
                   type="file"
                   accept="image/*"
+                  multiple
                   className="hidden"
-                  onChange={handleImageAdd}
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files ?? [])
+                    e.target.value = ""
+                    void handleImageAdd(files)
+                  }}
                   disabled={uploading}
                 />
                 {uploading ? (
@@ -1914,14 +1932,15 @@ export function StoreProductForm({
                   <>
                     <Plus className="size-5" />
                     <span className="text-[9px]">Adicionar</span>
+                    <span className="text-[8px] text-muted-foreground/70">ou arraste</span>
                   </>
                 )}
               </label>
             )}
           </div>
           <p className="text-[10px] text-muted-foreground">
-            O fundo é removido automaticamente ao enviar. Arraste pelo ícone no canto para
-            reordenar. A primeira imagem é a principal. Até {MAX_IMAGES} imagens,{" "}
+            O fundo é removido automaticamente ao enviar. Arraste imagens do computador para
+            esta área para enviar várias de uma vez; arraste pelo ícone no canto para reordenar. A primeira imagem é a principal. Até {MAX_IMAGES} imagens,{" "}
             {formatUploadLimit(UPLOAD_LIMITS.image)} cada.
           </p>
           <label className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -2349,8 +2368,12 @@ export function StoreProductForm({
                   />
                 </div>
 
-                {/* Imagem de capa da variante */}
-                <div className="flex items-center gap-1.5">
+                {/* Imagem de capa da variante (soltar uma imagem aqui troca a capa) */}
+                <FileDropArea
+                  className={VARIANT_DROP_AREA}
+                  disabled={uploadingVariantImage !== null}
+                  onFiles={(files) => void handleVariantImageAdd(idx, files)}
+                >
                   <span className="text-[10px] text-muted-foreground">Capa</span>
                   {variant.image_url ? (
                     <div className="relative size-9 shrink-0 overflow-hidden rounded-md border border-border bg-muted">
@@ -2366,25 +2389,27 @@ export function StoreProductForm({
                       </button>
                     </div>
                   ) : (
-                    <label className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-md border border-dashed border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground">
+                    <FileDropLabel
+                      droppable={false}
+                      className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-md border border-dashed border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+                      disabled={uploadingVariantImage !== null}
+                      onFiles={(files) => void handleVariantImageAdd(idx, files)}
+                    >
                       {uploadingVariantImage === idx ? (
                         <Loader2 className="size-3.5 animate-spin" />
                       ) : (
                         <Upload className="size-3.5" />
                       )}
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        disabled={uploadingVariantImage !== null}
-                        onChange={(e) => handleVariantImageAdd(idx, e)}
-                      />
-                    </label>
+                    </FileDropLabel>
                   )}
-                </div>
+                </FileDropArea>
 
                 {/* Galeria exclusiva da variante (até MAX_VARIANT_IMAGES) */}
-                <div className="flex items-center gap-1.5">
+                <FileDropArea
+                  className={VARIANT_DROP_AREA}
+                  disabled={uploadingVariantImage !== null}
+                  onFiles={(files) => void handleVariantGalleryImageAdd(idx, files)}
+                >
                   <span className="text-[10px] text-muted-foreground">
                     Galeria {variant.images.length}/{MAX_VARIANT_IMAGES}
                   </span>
@@ -2406,22 +2431,21 @@ export function StoreProductForm({
                     </div>
                   ))}
                   {variant.images.length < MAX_VARIANT_IMAGES && (
-                    <label className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-md border border-dashed border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground">
+                    <FileDropLabel
+                      multiple
+                      droppable={false}
+                      className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-md border border-dashed border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+                      disabled={uploadingVariantImage !== null}
+                      onFiles={(files) => void handleVariantGalleryImageAdd(idx, files)}
+                    >
                       {uploadingVariantImage === idx ? (
                         <Loader2 className="size-3.5 animate-spin" />
                       ) : (
                         <Upload className="size-3.5" />
                       )}
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        disabled={uploadingVariantImage !== null}
-                        onChange={(e) => handleVariantGalleryImageAdd(idx, e)}
-                      />
-                    </label>
+                    </FileDropLabel>
                   )}
-                </div>
+                </FileDropArea>
               </div>
             </div>
           ))}

@@ -20,9 +20,16 @@
  * travado no celular, enquanto o modo responsivo do Chrome rolava normal.
  * No toque o trilho recebe o gesto, e o cabeçalho da seção fica acima dele
  * com `STORE_CARD_RAIL_HEADER_CLASS`, para "Ver tudo" continuar tocável.
+ *
+ * **Até a borda do `<main>`.** A margem negativa e o padding laterais leem
+ * `--rail-bleed-l`/`--rail-bleed-r`, que `useCardRailBleed` mede: o trilho
+ * vaza a coluna `max-w-7xl` até a sidebar e até a borda da tela, e o padding
+ * igual mantém o primeiro e o último card alinhados à coluna. Sem a medida
+ * (SSR), vale `--rail-pad`, o respiro da página — quem usa o trilho numa
+ * página de padding diferente troca só o `--rail-pad`. Todo trilho chama o hook.
  */
 export const STORE_CARD_RAIL_CLASS =
-  "relative -mx-4 -mt-7 -mb-10 flex gap-3 overflow-x-auto px-4 pt-8 pb-12 scrollbar-hide pointer-fine:pointer-events-none pointer-fine:*:pointer-events-auto sm:gap-3.5 lg:-mx-8 lg:px-8"
+  "relative -mt-7 -mb-10 flex gap-3 overflow-x-auto pt-8 pb-12 scrollbar-hide pointer-fine:pointer-events-none pointer-fine:*:pointer-events-auto sm:gap-3.5 [--rail-pad:1rem] lg:[--rail-pad:2rem] -ml-[var(--rail-bleed-l,var(--rail-pad))] -mr-[var(--rail-bleed-r,var(--rail-pad))] pl-[var(--rail-bleed-l,var(--rail-pad))] pr-[var(--rail-bleed-r,var(--rail-pad))]"
 
 /** Cabeçalho da seção acima do respiro do trilho (ver `STORE_CARD_RAIL_CLASS`). */
 export const STORE_CARD_RAIL_HEADER_CLASS = "relative z-10"

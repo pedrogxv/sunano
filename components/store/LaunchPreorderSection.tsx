@@ -4,6 +4,7 @@ import { useRef } from "react"
 import { ChevronLeft, ChevronRight, Megaphone, Rocket } from "lucide-react"
 
 import { LaunchCard } from "@/components/store/LaunchCard"
+import { useCardRailBleed } from "@/lib/hooks/use-card-rail-bleed"
 import { STORE_CARD_RAIL_CLASS, STORE_CARD_RAIL_HEADER_CLASS } from "@/components/store/card-rail"
 import { cn } from "@/lib/utils"
 import { PreorderCard } from "@/components/store/PreorderCard"
@@ -23,6 +24,7 @@ function Row({
   count: number
 }) {
   const scrollRef = useRef<HTMLDivElement>(null)
+  useCardRailBleed(scrollRef)
   return (
     <div className="flex flex-col gap-2.5">
       <div className={cn("flex items-center justify-between gap-3", STORE_CARD_RAIL_HEADER_CLASS)}>

@@ -5,6 +5,7 @@ import { Ban, ImageIcon, Layers, Loader2, Upload, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { FileDropLabel } from "@/components/admin/FileDropLabel"
 import { cn } from "@/lib/utils"
 
 /** O que o admin digitou numa combinação. Campo vazio = herda da cor/opção/produto. */
@@ -256,21 +257,14 @@ export function ProductSkuMatrix({ variants, groups, productImages, drafts, onCh
                               <img src={url} alt="" className="h-full w-full object-contain p-0.5" />
                             </button>
                           ))}
-                          <label className="flex h-12 cursor-pointer items-center gap-1.5 rounded-md border border-dashed border-border px-3 text-[11px] text-muted-foreground hover:border-foreground/30">
+                          <FileDropLabel
+                            className="flex h-12 cursor-pointer items-center gap-1.5 rounded-md border border-dashed border-border px-3 text-[11px] text-muted-foreground hover:border-foreground/30"
+                            disabled={uploadingRow !== null}
+                            onFiles={(files) => void handleUpload(combo.key, files[0])}
+                          >
                             {uploadingRow === combo.key ? <Loader2 className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />}
-                            Enviar nova
-                            <input
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              disabled={uploadingRow !== null}
-                              onChange={(e) => {
-                                const file = e.target.files?.[0]
-                                e.target.value = ""
-                                if (file) void handleUpload(combo.key, file)
-                              }}
-                            />
-                          </label>
+                            Enviar ou arraste
+                          </FileDropLabel>
                           {draft.image_url && (
                             <Button
                               type="button"

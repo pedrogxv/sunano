@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation"
-import { getStoreProductDetail, getStoreFilterOptions } from "@/lib/server/repositories/store-repository"
+import { getStoreProductDetail, getStoreFilterOptions, listProductRecommendations } from "@/lib/server/repositories/store-repository"
 import { getReviewAggregate } from "@/lib/server/repositories/store-reviews-repository"
 import { JsonLd } from "@/components/seo/JsonLd"
 import { ProductDetailContent } from "@/components/store/ProductDetailContent"
@@ -23,11 +23,13 @@ export async function StoreProductPageBody({ slug }: { slug: string }) {
 
   // O card "Em destaque" do menu vem de `filterOptions.menuHighlights`: a
   // página não busca mais 24 produtos só para alimentá-lo.
-  const [filterOptions, reviewAggregate] = await Promise.all([
+  const [filterOptions, reviewAggregate, recommendations] = await Promise.all([
     getStoreFilterOptions("store"),
     // Já existia no repositório e alimentava só a UI — é o que habilita as
     // estrelas no resultado de busca.
     getReviewAggregate(detail.product.id),
+    // Complemento de Pagamento é pagar outro pedido: nada a recomendar.
+    detail.product.is_payment_complement ? Promise.resolve([]) : listProductRecommendations(detail.product),
   ])
 
   const { product } = detail
@@ -172,6 +174,7 @@ export async function StoreProductPageBody({ slug }: { slug: string }) {
       <ProductDetailContent
         {...detail}
         filterOptions={filterOptions}
+        recommendations={recommendations}
         rating={reviewAggregate.count > 0 ? { average: reviewAggregate.avgRating, count: reviewAggregate.count } : null}
       />
     </>

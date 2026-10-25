@@ -11,6 +11,9 @@ import { cn } from "@/lib/utils"
 import { resolveStoreProductVideo, type StoreProductVideo } from "@/lib/store-product-video"
 import { storageImgProps, storageWidthSrcSet } from "@/lib/storage-thumb"
 
+/** Casas de miniatura: a última vira "+N" quando há mais itens que isso. */
+const THUMB_SLOTS = 4
+
 type GalleryItem = { kind: "image"; src: string } | { kind: "video"; video: StoreProductVideo }
 
 interface ProductGalleryProps {
@@ -52,6 +55,14 @@ export function ProductGallery({ images, videoUrl, productName, category, soldOu
   function go(delta: number) {
     setActive((index) => (index + delta + items.length) % items.length)
   }
+
+  // Miniaturas: três fixas e a quarta casa. Com 4 itens ela é o 4º; com mais,
+  // vira "+N" e mostra o item aberto quando ele é um dos escondidos, para a
+  // borda verde nunca sumir da fileira. Clicar no "+N" anda pelos escondidos.
+  const overflow = items.length > THUMB_SLOTS ? items.length - (THUMB_SLOTS - 1) : 0
+  const thumbs = overflow
+    ? [...items.slice(0, THUMB_SLOTS - 1).map((item, index) => ({ item, index })), { item: items[Math.max(active, THUMB_SLOTS - 1)], index: Math.max(active, THUMB_SLOTS - 1) }]
+    : items.map((item, index) => ({ item, index }))
 
   return (
     <div className="flex flex-col gap-3 lg:flex-row-reverse lg:items-start">
@@ -157,53 +168,75 @@ export function ProductGallery({ images, videoUrl, productName, category, soldOu
       </div>
 
       {hasMany && (
-        <div className="flex gap-2.5 overflow-x-auto pb-1 scrollbar-hide lg:max-h-[calc(100vh-var(--sticky-header-h)-3rem)] lg:w-[76px] lg:shrink-0 lg:flex-col lg:overflow-y-auto lg:overflow-x-visible lg:pb-0">
-          {items.map((item, index) => (
-            <button
-              key={item.kind === "image" ? item.src : "video"}
-              type="button"
-              onClick={() => setActive(index)}
-              aria-label={item.kind === "video" ? "Ver vídeo do produto" : `Ver foto ${index + 1}`}
-              aria-current={index === active}
-              className={cn(
-                "relative size-[68px] shrink-0 overflow-hidden rounded-2xl border-[1.5px] bg-transparent transition-colors lg:size-[76px]",
-                index === active ? "border-emerald-500" : "border-border/60 hover:border-foreground/30"
-              )}
-            >
-              {item.kind === "image" ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img {...storageImgProps(item.src, 76)} alt="" className={cn("h-full w-full object-contain p-1.5", soldOut && "opacity-50 grayscale")} loading="lazy" decoding="async" />
-              ) : (
-                <>
-                  {item.video.kind === "youtube" ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={`https://i.ytimg.com/vi/${item.video.videoId}/mqdefault.jpg`}
-                      alt=""
-                      className="h-full w-full object-cover"
-                      loading="lazy"
-                      decoding="async"
-                    />
-                  ) : (
-                    // Sem capa gerada: a miniatura é o próprio quadro do vídeo.
-                    // `preload="metadata"` baixa só o cabeçalho, não o arquivo.
-                    <video
-                      src={`${item.video.src}#t=0.1`}
-                      muted
-                      playsInline
-                      preload="metadata"
-                      aria-hidden
-                      className="h-full w-full bg-black object-cover"
-                    />
-                  )}
-                  <span className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 bg-black/45 text-white">
-                    <Play className="size-5 fill-current" />
-                    <span className="text-[9px] font-bold uppercase tracking-wide">Vídeo</span>
+        <div className="flex gap-2.5 lg:w-[76px] lg:shrink-0 lg:flex-col">
+          {thumbs.map(({ item, index }, slot) => {
+            const more = overflow > 0 && slot === THUMB_SLOTS - 1
+            return (
+              <button
+                key={more ? "mais" : item.kind === "image" ? item.src : "video"}
+                type="button"
+                onClick={() => setActive(more ? (active < THUMB_SLOTS - 1 ? THUMB_SLOTS - 1 : Math.max(THUMB_SLOTS - 1, (active + 1) % items.length)) : index)}
+                aria-label={
+                  more
+                    ? `Ver mais ${overflow} ${overflow === 1 ? "item" : "itens"} (${index + 1} de ${items.length})`
+                    : item.kind === "video"
+                      ? "Ver vídeo do produto"
+                      : `Ver foto ${index + 1}`
+                }
+                aria-current={index === active}
+                className={cn(
+                  "relative size-[68px] shrink-0 overflow-hidden rounded-2xl border-[1.5px] bg-transparent transition-colors lg:size-[76px]",
+                  index === active ? "border-emerald-500" : "border-border/60 hover:border-foreground/30"
+                )}
+              >
+                {item.kind === "image" ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img {...storageImgProps(item.src, 76)} alt="" className={cn("h-full w-full object-contain p-1.5", soldOut && "opacity-50 grayscale")} loading="lazy" decoding="async" />
+                ) : (
+                  <>
+                    {item.video.kind === "youtube" ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={`https://i.ytimg.com/vi/${item.video.videoId}/mqdefault.jpg`}
+                        alt=""
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                    ) : (
+                      // Sem capa gerada: a miniatura é o próprio quadro do vídeo.
+                      // `preload="metadata"` baixa só o cabeçalho, não o arquivo.
+                      <video
+                        src={`${item.video.src}#t=0.1`}
+                        muted
+                        playsInline
+                        preload="metadata"
+                        aria-hidden
+                        className="h-full w-full bg-black object-cover"
+                      />
+                    )}
+                    {!more && (
+                      <span className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 bg-black/45 text-white">
+                        <Play className="size-5 fill-current" />
+                        <span className="text-[9px] font-bold uppercase tracking-wide">Vídeo</span>
+                      </span>
+                    )}
+                  </>
+                )}
+                {/* Aberto num dos escondidos: o "+N" clareia e a foto aparece. */}
+                {more && (
+                  <span
+                    className={cn(
+                      "absolute inset-0 flex items-center justify-center text-[17px] font-bold tabular-nums text-white transition-colors",
+                      index === active ? "bg-black/35" : "bg-black/65",
+                    )}
+                  >
+                    +{overflow}
                   </span>
-                </>
-              )}
-            </button>
-          ))}
+                )}
+              </button>
+            )
+          })}
         </div>
       )}
     </div>

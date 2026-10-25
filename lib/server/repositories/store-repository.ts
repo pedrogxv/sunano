@@ -34,6 +34,7 @@ import {
 import { STORE_SHOWCASE_SLOTS } from "@/lib/store-showcase"
 import { isLaunchActive, toSaleWindow, type SaleWindow } from "@/lib/store-sale-window"
 import { findSku, resolveSelection, skuKey, type StoreSku } from "@/lib/store-sku"
+import { pickRecommendations } from "@/lib/store-recommendations"
 
 /**
  * Repositório da Loja — única porta de acesso à tabela `store_products`
@@ -1433,6 +1434,112 @@ export async function listProductsByPeripheral(peripheralId: string): Promise<Li
         a.position - b.position
     )
     .map((row) => mapLinkedProductRow(row.product))
+}
+
+/** Cards do trilho "Você também pode gostar" da página de produto. */
+const RECOMMENDATIONS_SIZE = 12
+
+/** Pedidos recentes lidos para "comprados juntos": a Loja é pequena, isso cobre meses. */
+const BOUGHT_TOGETHER_ORDER_SAMPLE = 300
+
+/**
+ * Quantos pedidos pagos levaram `productId` junto de cada outro produto.
+ * Mesmos status e mesmo corte de sandbox de `get_top_selling_products`.
+ * Containment do jsonb (`items @> [{"id": ...}]`): o banco filtra, só os
+ * pedidos com o produto voltam.
+ */
+async function getBoughtTogetherCounts(productId: string): Promise<Map<string, number>> {
+  const counts = new Map<string, number>()
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("store_orders")
+    .select("items")
+    .eq("is_sandbox", false)
+    .in("status", ["paid", "awaiting_shipping_info", "shipped", "delivered"])
+    .contains("items", JSON.stringify([{ id: productId }]))
+    .order("created_at", { ascending: false })
+    .limit(BOUGHT_TOGETHER_ORDER_SAMPLE)
+  if (error) {
+    console.error("[store-repository] getBoughtTogetherCounts:", error)
+    return counts
+  }
+  for (const row of (data ?? []) as { items: unknown }[]) {
+    if (!Array.isArray(row.items)) continue
+    // Um pedido conta uma vez por produto, mesmo com duas cores do mesmo item.
+    const ids = new Set(
+      row.items
+        .map((item) => (item && typeof item === "object" ? (item as { id?: unknown }).id : null))
+        .filter((id): id is string => typeof id === "string" && id !== productId)
+    )
+    for (const id of ids) counts.set(id, (counts.get(id) ?? 0) + 1)
+  }
+  return counts
+}
+
+/**
+ * Recomendações da página de produto. Os sinais (comprados juntos, categoria,
+ * atributos do catálogo, preço, vitrine) saem do banco aqui e a decisão é de
+ * `pickRecommendations` (lib/store-recommendations.ts). Esgotado não entra:
+ * recomendar o que não dá para comprar é um clique perdido.
+ *
+ * Roda dentro do ISR da página (revalidate 120), não por visita.
+ */
+export async function listProductRecommendations(
+  product: Pick<StoreProductDetail, "id" | "name" | "category" | "brand" | "price_cents" | "promo_price_cents">,
+  limit = RECOMMENDATIONS_SIZE
+): Promise<StoreProductCard[]> {
+  const db = createSupabaseAdminClient()
+  const [{ data, error }, boughtTogether, catalog, bestSellers] = await Promise.all([
+    db
+      .from("store_products")
+      .select(CARD_COLUMNS)
+      .eq("type", "store")
+      .eq("is_active", true)
+      .eq("is_payment_complement", false)
+      .neq("id", product.id),
+    getBoughtTogetherCounts(product.id),
+    getStoreCatalogIndex(),
+    getBestSellerBadgeIds(),
+  ])
+  if (error) {
+    console.error("[store-repository] listProductRecommendations:", error)
+    return []
+  }
+
+  const rows = ((data ?? []) as unknown as RawCardRow[]).map(mapCardRow).filter((item) => !isCardSoldOut(item))
+  if (rows.length === 0) return []
+  const ratings = await getRatingsByProduct(rows.map((item) => item.id))
+
+  const pickedIds = pickRecommendations(
+    {
+      id: product.id,
+      name: product.name,
+      category: product.category,
+      brand: product.brand,
+      priceCents: product.promo_price_cents ?? product.price_cents,
+      attributes: catalog[product.id]?.attributes ?? EMPTY_ATTRIBUTES,
+    },
+    rows.map((item) => {
+      const price = computeCardDisplayPrice(item)
+      return {
+        id: item.id,
+        name: item.name,
+        category: item.category,
+        brand: item.brand,
+        priceCents: price.effectiveCents,
+        attributes: catalog[item.id]?.attributes ?? EMPTY_ATTRIBUTES,
+        boughtTogether: boughtTogether.get(item.id) ?? 0,
+        isBestSeller: bestSellers.includes(item.id),
+        rating: ratings.get(item.id) ?? null,
+        onPromo: (price.discountPercent ?? 0) > 0,
+        isFeatured: item.is_featured,
+      }
+    }),
+    limit
+  )
+
+  const byId = new Map(rows.map((item) => [item.id, item]))
+  return withCardDisplay(pickedIds.map((id) => byId.get(id)!))
 }
 
 export type StoreProductDetail = {

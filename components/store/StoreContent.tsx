@@ -25,6 +25,7 @@ import { MarketInfoDialog } from "@/components/store/MarketInfoDialog"
 import { StoreAuthorityStrip } from "@/components/store/StoreAuthorityStrip"
 import { StoreHero } from "@/components/store/StoreHero"
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value"
+import { useCardRailBleed } from "@/lib/hooks/use-card-rail-bleed"
 import { getCategoryIcon, getCategoryLabel } from "@/lib/store-category-icons"
 import {
   catalogConfigFor,
@@ -178,6 +179,7 @@ function ProductCarouselSection({
   showcase?: boolean
 }) {
   const scrollRef = useRef<HTMLDivElement>(null)
+  useCardRailBleed(scrollRef)
   const showCarouselControls = items.length > (showcase ? 3 : 5)
 
   if (items.length === 0) return null
@@ -401,6 +403,7 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
   const appendNextRef = useRef(false)
   const isFirstRun = useRef(true)
   const featuredScrollRef = useRef<HTMLDivElement>(null)
+  useCardRailBleed(featuredScrollRef)
 
   // Volta pra página 1 sempre que um filtro (não a página em si) muda.
   useEffect(() => {

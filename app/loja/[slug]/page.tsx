@@ -9,6 +9,7 @@ import {
 } from "@/lib/server/auth/store-maintenance-gate"
 import { getStoreLaunchAt } from "@/lib/store-maintenance"
 import { buildDescription, buildMetadata } from "@/lib/seo"
+import { getCategoryLabel } from "@/lib/store-category-icons"
 
 export const revalidate = 120
 
@@ -52,11 +53,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   const { product } = detail
   const priceCents = product.promo_price_cents ?? product.price_cents
-  const price = (priceCents / 100).toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  })
+  const formatPrice = (cents: number) =>
+    (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+  const price = formatPrice(priceCents)
   const condition = CONDITION_LABEL[product.condition] ?? ""
+  // Rótulo do card: "Everglide · Teclado", o mesmo da linha acima do título
+  // na página.
+  const cardEyebrow = [product.brand, getCategoryLabel(product.category)].filter(Boolean).join(" · ")
 
   // Complemento de Pagamento não tem preço: o valor é o do pedido do cliente.
   if (product.is_payment_complement) {
@@ -67,8 +70,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
         context: "Pague o valor pendente de um pedido da Loja Sunano pelo número do pedido.",
       }),
       path: `/loja/${slug}`,
-      eyebrow: "Loja",
-      subtitle: "Pagamento de pedido",
+      eyebrow: cardEyebrow || "Loja",
+      subtitle: "Pague o valor pendente do seu pedido",
       image: product.images[0],
       imageVariant: "product",
     })
@@ -85,8 +88,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       extraContext: "Testado antes de anunciar, com PIX na hora e envio para todo o Brasil.",
     }),
     path: `/loja/${slug}`,
-    eyebrow: "Loja",
-    subtitle: `${condition} · ${price}`,
+    eyebrow: cardEyebrow || "Loja",
+    price,
+    oldPrice:
+      product.promo_price_cents != null && product.promo_price_cents < product.price_cents
+        ? formatPrice(product.price_cents)
+        : undefined,
+    badge: condition || undefined,
     // `product` desenha a foto com `contain`: recortar foto de produto corta o
     // próprio produto. Antes ela ia crua em 800×800 (1:1) e saía distorcida.
     image: product.images[0],

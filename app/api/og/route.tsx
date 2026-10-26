@@ -95,6 +95,51 @@ async function loadBrandLogo(): Promise<string | undefined> {
   return brandLogoPromise
 }
 
+type OgFont = { name: string; data: ArrayBuffer; weight: 500 | 700; style: "normal" }
+
+/** Memoiza a leitura das fontes entre invocações da mesma instância. */
+let fontsPromise: Promise<OgFont[]> | undefined
+
+/**
+ * As fontes do site (Space Grotesk nos títulos, Manrope no texto) em WOFF
+ * estático, subconjunto latino: o Satori não lê WOFF2 nem fonte variável, que
+ * é o que o `next/font` serve. Sem elas o card sai na fonte embutida do
+ * `next/og`, que só tem o peso regular: o `fontWeight: 700` do título era
+ * ignorado e o card não parecia do Sunano.
+ *
+ * Caminhos literais pelo mesmo motivo do logo (file tracing). Falhou a
+ * leitura, o card sai na fonte padrão, nunca com erro.
+ */
+async function loadFonts(): Promise<OgFont[]> {
+  fontsPromise ??= Promise.all([
+    readFile(join(process.cwd(), "public/fonts/og/space-grotesk-latin-700-normal.woff")),
+    readFile(join(process.cwd(), "public/fonts/og/manrope-latin-500-normal.woff")),
+    readFile(join(process.cwd(), "public/fonts/og/manrope-latin-700-normal.woff")),
+  ])
+    .then(([display, text, textBold]): OgFont[] => [
+      { name: "Display", data: toArrayBuffer(display), weight: 700, style: "normal" },
+      { name: "Text", data: toArrayBuffer(text), weight: 500, style: "normal" },
+      { name: "Text", data: toArrayBuffer(textBold), weight: 700, style: "normal" },
+    ])
+    .catch((error) => {
+      console.error("[api/og] fontes indisponíveis, card sai na fonte padrão:", error)
+      return []
+    })
+
+  return fontsPromise
+}
+
+function toArrayBuffer(buffer: Buffer): ArrayBuffer {
+  return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer
+}
+
+/** Pilhas de fonte do card; o `sans-serif` cobre a falha de leitura. */
+const DISPLAY_FONT = "Display, Text, sans-serif"
+const TEXT_FONT = "Text, sans-serif"
+
+/** Verde da Loja (`emerald-400` do Tailwind). */
+const STORE_ACCENT = "#34D399"
+
 /** Acima disso a imagem não vale o custo de decodificar dentro do card. */
 const MAX_SOURCE_BYTES = 8 * 1024 * 1024
 
@@ -228,6 +273,18 @@ function titleFontSize(length: number): number {
 }
 
 /**
+ * Mesmo degrau para o card de produto, cuja coluna de texto tem metade da
+ * largura: nome de periférico costuma ser curto, mas "Everglide SU75 Ultra
+ * Pikachu Edition" precisa caber em três linhas.
+ */
+function productTitleFontSize(length: number): number {
+  if (length <= 18) return 68
+  if (length <= 32) return 58
+  if (length <= 52) return 48
+  return 40
+}
+
+/**
  * Card mínimo, só com a marca.
  *
  * Rede de segurança para quando o card completo falha por qualquer motivo:
@@ -289,6 +346,26 @@ async function renderCard(request: NextRequest) {
     loadBrandLogo(),
   ])
   const variant = searchParams.get("variant") ?? "cover"
+  const fonts = await loadFonts()
+
+  // Produto com foto ganha o card de vitrine: a foto é o assunto, então ela
+  // ocupa metade do card em vez de um quadro de 340px ao lado do texto. Sem
+  // foto não há vitrine, e o card tipográfico abaixo é o preview certo.
+  if (variant === "product" && image) {
+    const response = productCard({
+      title,
+      eyebrow,
+      subtitle,
+      image,
+      brandLogo,
+      fonts,
+      price: searchParams.get("price")?.slice(0, 24),
+      oldPrice: searchParams.get("oldPrice")?.slice(0, 24),
+      badge: searchParams.get("badge")?.slice(0, 24),
+    })
+    response.headers.set("Cache-Control", CACHE_CONTROL)
+    return response
+  }
 
   // Avatar e produto ficam num quadro quadrado ao lado do texto; capa ocupa a
   // faixa inteira à direita. Em ambos os casos a proporção do card é fixa.
@@ -308,7 +385,7 @@ async function renderCard(request: NextRequest) {
           backgroundImage:
             "radial-gradient(circle at 88% 12%, rgba(255,255,255,0.14) 0%, rgba(0,0,0,0) 46%)",
           padding: 64,
-          fontFamily: "sans-serif",
+          fontFamily: TEXT_FONT,
           color: "#FFFFFF",
         }}
       >
@@ -354,6 +431,7 @@ async function renderCard(request: NextRequest) {
               style={{
                 display: "flex",
                 fontSize: titleFontSize(title.length),
+                fontFamily: DISPLAY_FONT,
                 fontWeight: 700,
                 lineHeight: 1.12,
                 letterSpacing: -1.5,
@@ -418,9 +496,174 @@ async function renderCard(request: NextRequest) {
     {
       width: OG_IMAGE_WIDTH,
       height: OG_IMAGE_HEIGHT,
+      fonts,
     }
   )
 
   response.headers.set("Cache-Control", CACHE_CONTROL)
   return response
+}
+
+/**
+ * Card de vitrine (Loja e ficha de periférico): texto à esquerda, foto grande
+ * num palco iluminado à direita.
+ *
+ * No WhatsApp e no Discord o card é mostrado pequeno, então o que precisa ser
+ * lido de longe é o produto e o preço: a foto ganha metade do card e o preço
+ * sai grande, em verde, em vez de uma linha cinza abaixo do título.
+ */
+function productCard({
+  title,
+  eyebrow,
+  subtitle,
+  image,
+  brandLogo,
+  fonts,
+  price,
+  oldPrice,
+  badge,
+}: {
+  title: string
+  eyebrow?: string
+  subtitle?: string
+  image: string
+  brandLogo?: string
+  fonts: OgFont[]
+  price?: string
+  oldPrice?: string
+  badge?: string
+}) {
+  return new ImageResponse(
+    (
+      <div
+        style={{
+          width: "100%",
+          height: "100%",
+          display: "flex",
+          background: "#050505",
+          backgroundImage:
+            "radial-gradient(circle at 0% 100%, rgba(16,185,129,0.22) 0%, rgba(0,0,0,0) 55%)",
+          fontFamily: TEXT_FONT,
+          color: "#FFFFFF",
+        }}
+      >
+        {/* Coluna de texto */}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+            width: 620,
+            padding: "56px 40px 56px 64px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            {brandLogo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={brandLogo} alt="" width={52} height={52} style={{ objectFit: "contain" }} />
+            ) : null}
+            <div style={{ display: "flex", fontSize: 28, fontWeight: 700, letterSpacing: -0.5 }}>
+              {SITE_NAME}
+            </div>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            {eyebrow || badge ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 18 }}>
+                {badge ? (
+                  <div
+                    style={{
+                      display: "flex",
+                      padding: "5px 14px",
+                      borderRadius: 999,
+                      border: "1px solid rgba(52,211,153,0.4)",
+                      background: "rgba(16,185,129,0.12)",
+                      fontSize: 20,
+                      fontWeight: 700,
+                      color: STORE_ACCENT,
+                    }}
+                  >
+                    {badge}
+                  </div>
+                ) : null}
+                {eyebrow ? (
+                  <div
+                    style={{
+                      display: "flex",
+                      fontSize: 22,
+                      fontWeight: 700,
+                      letterSpacing: 3,
+                      textTransform: "uppercase",
+                      color: STORE_ACCENT,
+                    }}
+                  >
+                    {eyebrow}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            <div
+              style={{
+                display: "flex",
+                fontFamily: DISPLAY_FONT,
+                fontSize: productTitleFontSize(title.length),
+                fontWeight: 700,
+                lineHeight: 1.06,
+                letterSpacing: -1.5,
+              }}
+            >
+              {title}
+            </div>
+
+            {price ? (
+              <div style={{ display: "flex", alignItems: "baseline", gap: 18, marginTop: 30 }}>
+                <div style={{ display: "flex", fontSize: 50, fontWeight: 700, letterSpacing: -1, color: STORE_ACCENT }}>
+                  {price}
+                </div>
+                {oldPrice ? (
+                  <div
+                    style={{
+                      display: "flex",
+                      fontSize: 28,
+                      color: "#737373",
+                      textDecoration: "line-through",
+                    }}
+                  >
+                    {oldPrice}
+                  </div>
+                ) : null}
+              </div>
+            ) : subtitle ? (
+              <div style={{ display: "flex", marginTop: 24, fontSize: 28, lineHeight: 1.35, color: "#A3A3A3" }}>
+                {subtitle}
+              </div>
+            ) : null}
+          </div>
+
+          <div style={{ display: "flex", fontSize: 22, color: "#737373" }}>sunano.com.br</div>
+        </div>
+
+        {/* Palco da foto: o brilho no centro destaca produto escuro sobre fundo
+            escuro, que é a maioria das fotos da Loja. */}
+        <div
+          style={{
+            display: "flex",
+            flex: 1,
+            margin: "28px 28px 28px 0",
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 32,
+            border: "1px solid rgba(255,255,255,0.10)",
+            background: "#0D0D0D",
+            backgroundImage:
+              "radial-gradient(circle at 50% 50%, rgba(255,255,255,0.13) 0%, rgba(255,255,255,0.03) 45%, rgba(0,0,0,0) 70%)",
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={image} alt="" width={500} height={500} style={{ objectFit: "contain" }} />
+        </div>
+      </div>
+    ),
+    { width: OG_IMAGE_WIDTH, height: OG_IMAGE_HEIGHT, fonts }
+  )
 }

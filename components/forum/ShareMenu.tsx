@@ -53,6 +53,7 @@ export function ShareMenu({
   url,
   path,
   showEmbed = true,
+  align = "start",
   className,
 }: {
   slug?: string
@@ -60,6 +61,8 @@ export function ShareMenu({
   url?: string
   path?: string
   showEmbed?: boolean
+  /** Lado do menu em relação ao botão; "end" quando o gatilho fica na borda direita. */
+  align?: "start" | "end"
   /** Ajuste do gatilho, ex. a altura da barra de ações do post. */
   className?: string
 }) {
@@ -115,7 +118,7 @@ export function ShareMenu({
           <span className="hidden sm:inline">Compartilhar</span>
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-56 border-border bg-popover text-foreground shadow-xl">
+      <DropdownMenuContent align={align} className="w-56 border-border bg-popover text-foreground shadow-xl">
         <DropdownMenuItem onSelect={handleCopyLink} className="gap-2.5">
           <Link2 className="size-4" />
           Copiar link

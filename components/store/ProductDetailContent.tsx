@@ -34,6 +34,7 @@ import { FormattedText } from "@/components/ui/formatted-text"
 import { StoreCategoryNav } from "@/components/store/StoreCategoryNav"
 import { ProductBreadcrumb } from "@/components/store/ProductBreadcrumb"
 import { AffiliateShareButton } from "@/components/affiliates/AffiliateShareButton"
+import { ShareMenu } from "@/components/forum/ShareMenu"
 import { ProductStickyBuyBar } from "@/components/store/ProductStickyBuyBar"
 import { ProductRecommendations } from "@/components/store/ProductRecommendations"
 import { PRODUCT_SECTION_SCROLL_MARGIN, ProductSectionNav, type ProductSectionLink } from "@/components/store/ProductSectionNav"
@@ -258,11 +259,12 @@ export function ProductDetailContent({ filterOptions, rating, recommendations, .
               )}
 
               <div>
-                {(product.brand || product.category) && (
-                  <p className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+                <div className="mb-1.5 flex items-center justify-between gap-3">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
                     {[product.brand, getCategoryLabel(product.category)].filter(Boolean).join(" · ")}
                   </p>
-                )}
+                  <ShareMenu title={product.name} path={`/loja/${product.slug}`} showEmbed={false} align="end" />
+                </div>
                 <h1 className="font-display text-[30px] font-bold leading-[1.08] tracking-tight text-foreground sm:text-[36px]">
                   {product.name}
                 </h1>

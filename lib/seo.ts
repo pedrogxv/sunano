@@ -167,6 +167,12 @@ export interface OgImageParams {
   image?: string
   /** Formato do recorte da imagem de conteúdo. */
   variant?: "cover" | "product" | "avatar"
+  /** Card de produto: preço em destaque ("R$ 1.100,00"). */
+  price?: string
+  /** Card de produto: preço riscado ao lado, quando há promoção. */
+  oldPrice?: string
+  /** Card de produto: selo curto ao lado do preço ("Novo", "Usado"). */
+  badge?: string
 }
 
 /**
@@ -182,6 +188,9 @@ export function ogImageUrl(params: OgImageParams): string {
   if (params.subtitle) search.set("subtitle", truncate(toPlainText(params.subtitle), 120))
   if (params.image) search.set("image", params.image)
   if (params.variant) search.set("variant", params.variant)
+  if (params.price) search.set("price", truncate(params.price, 24))
+  if (params.oldPrice) search.set("oldPrice", truncate(params.oldPrice, 24))
+  if (params.badge) search.set("badge", truncate(toPlainText(params.badge), 24))
 
   return `${SITE_URL}/api/og?${search.toString()}`
 }
@@ -215,6 +224,10 @@ interface BuildMetadataInput {
   /** Rótulo/subtítulo desenhados no card. */
   eyebrow?: string
   subtitle?: string
+  /** Preço, preço riscado e selo do card de produto (`imageVariant: "product"`). */
+  price?: string
+  oldPrice?: string
+  badge?: string
   publishedTime?: string
   modifiedTime?: string
   authors?: string[]
@@ -253,6 +266,9 @@ export function buildMetadata(input: BuildMetadataInput): Metadata {
     subtitle: input.subtitle,
     image: input.image ?? undefined,
     variant: input.imageVariant,
+    price: input.price,
+    oldPrice: input.oldPrice,
+    badge: input.badge,
   })
 
   const images = [

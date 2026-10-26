@@ -11,6 +11,7 @@ import {
   parseOrderKind,
   type OrderStatus,
 } from "@/lib/server/repositories/orders-repository"
+import { getOrderChatsForAdmin } from "@/lib/server/repositories/support-repository"
 
 const VALID_STATUSES: OrderStatus[] = [
   "pending",
@@ -58,5 +59,22 @@ export async function GET(request: NextRequest) {
     listOrdersForAdmin({ status, statuses, productId, userQuery, userId, dateFrom, dateTo, missingShipping, environment, paymentSource, kind, page, pageSize }),
     countOrdersByStatus(environment, kind, paymentSource),
   ])
-  return NextResponse.json({ ok: true, orders, total, page, pageSize, counts, environment, paymentSource, kind })
+  // Conversa de cada pedido (botão "Chat" da linha). Só para quem pode abrir
+  // o chamado: o link leva a /admin/suporte, que exige `support_read`.
+  const chats = hasAdminPermission(auth.profile, "support_read")
+    ? await getOrderChatsForAdmin(orders.map((order) => order.id))
+    : new Map()
+  return NextResponse.json({
+    ok: true,
+    orders: orders.map((order) => ({ ...order, chat: chats.get(order.id) ?? null })),
+    total,
+    page,
+    pageSize,
+    counts,
+    environment,
+    paymentSource,
+    kind,
+    // Botão "Chamar" nos pedidos sem conversa (rota exige `support_write`).
+    canOpenChat: hasAdminPermission(auth.profile, "support_write"),
+  })
 }

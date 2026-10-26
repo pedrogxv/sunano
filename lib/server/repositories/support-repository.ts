@@ -905,6 +905,135 @@ export async function getOpenOrderTickets(
   return result
 }
 
+export type AdminOrderChat = {
+  ticketId: string
+  /** Conversa aberta e a vez é da equipe: o cliente está esperando. */
+  waitingOnAdmin: boolean
+  /** false = só há conversa encerrada; o botão leva ao histórico. */
+  open: boolean
+}
+
+/**
+ * Conversa de cada pedido da fila do admin, para o botão "Chat" da linha.
+ * Qualquer status: conversa encerrada ainda é o histórico do pedido. A que
+ * espera a equipe ganha, depois a aberta, depois a mais recente. Em LOTE: uma
+ * consulta para a página. Sem filtro de `user_id` (o admin vê todas); a posse
+ * do pedido já foi conferida ao abrir o chamado (`createSupportTicket`).
+ */
+export async function getOrderChatsForAdmin(orderIds: string[]): Promise<Map<string, AdminOrderChat>> {
+  const result = new Map<string, AdminOrderChat>()
+  if (orderIds.length === 0) return result
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("support_tickets")
+    .select("id, order_id, status, waiting_on")
+    .in("order_id", orderIds)
+    .order("last_message_at", { ascending: false })
+
+  if (error) {
+    console.error("[support-repository] getOrderChatsForAdmin:", error)
+    return result
+  }
+  const rank = (chat: AdminOrderChat) => (chat.waitingOnAdmin ? 2 : chat.open ? 1 : 0)
+  for (const row of data ?? []) {
+    if (!row.order_id) continue
+    const open = row.status === "open"
+    const chat = { ticketId: row.id, waitingOnAdmin: open && row.waiting_on === "admin", open }
+    const current = result.get(row.order_id)
+    if (!current || rank(chat) > rank(current)) result.set(row.order_id, chat)
+  }
+  return result
+}
+
+/**
+ * A equipe abre a conversa de um pedido com o cliente (botão "Chamar" da fila
+ * do admin). Mesmo formato do chamado de serviço: a 1ª mensagem é da EQUIPE,
+ * então o chamado nasce esperando o cliente e o trigger de `support_messages`
+ * já o notifica (`support_reply`, link para `/conta/suporte/<id>`).
+ *
+ * Sem o teto de chamados abertos de `createSupportTicket`: ele existe contra
+ * spam do usuário, e quem abre aqui é a equipe. Se o pedido já tem conversa
+ * ABERTA, devolve ela (`existing`) em vez de criar outra: dois admins
+ * clicando no mesmo pedido não podem abrir duas conversas para o cliente.
+ */
+export async function openOrderTicketByAdmin(params: {
+  orderId: string
+  adminId: string
+  adminName: string
+  body: string
+}): Promise<RepositoryResult & { ticketId?: string; existing?: boolean }> {
+  const db = createSupabaseAdminClient()
+
+  const { data: order, error: orderError } = await db
+    .from("store_orders")
+    .select("id, metadata, is_sandbox")
+    .eq("id", params.orderId)
+    .maybeSingle()
+  if (orderError) {
+    console.error("[support-repository] openOrderTicketByAdmin order lookup:", orderError)
+    return { ok: false, error: "Não foi possível abrir a conversa.", status: 500 }
+  }
+  if (!order) {
+    return { ok: false, error: "Pedido não encontrado.", status: 404 }
+  }
+  // Chamado é conversa de usuário logado; pedido de convidado não tem quem leia.
+  const ownerId = orderOwnerId(order.metadata as Record<string, unknown> | null)
+  if (!ownerId) {
+    return {
+      ok: false,
+      error: "Pedido de convidado: o cliente não tem conta para receber a conversa. Fale pelo e-mail.",
+      status: 422,
+    }
+  }
+
+  const { data: openTicket, error: openError } = await db
+    .from("support_tickets")
+    .select("id")
+    .eq("order_id", order.id)
+    .eq("status", "open")
+    .order("last_message_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (openError) {
+    console.error("[support-repository] openOrderTicketByAdmin open lookup:", openError)
+    return { ok: false, error: "Não foi possível abrir a conversa.", status: 500 }
+  }
+  if (openTicket) {
+    return { ok: true, ticketId: openTicket.id as string, existing: true }
+  }
+
+  const { data: ticket, error: ticketError } = await db
+    .from("support_tickets")
+    .insert({
+      user_id: ownerId,
+      subject: `${order.is_sandbox ? "[Teste] " : ""}Pedido #${orderNumber(order.id)}`,
+      order_id: order.id,
+    })
+    .select("id")
+    .single()
+  if (ticketError || !ticket) {
+    console.error("[support-repository] openOrderTicketByAdmin insert ticket:", ticketError)
+    return { ok: false, error: "Não foi possível abrir a conversa.", status: 500 }
+  }
+
+  const { error: messageError } = await db.from("support_messages").insert({
+    ticket_id: ticket.id,
+    sender_type: "admin",
+    sender_id: params.adminId,
+    sender_name: params.adminName,
+    body: params.body,
+    image_urls: [],
+  })
+  if (messageError) {
+    console.error("[support-repository] openOrderTicketByAdmin insert message:", messageError)
+    // Mesmo motivo de `createSupportTicket`: ticket sem mensagem é órfão.
+    await db.from("support_tickets").delete().eq("id", ticket.id)
+    return { ok: false, error: "Não foi possível enviar a mensagem.", status: 500 }
+  }
+
+  return { ok: true, ticketId: ticket.id as string }
+}
+
 export type SupportTicketStats = {
   open: number
   resolved: number

@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
+import { useRouter } from "next/navigation"
 import { RouteLink } from "@/components/ui/route-link"
 import {
   AlertCircle,
@@ -20,6 +21,8 @@ import {
   Loader2,
   Mail,
   MapPinOff,
+  MessageCircle,
+  MessageCirclePlus,
   Package,
   PackageCheck,
   RotateCcw,
@@ -99,6 +102,7 @@ import type {
   OrderManualPayment,
   OrderShippingAddress,
 } from "@/lib/server/repositories/orders-repository"
+import type { AdminOrderChat } from "@/lib/server/repositories/support-repository"
 
 type OrderStatus =
   | "pending"
@@ -179,6 +183,8 @@ type AdminOrder = {
   complement: AdminOrderRow["complement"]
   /** Este pedido é o pagamento de complemento de outro. */
   complement_for: AdminOrderRow["complement_for"]
+  /** Conversa do cliente sobre o pedido (chamado de suporte). Null = nenhuma. */
+  chat: AdminOrderChat | null
 }
 
 /**
@@ -729,6 +735,9 @@ export default function AdminOrdersPage() {
   const [page, setPage] = useState(1)
 
   const [manageOrder, setManageOrder] = useState<AdminOrder | null>(null)
+  // Pedido sem conversa em que a equipe vai chamar o cliente.
+  const [chatOrder, setChatOrder] = useState<AdminOrder | null>(null)
+  const [canOpenChat, setCanOpenChat] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -754,10 +763,12 @@ export default function AdminOrdersPage() {
         orders?: AdminOrder[]
         total?: number
         counts?: Record<OrderStatus | "all", number>
+        canOpenChat?: boolean
         error?: string
       }
       if (!res.ok) throw new Error(data.error ?? "Erro ao carregar pedidos")
       setOrders(data.orders ?? [])
+      setCanOpenChat(data.canOpenChat === true)
       setTotal(data.total ?? 0)
       if (data.counts) setCounts(data.counts)
     } catch (err) {
@@ -1046,6 +1057,7 @@ export default function AdminOrdersPage() {
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Data</th>
                 <th className="px-4 py-3" />
+                <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -1191,6 +1203,55 @@ export default function AdminOrdersPage() {
                       Ver pedido
                     </Button>
                   </td>
+                  <td className="px-4 py-3">
+                    {order.chat ? (
+                      <Button
+                        asChild
+                        size="sm"
+                        variant="outline"
+                        className={cn(
+                          "relative gap-1.5",
+                          order.chat.waitingOnAdmin && "border-emerald-500/50 text-emerald-400",
+                          !order.chat.open && "text-muted-foreground"
+                        )}
+                      >
+                        <RouteLink
+                          href={`/admin/suporte/${order.chat.ticketId}`}
+                          onClick={(e) => e.stopPropagation()}
+                          title={
+                            order.chat.waitingOnAdmin
+                              ? "O cliente está esperando resposta"
+                              : order.chat.open
+                                ? "Conversa aberta com o cliente"
+                                : "Conversa encerrada"
+                          }
+                        >
+                          <MessageCircle className="size-3.5" />
+                          Chat
+                          {order.chat.waitingOnAdmin && (
+                            <span className="absolute -right-1 -top-1 size-2.5 rounded-full bg-emerald-400 ring-2 ring-background" />
+                          )}
+                        </RouteLink>
+                      </Button>
+                    ) : (
+                      canOpenChat &&
+                      order.user_id && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="gap-1.5 text-muted-foreground"
+                          title="Abrir uma conversa com o cliente sobre este pedido"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setChatOrder(order)
+                          }}
+                        >
+                          <MessageCirclePlus className="size-3.5" />
+                          Chamar
+                        </Button>
+                      )
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -1248,7 +1309,103 @@ export default function AdminOrdersPage() {
         onOpenChange={(open) => !open && setManageOrder(null)}
         onOrderPatched={applyOrderPatch}
       />
+      <OrderOpenChatDialog order={chatOrder} onOpenChange={(open) => !open && setChatOrder(null)} />
     </div>
+  )
+}
+
+/**
+ * A equipe chama o cliente sobre um pedido que ainda não tem conversa. Vira
+ * um chamado de suporte vinculado ao pedido, com a 1ª mensagem da equipe: o
+ * cliente é notificado e responde em "Meus Pedidos". Depois de enviar, a
+ * conversa segue na tela do chamado, onde o resto do suporte vive.
+ */
+function OrderOpenChatDialog({
+  order,
+  onOpenChange,
+}: {
+  order: AdminOrder | null
+  onOpenChange: (open: boolean) => void
+}) {
+  const router = useRouter()
+  const [body, setBody] = useState("")
+  const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (order) setBody(`Olá! Sobre o seu pedido #${orderNumber(order.id)}: `)
+  }, [order])
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!order || submitting || !body.trim()) return
+    setSubmitting(true)
+    try {
+      const res = await fetch(`/api/admin/store/orders/${order.id}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body: body.trim() }),
+      })
+      const data = (await res.json().catch(() => null)) as
+        | { ticketId?: string; existing?: boolean; error?: string }
+        | null
+      if (!res.ok || !data?.ticketId) {
+        toast.error(data?.error ?? "Não foi possível abrir a conversa")
+        return
+      }
+      if (data.existing) {
+        toast.info("Este pedido já tem uma conversa aberta", {
+          description: "Sua mensagem não foi enviada. Escreva nela.",
+        })
+      } else {
+        toast.success("Conversa aberta. O cliente foi notificado")
+      }
+      router.push(`/admin/suporte/${data.ticketId}`)
+    } catch {
+      toast.error("Não foi possível abrir a conversa")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Dialog open={order !== null} onOpenChange={onOpenChange}>
+      <DialogContent className="border border-border bg-card sm:max-w-md">
+        {order && (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <MessageCirclePlus className="size-4 text-emerald-400" />
+                Chamar cliente
+              </DialogTitle>
+              <DialogDescription>
+                Pedido #{orderNumber(order.id)} de {order.user_display_name ?? order.customer_name ?? "cliente"}.
+                Abre uma conversa no suporte vinculada a este pedido, e o cliente recebe uma notificação
+              </DialogDescription>
+            </DialogHeader>
+
+            <Textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder="Escreva a mensagem para o cliente..."
+              className="min-h-28"
+              maxLength={4000}
+              autoFocus
+              required
+            />
+
+            <DialogFooter>
+              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting}>
+                Cancelar
+              </Button>
+              <Button type="submit" className="gap-2" disabled={submitting || !body.trim()}>
+                {submitting ? <Loader2 className="size-4 animate-spin" /> : <MessageCircle className="size-4" />}
+                {submitting ? "Enviando..." : "Enviar mensagem"}
+              </Button>
+            </DialogFooter>
+          </form>
+        )}
+      </DialogContent>
+    </Dialog>
   )
 }
 

@@ -85,6 +85,12 @@ export type StoreProductCard = {
   preorder: StoreCardPreorder | null
   /** Marcado como Lançamento no admin e ainda no prazo. */
   is_launch: boolean
+  /**
+   * Está na seção "Mais vendidos" da Home, independente do `badge`. O selo
+   * principal é um só e Lançamento ganha de Mais vendido; o `LaunchCard` lê
+   * isto para mostrar os dois.
+   */
+  is_best_seller: boolean
   /** Prazo da pré-venda/lançamento, para a contagem. `null` = sem prazo, ou o produto não é nenhum dos dois. */
   sale_window: SaleWindow | null
 }
@@ -271,6 +277,7 @@ async function withCardDisplay(items: StoreProductCardBase[]): Promise<StoreProd
     const preorder =
       item.sale_type === "pre_order" ? toCardPreorder(extras?.preorder ?? DEFAULT_PREORDER_INFO, soldOut) : null
     const isLaunch = extras ? isLaunchActive(extras, now) : false
+    const isBestSeller = bestSellers.includes(item.id)
 
     return {
       ...item,
@@ -282,7 +289,7 @@ async function withCardDisplay(items: StoreProductCardBase[]): Promise<StoreProd
         saleType: item.sale_type,
         choice: isStoreCardBadgeChoice(choice?.badge) ? choice.badge : null,
         stock: variant ? variant.stock : item.stock,
-        isBestSeller: bestSellers.includes(item.id),
+        isBestSeller,
         isBestValue: attributes.tags.includes("value"),
         isNew: item.condition === "new" && Date.parse(item.created_at) >= newSince,
         isLaunch,
@@ -290,6 +297,7 @@ async function withCardDisplay(items: StoreProductCardBase[]): Promise<StoreProd
       highlights: manualHighlights.length > 0 ? manualHighlights : deriveCardHighlights(item.category, attributes),
       preorder,
       is_launch: isLaunch,
+      is_best_seller: isBestSeller,
       sale_window: (preorder || isLaunch) && extras ? extras.sale_window : null,
     }
   })

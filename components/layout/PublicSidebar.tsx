@@ -52,7 +52,7 @@ type NavItem = {
 }
 
 function SectionLabel({ label, collapsed }: { label: string; collapsed: boolean }) {
-  if (collapsed) return <div className="my-2 h-px bg-border" />
+  if (collapsed) return <div className="my-2 h-px bg-white/10" />
   return (
     <p className="mb-1.5 mt-5 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
       {label}
@@ -81,7 +81,7 @@ function NavLink({
         collapsed && "justify-center",
         isActive
           ? "bg-primary text-primary-foreground"
-          : "text-foreground/75 hover:bg-muted hover:text-foreground"
+          : "text-foreground/75 hover:bg-white/[0.07] hover:text-foreground"
       )}
     >
       <Icon className="size-[18px] shrink-0" />
@@ -162,7 +162,11 @@ export function PublicSidebar() {
           // h-dvh e não h-screen: 100vh é o viewport *sem* a barra de URL do navegador
           // mobile, o que empurra o rodapé (painel de Aura, Patch Notes) para fora
           // da tela.
-          "fixed inset-y-0 left-0 z-40 flex h-dvh w-60 shrink-0 flex-col border-border bg-background transition-all duration-300 md:relative md:inset-auto md:h-full md:translate-x-0",
+          "fixed inset-y-0 left-0 z-40 flex h-dvh w-60 shrink-0 flex-col transition-all duration-300 md:relative md:inset-auto md:h-full md:translate-x-0",
+          // Vidro (estilo macOS): painel flutuante, material em `.sidebar-glass`
+          // (globals.css). `overflow-hidden` recorta a rolagem do <nav> no
+          // raio do painel.
+          "sidebar-glass overflow-hidden rounded-r-2xl border border-l-0 border-white/10 md:rounded-2xl md:border-l",
           // Gaveta fechada no celular: fora da tela, mas antes seguia pintando
           // os destaques em loop (Loja/Promoções/Aura animam background-position
           // e drop-shadow, que não rodam no compositor) a cada frame, o tempo
@@ -300,7 +304,7 @@ export function PublicSidebar() {
             TopBar) e, por último, Patch Notes numa linha discreta. Fica fora
             da rolagem para o saldo estar sempre à vista. Deslogado não tem
             saldo: a Central aparece como link comum. */}
-        <div className="shrink-0 space-y-1 border-t border-border px-3 pt-3 pb-3">
+        <div className="shrink-0 space-y-1 border-t border-white/10 px-3 pt-3 pb-3">
           {/* Convite VIP para quem NÃO é VIP AGORA (`isVip`, não "tem
               assinatura viva": quem cancelou dentro do período pago continua
               VIP até o fim dele). Ver lib/vip-status.ts. Encaixa no topo da

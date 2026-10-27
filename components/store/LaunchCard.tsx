@@ -43,6 +43,10 @@ export function LaunchCard(props: StoreProductCard) {
   const requiresChoice = props.variants.length > 1 || props.has_option_groups
   const { icon: CategoryIcon, tint } = getCategoryIcon(props.category)
   const { icon: LaunchIcon, label: launchLabel, className: launchChip } = STORE_CARD_BADGE.launch
+  const bestSeller = STORE_CARD_BADGE.best_seller
+  const BestSellerIcon = bestSeller.icon
+  const chipClassName =
+    "flex max-w-full items-center gap-1 rounded-lg px-2 py-1 text-[10.5px] font-bold shadow-md shadow-black/30"
   const eyebrow = [getCategoryLabel(props.category), props.brand].filter(Boolean).join(" · ")
 
   useEffect(() => {
@@ -115,14 +119,19 @@ export function LaunchCard(props: StoreProductCard) {
           </span>
         ) : (
           <>
-            <span
-              className={cn(
-                "absolute left-3 top-3 flex max-w-[calc(100%-4rem)] items-center gap-1 rounded-lg px-2 py-1 text-[10.5px] font-bold shadow-md shadow-black/30",
-                launchChip
+            {/* Lançamento ganha o selo principal, mas quem também está em
+                "Mais vendidos" mostra os dois: um não apaga o outro. */}
+            <span className="absolute left-3 top-3 flex max-w-[calc(100%-1.5rem)] flex-wrap gap-1">
+              <span className={cn(chipClassName, launchChip)}>
+                <LaunchIcon className="size-3 shrink-0" strokeWidth={2.5} />
+                <span className="truncate">{launchLabel}</span>
+              </span>
+              {props.is_best_seller && (
+                <span className={cn(chipClassName, bestSeller.className)}>
+                  <BestSellerIcon className={cn("size-3 shrink-0", bestSeller.iconClassName)} strokeWidth={2.5} />
+                  <span className="truncate">{bestSeller.label}</span>
+                </span>
               )}
-            >
-              <LaunchIcon className="size-3 shrink-0" strokeWidth={2.5} />
-              <span className="truncate">{launchLabel}</span>
             </span>
             {hasDiscount && (
               <span className="absolute bottom-3 left-3 rounded-lg bg-red-600 px-2 py-1 text-[11px] font-extrabold text-white">

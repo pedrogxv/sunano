@@ -177,7 +177,7 @@ export function PublicSidebar() {
           isCollapsed ? "md:w-16" : "md:w-60"
         )}
       >
-        <nav className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 pt-6 pb-6">
+        <nav className="sidebar-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 pt-6 pb-6">
           {/* Brand */}
           <RouteLink
             href="/"

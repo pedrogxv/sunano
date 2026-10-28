@@ -136,19 +136,16 @@ export function TopBar() {
             </div>
           )}
 
-          {/* Notificações — vale também no admin, onde não há AuthUser aqui. */}
+          {/* Notificações — vale também no admin. */}
           <NotificationBell />
 
-          {/* Conta — sempre visível no canto; no admin fica na própria sidebar. */}
-          {!isAdmin && (
-            <>
-              <div className="hidden h-6 w-px shrink-0 bg-border sm:block" />
-              <AuthUser
-                layout="topbar"
-                variant="public"
-              />
-            </>
-          )}
+          {/* Conta — sempre no canto, no site e no painel. O `variant` só
+              troca os atalhos do menu (no admin, Configurações do painel). */}
+          <div className="hidden h-6 w-px shrink-0 bg-border sm:block" />
+          <AuthUser
+            layout="topbar"
+            variant={isAdmin ? "admin" : "public"}
+          />
         </div>
       </div>
     </div>

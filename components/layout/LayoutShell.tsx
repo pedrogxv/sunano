@@ -10,7 +10,6 @@ import { CartDrawer } from "@/components/store/CartDrawer"
 import { SupportFab } from "@/components/layout/SupportFab"
 import { useAuthModal } from "@/components/providers/auth-modal-context"
 import { VipIntentWatcher } from "@/components/aura/VipIntentWatcher"
-import { cn } from "@/lib/utils"
 
 // Code-split: o AuthModal puxa UserLoginForm/UserRegisterForm, que por sua
 // vez puxam @supabase/ssr — pesado e só relevante para quem realmente abre o
@@ -74,9 +73,9 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
       <div className="flex">
         {/* Sidebar — fixed drawer on mobile (self-managed), relative+sticky on desktop.
             Must NOT be hidden on mobile, otherwise the drawer/overlay/toggle never render.
-            A pública flutua (painel de vidro): o respiro de 8px em cima,
+            As duas flutuam (painel de vidro): o respiro de 8px em cima,
             embaixo e à esquerda; o da direita é a margem do conteúdo. */}
-        <div className={cn("md:flex md:shrink-0 md:sticky md:top-0 md:h-screen", !isAdmin && "md:py-2 md:pl-2")}>
+        <div className="md:flex md:shrink-0 md:sticky md:top-0 md:h-screen md:py-2 md:pl-2">
           {isAdmin ? <AdminSidebar /> : <PublicSidebar />}
         </div>
 

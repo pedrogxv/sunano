@@ -39,8 +39,7 @@ import {
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 
-import { AuthUser } from "@/components/auth/auth-user"
-import { SunanoLogo } from "@/components/ui/SunanoLogo"
+import { SunanoIcon } from "@/components/ui/SunanoLogo"
 import { useSidebar } from "@/components/providers/sidebar-context"
 import { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
@@ -67,10 +66,14 @@ interface NavGroup {
   items: NavItem[]
 }
 
+// Mesmos tokens da PublicSidebar: as duas sidebars são o mesmo painel de
+// vidro, e item, seção e hover não podem divergir entre elas.
+const NAV_ITEM_IDLE = "text-foreground/75 hover:bg-white/[0.07] hover:text-foreground"
+
 function SectionLabel({ label, collapsed }: { label: string; collapsed: boolean }) {
-  if (collapsed) return <div className="my-2 h-px bg-border/50" />
+  if (collapsed) return <div className="my-2 h-px bg-white/10" />
   return (
-    <p className="mb-1 mt-4 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">
+    <p className="mb-1.5 mt-5 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
       {label}
     </p>
   )
@@ -305,34 +308,59 @@ export function AdminSidebar() {
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex h-dvh shrink-0 flex-col bg-background transition-all duration-300 md:relative md:inset-auto md:h-full md:translate-x-0",
-          isAdminMobileOpen ? "translate-x-0" : "-translate-x-full",
+          "fixed inset-y-0 left-0 z-40 flex h-dvh w-64 shrink-0 flex-col transition-all duration-300 md:relative md:inset-auto md:h-full md:translate-x-0",
+          // Mesmo painel de vidro flutuante da PublicSidebar (`.sidebar-glass`
+          // em globals.css); `overflow-hidden` recorta a rolagem no raio.
+          "sidebar-glass overflow-hidden rounded-r-2xl border border-l-0 border-white/10 md:rounded-2xl md:border-l",
+          // Gaveta fechada no celular sai da pintura e do Tab.
+          isAdminMobileOpen ? "translate-x-0" : "-translate-x-full max-md:invisible",
           isCollapsed ? "md:w-16" : "md:w-64"
         )}
       >
-        {/* Brand */}
-        <div className={cn("flex px-3 pt-6 pb-4", isCollapsed ? "justify-center" : "items-center")}>
-          <SunanoLogo showText={!isCollapsed} subtitle="Admin" />
-        </div>
+        <nav className="sidebar-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 pt-6 pb-6">
+          {/* Brand */}
+          <RouteLink
+            href="/admin"
+            onClick={close}
+            className={cn("flex pb-6", isCollapsed ? "justify-center" : "items-center gap-2.5")}
+          >
+            {isCollapsed ? (
+              <SunanoIcon />
+            ) : (
+              <>
+                {/* Mesmo wordmark da PublicSidebar (ver o comentário lá sobre o
+                    WebP), um degrau menor para caber o selo do painel. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/images/mascot/logo-wordmark.webp"
+                  alt="Sunano Admin"
+                  width={606}
+                  height={108}
+                  className="h-7 w-auto shrink-0 object-contain"
+                />
+                <span className="rounded-md border border-red-500/40 bg-red-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-red-400">
+                  Admin
+                </span>
+              </>
+            )}
+          </RouteLink>
 
-        {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 pb-4">
           {isLoadingProfile ? (
             // Espelha: Geral(2), Periféricos(3), Conteúdo(2), Loja(2), Sistema(2), Ações(1)
-            <div className="pt-1">
+            <div>
               {[2, 3, 2, 2, 2, 1].map((count, gi) => (
                 <div key={gi}>
                   {isCollapsed ? (
-                    <div className="my-2 h-px bg-muted/20" />
+                    <div className="my-2 h-px bg-white/10" />
                   ) : (
-                    <div className="mb-1 mt-4 mx-3 h-2 w-12 rounded bg-muted/30 animate-pulse" />
+                    <div className="mb-1.5 mt-5 mx-3 h-2.5 w-14 rounded bg-white/[0.07] animate-pulse" />
                   )}
                   <div className="space-y-1">
                     {Array.from({ length: count }).map((_, ii) => (
                       <div
                         key={ii}
                         className={cn(
-                          "h-10 rounded-lg bg-muted/30 animate-pulse",
+                          "h-10 rounded-lg bg-white/[0.06] animate-pulse",
                           isCollapsed ? "w-10 mx-auto" : "w-full"
                         )}
                       />
@@ -366,9 +394,7 @@ export function AdminSidebar() {
                               className={cn(
                                 "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                                 isCollapsed && "justify-center",
-                                activeChild
-                                  ? "text-foreground"
-                                  : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+                                activeChild ? "text-foreground" : NAV_ITEM_IDLE
                               )}
                             >
                               <Icon className="size-[18px] shrink-0" />
@@ -395,7 +421,7 @@ export function AdminSidebar() {
                                 style={{ gridTemplateRows: open ? "1fr" : "0fr" }}
                               >
                                 <div className="min-h-0">
-                                  <div className="ml-4 mt-1 space-y-1 border-l border-border pl-3">
+                                  <div className="ml-4 mt-1 space-y-1 border-l border-white/10 pl-3">
                                     {item.children.map((child) => {
                                       const ChildIcon = child.icon
                                       const childActiveState = child.href === activeChild
@@ -406,9 +432,7 @@ export function AdminSidebar() {
                                           onClick={close}
                                           className={cn(
                                             "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                                            childActiveState
-                                              ? "bg-primary text-primary-foreground"
-                                              : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+                                            childActiveState ? "bg-primary text-primary-foreground" : NAV_ITEM_IDLE
                                           )}
                                         >
                                           <ChildIcon className="size-4 shrink-0" />
@@ -444,9 +468,7 @@ export function AdminSidebar() {
                           className={cn(
                             "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
                             isCollapsed && "justify-center",
-                            active
-                              ? "bg-primary text-primary-foreground"
-                              : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+                            active ? "bg-primary text-primary-foreground" : NAV_ITEM_IDLE
                           )}
                         >
                           <Icon className="size-[18px] shrink-0" />
@@ -473,7 +495,8 @@ export function AdminSidebar() {
                 href="/"
                 onClick={close}
                 className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-all hover:bg-primary/10 hover:text-primary",
+                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
+                  NAV_ITEM_IDLE,
                   isCollapsed && "justify-center"
                 )}
               >
@@ -483,11 +506,6 @@ export function AdminSidebar() {
             </>
           )}
         </nav>
-
-        {/* User */}
-        <div className="border-t border-border px-3 py-2">
-          <AuthUser isCollapsed={isCollapsed} />
-        </div>
       </aside>
     </>
   )

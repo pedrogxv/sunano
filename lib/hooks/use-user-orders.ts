@@ -6,6 +6,7 @@ import { useAuthUser } from "@/components/providers/auth-context"
 import type { OrderShippingAddress } from "@/lib/server/repositories/orders-repository"
 import type { OrderServiceFormAnswers } from "@/lib/store-service-form"
 import type { OrderComplementSummary } from "@/lib/store-payment-complement"
+import type { OrderCustomerNotice } from "@/lib/order-customer-notice"
 
 export type UserOrderItem = {
   id?: string
@@ -61,6 +62,8 @@ export type UserOrder = {
   payment_expires_at: string | null
   /** Conversa do pedido em que a equipe respondeu e falta a vez do usuário. */
   awaiting_reply_ticket_id: string | null
+  /** Aviso da loja esperando o usuário (dado de entrega a corrigir etc.). Null = nenhum aberto. */
+  customer_notice: OrderCustomerNotice | null
 }
 
 /**

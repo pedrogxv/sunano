@@ -18,6 +18,7 @@ import {
   hasAnySupportTicket,
 } from "@/lib/server/repositories/support-repository"
 import { countMissingShippingByUser } from "@/lib/server/repositories/orders-repository"
+import { countOpenOrderNoticesByUser } from "@/lib/server/repositories/order-customer-notice-repository"
 import { hasForumPostsByUser } from "@/lib/server/repositories/forum-repository"
 import { ownsVipFounderFrame } from "@/lib/server/repositories/vip-founder-repository"
 import { getUserStreakPairsByUser } from "@/lib/server/repositories/achievements-repository"
@@ -46,7 +47,8 @@ export type AuthUserPayload = {
   supportTicketsAwaitingMe: number
   /**
    * Pedidos esperando o usuário: pago sem endereço de entrega + conversa de
-   * pedido com resposta da equipe. Badge do atalho "Meus Pedidos" da TopBar.
+   * pedido com resposta da equipe + aviso da loja pedindo correção. Badge do
+   * atalho "Meus Pedidos" da TopBar.
    */
   ordersNeedingAttention: number
   hasForumPost: boolean
@@ -177,6 +179,7 @@ export const resolveAuthUser = cache(async function resolveAuthUser(): Promise<A
     supportTicketsAwaitingMe,
     ordersMissingShipping,
     orderTicketsAwaitingMe,
+    orderNoticesOpen,
     hasForumPost,
     subscription,
     canUseStore,
@@ -191,6 +194,7 @@ export const resolveAuthUser = cache(async function resolveAuthUser(): Promise<A
     countMySupportTicketsAwaitingUser(user.id),
     countMissingShippingByUser(user.id),
     countMyOrderTicketsAwaitingUser(user.id),
+    countOpenOrderNoticesByUser(user.id),
     hasForumPostsByUser(user.id),
     // `resolveVipStatus` (lib/vip-status.ts) precisa do status da assinatura
     // para distinguir "nunca assinou" de "cancelou com período pago correndo"
@@ -218,7 +222,7 @@ export const resolveAuthUser = cache(async function resolveAuthUser(): Promise<A
     adminProfile,
     hasSupportTicket,
     supportTicketsAwaitingMe,
-    ordersNeedingAttention: ordersMissingShipping + orderTicketsAwaitingMe,
+    ordersNeedingAttention: ordersMissingShipping + orderTicketsAwaitingMe + orderNoticesOpen,
     hasForumPost,
     accountTier: profileAndVip.vip?.account_tier ?? "common",
     vipExpiresAt: profileAndVip.vip?.vip_expires_at ?? null,

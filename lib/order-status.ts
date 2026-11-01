@@ -148,3 +148,11 @@ export const ORDER_TRACKING_NOTICE = {
 
 /** Status em que o admin pode trocar o código de rastreio. */
 export const TRACKING_EDITABLE_STATUSES: OrderStatusValue[] = ["shipped"]
+
+/**
+ * Status em que o cliente ainda pode informar ou corrigir o endereço em "Meus
+ * Pedidos". Depois de `shipped` a etiqueta já saiu: o caminho é o suporte.
+ * Lido pelo servidor (`setOrderShippingAddress`), pela tela do cliente e pelo
+ * aviso de correção do admin, para os três concordarem.
+ */
+export const SHIPPING_EDITABLE_STATUSES: OrderStatusValue[] = ["pending", "paid", "awaiting_shipping_info"]

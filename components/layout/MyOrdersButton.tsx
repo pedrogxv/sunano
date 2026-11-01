@@ -13,9 +13,9 @@ import { cn } from "@/lib/utils"
  * site procurando o pedido no topo, ao lado do sino. Só para quem está logado:
  * deslogado não tem pedido, e o link cairia na tela de login.
  *
- * O badge conta os pedidos que esperam a PESSOA (endereço faltando ou
- * resposta da equipe na conversa do pedido), vindo da sessão
- * (`ordersNeedingAttention`) — sem polling próprio. A página de pedidos
+ * O badge conta os pedidos que esperam a PESSOA (endereço faltando, resposta
+ * da equipe na conversa do pedido ou aviso da loja pedindo correção), vindo
+ * da sessão (`ordersNeedingAttention`) — sem polling próprio. A página de pedidos
  * mostra, no card de cada um, o que falta.
  */
 export function MyOrdersButton() {

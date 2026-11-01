@@ -25,7 +25,17 @@ import { computeEffectivePrice } from "@/lib/store-pricing"
 import { getSelectionRulesForCheckout } from "@/lib/server/repositories/store-repository"
 import { patchOrderMetadata } from "@/lib/server/repositories/order-metadata-repository"
 import { stripeReceiptUrlOf } from "@/lib/stripe-receipt"
-import { TRACKING_EDITABLE_STATUSES } from "@/lib/order-status"
+import { SHIPPING_EDITABLE_STATUSES, TRACKING_EDITABLE_STATUSES } from "@/lib/order-status"
+import {
+  ORDER_NOTICE_COLUMNS,
+  ORDER_NOTICE_REASON,
+  isOrderNoticeReason,
+  readAdminOrderNotice,
+  readOpenOrderNotice,
+  type AdminOrderCustomerNotice,
+  type OrderCustomerNotice,
+  type RawOrderNoticeColumns,
+} from "@/lib/order-customer-notice"
 import { readServiceFormAnswers, type OrderServiceFormAnswers } from "@/lib/store-service-form"
 import { signServiceFormAnswerImages } from "@/lib/server/service-form-media"
 import { getComplementSummaries } from "@/lib/server/repositories/order-complement-repository"
@@ -569,6 +579,8 @@ export type UserOrderSummary = {
   complement_for: OrderComplementTarget | null
   /** Prazo da loja para pagar um pedido `pending` (coluna `pix_expires_at`, que vale para todo método). */
   payment_expires_at: string | null
+  /** Aviso da loja que espera o cliente (dado de entrega a corrigir etc.). Null = nenhum aberto. */
+  customer_notice: OrderCustomerNotice | null
 }
 
 /** O pedido original de um pagamento de complemento. */
@@ -576,6 +588,8 @@ export type OrderComplementTarget = { order_id: string; order_number: string }
 
 const ORDER_COLUMNS =
   "id, status, total_cents, items, created_at, payment_method, aura_cost_paid, asaas_payment_id, asaas_receipt_url, stripe_payment_intent_id, metadata, pix_expires_at, pix_copy_paste, pix_qr_code_base64, tracking_code, carrier, warehouse_arrived_at, service_form_answers, complement_due_cents, complement_note, complement_for_order_id, " +
+  ORDER_NOTICE_COLUMNS +
+  ", " +
   SHIPPING_COLUMNS
 
 type ComplementColumns = {
@@ -707,9 +721,15 @@ function toUserOrderSummaryBase(row: unknown): Omit<UserOrderSummary, "complemen
     stripe_payment_intent_id: stripePaymentIntentId,
     metadata,
     pix_expires_at: paymentExpiresAt,
+    customer_notice_reason,
+    customer_notice_message,
+    customer_notice_sent_at,
+    customer_notice_resolved_at,
+    customer_notice_resolved_by,
     ...raw
-  } = row as Omit<UserOrderSummary, "complement" | "complement_for" | "payment_expires_at"> &
-    RawShippingColumns & {
+  } = row as Omit<UserOrderSummary, "complement" | "complement_for" | "payment_expires_at" | "customer_notice"> &
+    RawShippingColumns &
+    RawOrderNoticeColumns & {
       stripe_payment_intent_id: string | null
       metadata: Record<string, unknown> | null
       pix_expires_at: string | null
@@ -717,6 +737,15 @@ function toUserOrderSummaryBase(row: unknown): Omit<UserOrderSummary, "complemen
   return {
     ...raw,
     payment_expires_at: paymentExpiresAt,
+    // Só o aviso ABERTO vai para o cliente; as colunas cruas não (quem fechou
+    // e quando é assunto da fila do admin).
+    customer_notice: readOpenOrderNotice({
+      customer_notice_reason,
+      customer_notice_message,
+      customer_notice_sent_at,
+      customer_notice_resolved_at,
+      customer_notice_resolved_by,
+    }),
     // Pedido do Stripe: a cobrança e o comprovante entram nos mesmos campos
     // que a tela já mostra. `metadata` não vai para o cliente.
     asaas_payment_id: raw.asaas_payment_id ?? stripePaymentIntentId,
@@ -885,10 +914,14 @@ export type AdminOrderRow = {
   complement: OrderComplementSummary
   /** Este pedido É o pagamento de complemento do pedido indicado. */
   complement_for: OrderComplementTarget | null
+  /** Último aviso mandado ao cliente (aberto ou resolvido). Null = nunca houve. */
+  customer_notice: AdminOrderCustomerNotice | null
 }
 
 const ADMIN_ORDER_COLUMNS =
   "id, status, total_cents, pix_price_cents, items, created_at, updated_at, payment_method, aura_cost_paid, customer_name, customer_email, metadata, tracking_code, carrier, warehouse_arrived_at, shipped_at, delivered_at, refunded_cents, refund_reason, refunded_at, asaas_payment_id, stripe_payment_intent_id, stripe_session_id, payment_gateway, mercadopago_payment_id, infinitepay_transaction_nsu, infinitepay_receipt_url, is_sandbox, service_form_answers, complement_due_cents, complement_note, complement_for_order_id, " +
+  ORDER_NOTICE_COLUMNS +
+  ", " +
   SHIPPING_COLUMNS
 
 type AdminOrderRawRow = {
@@ -922,6 +955,7 @@ type AdminOrderRawRow = {
   is_sandbox: boolean
   service_form_answers: unknown
 } & RawShippingColumns &
+  RawOrderNoticeColumns &
   ComplementColumns
 
 export type AdminOrderListResult = {
@@ -1071,6 +1105,7 @@ export async function listOrdersForAdmin(filters?: {
       })(),
       fraud_warning: (row.metadata?.fraud_warning as AdminOrderRow["fraud_warning"] | undefined) ?? null,
       chargeback: (row.metadata?.chargeback as OrderChargebackFlag | undefined) ?? null,
+      customer_notice: readAdminOrderNotice(row),
     }
   })
   const orders: AdminOrderRow[] = await withComplementAndMedia(baseOrders, rows)
@@ -2396,14 +2431,6 @@ async function reconcileOrderRefundedCents(
 }
 
 /**
- * Estados em que o dono do pedido ainda pode informar/corrigir o endereço de
- * entrega. Depois de `shipped` a etiqueta já foi gerada — mudar o destino
- * aqui só criaria divergência entre o que o cliente vê e para onde o pacote
- * foi; nesse ponto o caminho é o suporte, não a auto-edição.
- */
-const SHIPPING_EDITABLE_STATUSES: OrderStatus[] = ["pending", "paid", "awaiting_shipping_info"]
-
-/**
  * Grava o endereço de entrega de um pedido — chamada tanto pelo checkout
  * (via insert direto, não por aqui) quanto pela tela "Meus Pedidos" quando o
  * cliente pulou o preenchimento e o pedido já foi pago.
@@ -2428,7 +2455,9 @@ export async function setOrderShippingAddress(
 
   const { data: existing } = await db
     .from("store_orders")
-    .select("id, status, metadata, requires_shipping_address")
+    .select(
+      "id, status, metadata, requires_shipping_address, customer_notice_reason, customer_notice_sent_at, customer_notice_resolved_at"
+    )
     .eq("id", orderId)
     .eq("metadata->>user_id", userId)
     .maybeSingle()
@@ -2461,11 +2490,28 @@ export async function setOrderShippingAddress(
     }
   }
 
+  const now = new Date().toISOString()
   const update: Database["public"]["Tables"]["store_orders"]["Update"] = {
     ...shippingAddressColumns(address),
-    shipping_address_filled_at: new Date().toISOString(),
+    shipping_address_filled_at: now,
   }
   if (currentStatus === "awaiting_shipping_info") update.status = "paid"
+
+  // Aviso da loja pedindo para corrigir a entrega (CPF errado etc.): salvar
+  // de novo É a correção, então fecha no mesmo UPDATE. A fila do admin passa
+  // a mostrar "Cliente corrigiu" para alguém conferir antes de despachar.
+  const noticeReason = isOrderNoticeReason(existing.customer_notice_reason) ? existing.customer_notice_reason : null
+  const fixedNotice =
+    noticeReason &&
+    existing.customer_notice_sent_at &&
+    !existing.customer_notice_resolved_at &&
+    ORDER_NOTICE_REASON[noticeReason].fixesShipping
+      ? noticeReason
+      : null
+  if (fixedNotice) {
+    update.customer_notice_resolved_at = now
+    update.customer_notice_resolved_by = "customer"
+  }
 
   const { data: updatedRows, error } = await db
     .from("store_orders")
@@ -2493,15 +2539,21 @@ export async function setOrderShippingAddress(
 
   // Sem notificação para o cliente: foi ele mesmo que acabou de preencher, e
   // a tela já mostra o status novo.
-  if (update.status) {
+  if (update.status || fixedNotice) {
     // O card do Discord recarrega o pedido do banco, então já sai com o
     // endereço que acabou de ser gravado — é exatamente o que o admin
-    // precisa ver para postar o pacote.
+    // precisa ver para postar o pacote (ou conferir a correção pedida).
     await notifyDiscordOrderEvent({
       orderId,
-      status: "paid",
+      status: update.status ? "paid" : currentStatus,
       actor: "cliente",
-      note: "Endereço de entrega informado pelo cliente.",
+      eventKey: fixedNotice ? `notice-fixed:${existing.customer_notice_sent_at}` : undefined,
+      note: [
+        update.status ? "Endereço de entrega informado pelo cliente." : null,
+        fixedNotice ? `Dados de entrega corrigidos pelo cliente (aviso: ${ORDER_NOTICE_REASON[fixedNotice].label}).` : null,
+      ]
+        .filter(Boolean)
+        .join(" "),
     })
   }
 

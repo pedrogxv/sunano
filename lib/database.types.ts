@@ -1988,6 +1988,11 @@ export type Database = {
           carrier: string | null
           shipped_at: string | null
           warehouse_arrived_at: string | null
+          customer_notice_reason: "cpf" | "recipient" | "birth_date" | "address" | "phone" | "other" | null
+          customer_notice_message: string | null
+          customer_notice_sent_at: string | null
+          customer_notice_resolved_at: string | null
+          customer_notice_resolved_by: "customer" | "admin" | null
           delivered_at: string | null
           refunded_cents: number
           refund_reason: string | null
@@ -2073,6 +2078,11 @@ export type Database = {
           carrier?: string | null
           shipped_at?: string | null
           warehouse_arrived_at?: string | null
+          customer_notice_reason?: "cpf" | "recipient" | "birth_date" | "address" | "phone" | "other" | null
+          customer_notice_message?: string | null
+          customer_notice_sent_at?: string | null
+          customer_notice_resolved_at?: string | null
+          customer_notice_resolved_by?: "customer" | "admin" | null
           delivered_at?: string | null
           refunded_cents?: number
           refund_reason?: string | null
@@ -2137,6 +2147,11 @@ export type Database = {
           carrier?: string | null
           shipped_at?: string | null
           warehouse_arrived_at?: string | null
+          customer_notice_reason?: "cpf" | "recipient" | "birth_date" | "address" | "phone" | "other" | null
+          customer_notice_message?: string | null
+          customer_notice_sent_at?: string | null
+          customer_notice_resolved_at?: string | null
+          customer_notice_resolved_by?: "customer" | "admin" | null
           delivered_at?: string | null
           refunded_cents?: number
           refund_reason?: string | null

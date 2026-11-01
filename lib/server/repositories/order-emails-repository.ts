@@ -29,6 +29,10 @@ import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
  * Antes de acrescentar um e-mail aqui, faça a conta: cada evento novo
  * multiplica o volume por pedido.
  *
+ * Fora do fluxo automático há o aviso ao cliente (order-customer-notice-
+ * repository.ts): o admin manda à mão quando o cliente errou um dado, então
+ * não escala com o número de pedidos.
+ *
  * GARANTIAS (mesmo contrato do Discord de pedidos):
  *   • best-effort absoluto — nunca lança. Um Resend fora do ar não pode
  *     derrubar o 200 de um pagamento já confirmado;

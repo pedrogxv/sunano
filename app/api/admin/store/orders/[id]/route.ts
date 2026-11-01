@@ -16,6 +16,11 @@ import { registerManualPayment } from "@/lib/server/repositories/order-manual-pa
 import { approveStripeCardReview } from "@/lib/server/repositories/stripe-orders-repository"
 import { setOrderComplementDue } from "@/lib/server/repositories/order-complement-repository"
 import { COMPLEMENT_MAX_CENTS, COMPLEMENT_NOTE_MAX } from "@/lib/store-payment-complement"
+import {
+  resolveOrderCustomerNotice,
+  sendOrderCustomerNotice,
+} from "@/lib/server/repositories/order-customer-notice-repository"
+import { ORDER_NOTICE_MESSAGE_MAX, ORDER_NOTICE_REASONS } from "@/lib/order-customer-notice"
 import { STORE_CARRIERS } from "@/lib/store-carriers"
 
 const patchSchema = z.discriminatedUnion("action", [
@@ -66,6 +71,15 @@ const patchSchema = z.discriminatedUnion("action", [
     dueCents: z.number().int().positive().max(COMPLEMENT_MAX_CENTS).nullable(),
     note: z.string().trim().max(COMPLEMENT_NOTE_MAX).nullish(),
   }),
+  // Aviso ao cliente: dado de entrega errado (CPF etc.) ou outro assunto. Vai
+  // por e-mail, notificação e no card do pedido em "Meus Pedidos".
+  z.object({
+    action: z.literal("notify_customer"),
+    reason: z.enum(ORDER_NOTICE_REASONS),
+    message: z.string().trim().max(ORDER_NOTICE_MESSAGE_MAX).nullish(),
+  }),
+  // Fecha o aviso aberto (resolvido por outro caminho ou mandado por engano).
+  z.object({ action: z.literal("resolve_notice") }),
 ])
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -111,6 +125,31 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       return NextResponse.json({ error: complement.error }, { status: complement.status })
     }
     return NextResponse.json({ ok: true, complement: complement.summary })
+  }
+
+  if (parsed.data.action === "notify_customer") {
+    const notice = await sendOrderCustomerNotice(
+      id,
+      { reason: parsed.data.reason, message: parsed.data.message ?? null },
+      auth.profile.id
+    )
+    if (!notice.ok) {
+      return NextResponse.json({ error: notice.error }, { status: notice.status })
+    }
+    return NextResponse.json({
+      ok: true,
+      notice: notice.notice,
+      emailed: notice.emailed,
+      emailReason: notice.emailReason,
+    })
+  }
+
+  if (parsed.data.action === "resolve_notice") {
+    const resolved = await resolveOrderCustomerNotice(id, auth.profile.id)
+    if (!resolved.ok) {
+      return NextResponse.json({ error: resolved.error }, { status: resolved.status })
+    }
+    return NextResponse.json({ ok: true, resolvedAt: resolved.resolvedAt })
   }
 
   if (parsed.data.action === "approve_card_review") {

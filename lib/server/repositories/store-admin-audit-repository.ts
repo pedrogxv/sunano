@@ -25,6 +25,9 @@ export type StoreAuditAction =
   | "order.card_review_approve"
   /** Valor de Complemento de Pagamento cobrado num pedido. */
   | "order.complement_due"
+  /** Aviso ao cliente (dado de entrega a corrigir etc.) enviado ou marcado como resolvido. */
+  | "order.customer_notice"
+  | "order.customer_notice_resolve"
   | "store_settings.update"
 
 type LogAdminActionParams = {

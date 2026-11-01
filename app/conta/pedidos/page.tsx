@@ -5,6 +5,7 @@ import Link from "next/link"
 import { RouteLink } from "@/components/ui/route-link"
 import { toast } from "sonner"
 import {
+  AlertTriangle,
   CalendarIcon,
   ChevronsUpDown,
   ClipboardList,
@@ -90,9 +91,11 @@ import {
   ORDER_PAID_STATUSES,
   ORDER_STATUS_LABEL,
   ORDER_TRACKING_NOTICE,
+  SHIPPING_EDITABLE_STATUSES,
   orderStatusDescription,
   orderStatusLabel,
 } from "@/lib/order-status"
+import { ORDER_NOTICE_REASON, canFixShippingOnSite } from "@/lib/order-customer-notice"
 import { storeCarrierTracking } from "@/lib/store-carriers"
 import { storageImgProps } from "@/lib/storage-thumb"
 
@@ -402,9 +405,9 @@ function ConfirmDeliveryButton({
 /**
  * Estados em que ainda faz sentido o cliente mexer no endereço. Depois de
  * `shipped` a etiqueta já saiu — o servidor recusa a alteração, então nem
- * oferecemos o botão. Espelha `SHIPPING_EDITABLE_STATUSES` no repositório.
+ * oferecemos o botão. A mesma lista que o servidor confere.
  */
-const SHIPPING_EDITABLE: UserOrder["status"][] = ["pending", "paid", "awaiting_shipping_info"]
+const SHIPPING_EDITABLE: UserOrder["status"][] = SHIPPING_EDITABLE_STATUSES
 
 /**
  * Cor de destaque do card por status. O pedido é o objeto mais concreto que
@@ -473,12 +476,19 @@ function OrderCard({
   const missingServiceForm = isMissingServiceForm(order)
   const owesComplement = order.complement.pendingCents > 0 || order.complement.awaitingPaymentOrderId !== null
   const awaitingReplyTicketId = order.awaiting_reply_ticket_id
+  // Aviso da loja (CPF errado etc.). O de entrega leva direto ao formulário;
+  // os outros, à conversa do pedido.
+  const notice = order.customer_notice
+  const noticeFixesShipping =
+    notice !== null &&
+    ORDER_NOTICE_REASON[notice.reason].fixesShipping &&
+    canFixShippingOnSite(order.status, order.requires_shipping_address)
 
   return (
     <div
       className={cn(
         "group relative overflow-hidden rounded-xl border bg-muted/20 transition-colors",
-        missingAddress || missingServiceForm
+        notice || missingAddress || missingServiceForm
           ? "border-amber-500/40"
           : awaitingReplyTicketId
             ? "border-sky-500/40"
@@ -576,10 +586,73 @@ function OrderCard({
         )}
       </div>
 
+      {/* Aviso da loja: o admin pediu uma correção (ou avisou de algo) e
+          mandou o mesmo texto por e-mail. Vem antes dos outros avisos por ser
+          o único que uma pessoa escreveu para ESTE pedido. Fecha sozinho
+          quando os dados de entrega são salvos de novo. */}
+      {notice && (
+        <div className="flex flex-col gap-2 border-t border-amber-500/25 bg-amber-500/10 px-4 py-2.5 pl-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-1.5 text-[11px] text-amber-300">
+            <AlertTriangle className="mt-px size-3.5 shrink-0" />
+            <div className="min-w-0 space-y-0.5">
+              {ORDER_NOTICE_REASON[notice.reason].fixesShipping ? (
+                <>
+                  <p>
+                    <span className="font-semibold">Precisamos de uma correção:</span>{" "}
+                    {ORDER_NOTICE_REASON[notice.reason].problem}
+                  </p>
+                  {notice.message && (
+                    <p className="whitespace-pre-wrap break-words text-amber-200/90">{notice.message}</p>
+                  )}
+                </>
+              ) : (
+                <p className="whitespace-pre-wrap break-words">
+                  <span className="font-semibold">Aviso da loja:</span>{" "}
+                  {notice.message ?? ORDER_NOTICE_REASON[notice.reason].problem}
+                </p>
+              )}
+            </div>
+          </div>
+          {noticeFixesShipping ? (
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => onEditShipping(order)}
+              className="h-7 shrink-0 gap-1.5 bg-amber-500 text-xs font-semibold text-black hover:bg-amber-400"
+            >
+              <Truck className="size-3.5" />
+              Corrigir dados de entrega
+            </Button>
+          ) : order.chat_ticket_id ? (
+            <Button
+              asChild
+              size="sm"
+              className="h-7 shrink-0 gap-1.5 bg-amber-500 text-xs font-semibold text-black hover:bg-amber-400"
+            >
+              <RouteLink href={`/conta/suporte/${order.chat_ticket_id}`}>
+                <MessageCircle className="size-3.5" />
+                Falar com a loja
+              </RouteLink>
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => onOpenChat(order)}
+              className="h-7 shrink-0 gap-1.5 bg-amber-500 text-xs font-semibold text-black hover:bg-amber-400"
+            >
+              <MessageCircle className="size-3.5" />
+              Falar com a loja
+            </Button>
+          )}
+        </div>
+      )}
+
       {/* Aviso de endereço faltando: dentro do card do pedido em questão, não
           num alerta genérico no topo — o cliente precisa saber QUAL pedido
-          está parado, não que "algum" está. */}
-      {missingAddress && (
+          está parado, não que "algum" está. Com o aviso da loja acima já
+          levando ao mesmo formulário, este sairia repetido. */}
+      {missingAddress && !noticeFixesShipping && (
         <div className="flex flex-col gap-2 border-t border-amber-500/25 bg-amber-500/10 px-4 py-2.5 pl-5 sm:flex-row sm:items-center sm:justify-between">
           <p className="flex items-start gap-1.5 text-[11px] text-amber-300">
             <MapPin className="mt-px size-3.5 shrink-0" />
@@ -1015,6 +1088,15 @@ function OrderDetailsDialog({
                   Ainda não informado; o pedido não é despachado até você preencher.
                 </p>
               )}
+              {order.customer_notice && ORDER_NOTICE_REASON[order.customer_notice.reason].fixesShipping && (
+                <p className="flex items-start gap-1.5 text-xs text-amber-400">
+                  <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                  <span>
+                    {ORDER_NOTICE_REASON[order.customer_notice.reason].problem}
+                    {order.customer_notice.message ? ` ${order.customer_notice.message}` : ""}
+                  </span>
+                </p>
+              )}
               {order.requires_shipping_address && SHIPPING_EDITABLE.includes(order.status) && (
                 <button
                   type="button"
@@ -1022,7 +1104,11 @@ function OrderDetailsDialog({
                   className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-400 hover:underline"
                 >
                   <Truck className="size-3.5" />
-                  {order.shipping_address ? "Alterar endereço" : "Informar endereço"}
+                  {order.customer_notice && ORDER_NOTICE_REASON[order.customer_notice.reason].fixesShipping
+                    ? "Corrigir dados de entrega"
+                    : order.shipping_address
+                      ? "Alterar endereço"
+                      : "Informar endereço"}
                 </button>
               )}
               {/* Depois do despacho a etiqueta já saiu: o servidor recusa a

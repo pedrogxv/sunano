@@ -324,6 +324,41 @@ export async function notifyOrderWarehouseArrived(params: { userId: string; orde
 }
 
 /**
+ * Avisa o cliente que a loja precisa de uma correção (ou tem um aviso) sobre
+ * o pedido (`sendOrderCustomerNotice`). O card do pedido em "Meus Pedidos"
+ * mostra o aviso inteiro com o botão de corrigir; aqui vai o resumo. Mesmo
+ * contrato de `notifyOrderStatusChange`: best-effort, nunca lança.
+ */
+export async function notifyOrderCustomerNotice(params: {
+  userId: string
+  orderId: string
+  /** Pede correção dos dados de entrega (vs. aviso geral). */
+  fixesShipping: boolean
+  problem: string
+}): Promise<void> {
+  const db = createSupabaseAdminClient()
+  const shortId = params.orderId.slice(0, 8).toUpperCase()
+
+  const { error } = await db.from("notifications").insert({
+    user_id: params.userId,
+    type: "order_status",
+    entity_type: "order",
+    entity_id: params.orderId,
+    link: "/conta/pedidos",
+    title: params.fixesShipping
+      ? `Pedido #${shortId}: precisamos de uma correção`
+      : `Aviso sobre o pedido #${shortId}`,
+    body: params.fixesShipping
+      ? `${params.problem} Corrija em Meus Pedidos para o pedido seguir.`
+      : `${params.problem} Veja os detalhes em Meus Pedidos.`,
+  })
+
+  if (error) {
+    console.error("[notifications-repository] notifyOrderCustomerNotice:", error)
+  }
+}
+
+/**
  * Notifica o afiliado que o saque dele mudou de status. Chamada explícita a
  * partir de `affiliates-repository.ts` (`markPayoutPaid`/`rejectPayoutRequest`),
  * mesmo desenho de `notifyOrderStatusChange`: `title`/`body` já em português

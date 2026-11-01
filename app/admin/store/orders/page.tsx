@@ -7,6 +7,7 @@ import {
   AlertCircle,
   Ban,
   Banknote,
+  BellRing,
   CalendarIcon,
   CheckCircle2,
   ChevronsUpDown,
@@ -88,7 +89,20 @@ import {
 } from "@/lib/payment-gateways"
 import { formatBRL } from "@/lib/format"
 import { orderNumber } from "@/lib/order-number"
-import { ORDER_STATUS_GROUPS, orderStatusLabel, type OrderStatusGroup } from "@/lib/order-status"
+import {
+  ORDER_STATUS_GROUPS,
+  SHIPPING_EDITABLE_STATUSES,
+  orderStatusLabel,
+  type OrderStatusGroup,
+} from "@/lib/order-status"
+import {
+  ORDER_NOTICE_MESSAGE_MAX,
+  ORDER_NOTICE_REASON,
+  ORDER_NOTICE_REASONS,
+  canFixShippingOnSite,
+  type AdminOrderCustomerNotice,
+  type OrderNoticeReason,
+} from "@/lib/order-customer-notice"
 import { STORE_CARRIERS, findStoreCarrier, type StoreCarrier } from "@/lib/store-carriers"
 import { formatCepInput, formatCpfInput, formatPhoneInput } from "@/lib/br-format"
 import { SHIPPING_RESIDENCE_TYPE_LABELS, isoToBirthDateInput } from "@/components/store/ShippingAddressFields"
@@ -185,6 +199,8 @@ type AdminOrder = {
   complement_for: AdminOrderRow["complement_for"]
   /** Conversa do cliente sobre o pedido (chamado de suporte). Null = nenhuma. */
   chat: AdminOrderChat | null
+  /** Último aviso mandado ao cliente (dado a corrigir etc.). Null = nunca houve. */
+  customer_notice: AdminOrderRow["customer_notice"]
 }
 
 /**
@@ -218,6 +234,22 @@ function isMissingShippingAddress(order: AdminOrder): boolean {
     order.requires_shipping_address &&
     !order.shipping_address &&
     (order.status === "paid" || order.status === "awaiting_shipping_info")
+  )
+}
+
+/** Aviso ao cliente ainda aberto: o pedido espera ele corrigir/responder. */
+function hasOpenNotice(order: AdminOrder): boolean {
+  return Boolean(order.customer_notice && !order.customer_notice.resolved_at)
+}
+
+/**
+ * O cliente corrigiu a entrega depois do aviso e o pedido ainda não saiu:
+ * alguém precisa conferir o dado novo antes de despachar. Depois do envio o
+ * selo some (vira histórico, no detalhe do pedido).
+ */
+function noticeFixedByCustomer(order: AdminOrder): boolean {
+  return (
+    order.customer_notice?.resolved_by === "customer" && SHIPPING_EDITABLE_STATUSES.includes(order.status)
   )
 }
 
@@ -737,6 +769,8 @@ export default function AdminOrdersPage() {
   const [manageOrder, setManageOrder] = useState<AdminOrder | null>(null)
   // Pedido sem conversa em que a equipe vai chamar o cliente.
   const [chatOrder, setChatOrder] = useState<AdminOrder | null>(null)
+  // Pedido cujo cliente está sendo avisado (dado errado, outro assunto).
+  const [noticeOrder, setNoticeOrder] = useState<AdminOrder | null>(null)
   const [canOpenChat, setCanOpenChat] = useState(false)
 
   const load = useCallback(async () => {
@@ -1058,6 +1092,7 @@ export default function AdminOrdersPage() {
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Data</th>
                 <th className="px-4 py-3" />
                 <th className="px-4 py-3" />
+                <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -1175,6 +1210,24 @@ export default function AdminOrdersPage() {
                           SEM ENDEREÇO
                         </span>
                       )}
+                      {hasOpenNotice(order) && order.customer_notice && (
+                        <span
+                          title={`Aviso enviado ao cliente: ${ORDER_NOTICE_REASON[order.customer_notice.reason].label}`}
+                          className="inline-flex items-center gap-1 rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[9.5px] font-bold text-amber-400"
+                        >
+                          <BellRing className="size-2.5" strokeWidth={2.5} />
+                          AGUARDANDO CLIENTE
+                        </span>
+                      )}
+                      {noticeFixedByCustomer(order) && (
+                        <span
+                          title="O cliente salvou os dados de entrega depois do aviso: confira antes de despachar"
+                          className="inline-flex items-center gap-1 rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[9.5px] font-bold text-emerald-400"
+                        >
+                          <CheckCircle2 className="size-2.5" strokeWidth={2.5} />
+                          CLIENTE CORRIGIU
+                        </span>
+                      )}
                       {order.is_sandbox && (
                         <span
                           title={`Pedido de teste (sandbox${order.payment_method === "aura" ? "" : ` da ${PAYMENT_GATEWAY_LABEL[orderPaymentGateway(order)]}`}): não gerou receita nem comissão`}
@@ -1252,6 +1305,21 @@ export default function AdminOrdersPage() {
                       )
                     )}
                   </td>
+                  <td className="px-4 py-3">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="gap-1.5 text-muted-foreground"
+                      title="Avisar o cliente de um dado errado ou faltando (e-mail + site)"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setNoticeOrder(order)
+                      }}
+                    >
+                      <BellRing className="size-3.5" />
+                      Avisar
+                    </Button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -1308,8 +1376,19 @@ export default function AdminOrdersPage() {
         order={manageOrder}
         onOpenChange={(open) => !open && setManageOrder(null)}
         onOrderPatched={applyOrderPatch}
+        onNotifyCustomer={(order) => {
+          // Fecha o detalhe antes de abrir o aviso: dois dialogs abertos
+          // disputam o foco.
+          setManageOrder(null)
+          setNoticeOrder(order)
+        }}
       />
       <OrderOpenChatDialog order={chatOrder} onOpenChange={(open) => !open && setChatOrder(null)} />
+      <OrderNoticeDialog
+        order={noticeOrder}
+        onOpenChange={(open) => !open && setNoticeOrder(null)}
+        onOrderPatched={applyOrderPatch}
+      />
     </div>
   )
 }
@@ -1409,6 +1488,242 @@ function OrderOpenChatDialog({
   )
 }
 
+/**
+ * Avisa o cliente de um dado errado ou faltando (CPF de quem recebe,
+ * endereço...) ou de outro assunto importante do pedido. Sai por e-mail e
+ * notificação, e fica em destaque no card do pedido em "Meus Pedidos" com o
+ * botão de corrigir. O de entrega fecha sozinho quando o cliente salva os
+ * dados de novo; o de outro assunto, quem fecha é a equipe (detalhe do pedido).
+ */
+function OrderNoticeDialog({
+  order,
+  onOpenChange,
+  onOrderPatched,
+}: {
+  order: AdminOrder | null
+  onOpenChange: (open: boolean) => void
+  onOrderPatched: (id: string, patch: Partial<AdminOrder>) => void
+}) {
+  const [reason, setReason] = useState<OrderNoticeReason | "">("")
+  const [message, setMessage] = useState("")
+  const [submitting, setSubmitting] = useState(false)
+
+  const orderId = order?.id
+  useEffect(() => {
+    if (!orderId) return
+    setReason("")
+    setMessage("")
+  }, [orderId])
+
+  const canFixShipping = order ? canFixShippingOnSite(order.status, order.requires_shipping_address) : false
+  const meta = reason ? ORDER_NOTICE_REASON[reason] : null
+  const needsMessage = meta !== null && !meta.fixesShipping
+  const canSubmit = meta !== null && (!needsMessage || message.trim().length > 0)
+  const openNotice = order?.customer_notice && !order.customer_notice.resolved_at ? order.customer_notice : null
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!order || !reason || !canSubmit || submitting) return
+    setSubmitting(true)
+    try {
+      const res = await fetch(`/api/admin/store/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "notify_customer", reason, message: message.trim() || null }),
+      })
+      const data = (await res.json().catch(() => null)) as
+        | { notice?: AdminOrderCustomerNotice; emailed?: boolean; emailReason?: string | null; error?: string }
+        | null
+      if (!res.ok || !data?.notice) {
+        toast.error(data?.error ?? "Não foi possível avisar o cliente")
+        return
+      }
+      onOrderPatched(order.id, { customer_notice: data.notice })
+      if (data.emailed) {
+        toast.success("Cliente avisado por e-mail e no site", { description: `#${orderNumber(order.id)}` })
+      } else {
+        toast.warning("Aviso no site, mas o e-mail não saiu", {
+          description: data.emailReason ? `Motivo: ${data.emailReason}.` : undefined,
+        })
+      }
+      onOpenChange(false)
+    } catch {
+      toast.error("Não foi possível avisar o cliente")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Dialog open={order !== null} onOpenChange={onOpenChange}>
+      <DialogContent className="border border-border bg-card sm:max-w-md">
+        {order && (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <BellRing className="size-4 text-amber-400" />
+                Avisar cliente
+              </DialogTitle>
+              <DialogDescription>
+                Pedido #{orderNumber(order.id)} de {order.customer_name ?? order.user_display_name ?? "cliente"}.
+                O cliente recebe por e-mail e notificação, e o aviso fica em destaque no pedido em Meus Pedidos
+              </DialogDescription>
+            </DialogHeader>
+
+            {openNotice && (
+              <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+                Já existe um aviso aberto ({ORDER_NOTICE_REASON[openNotice.reason].label}). Enviar outro
+                substitui o anterior.
+              </p>
+            )}
+
+            <div className="space-y-1.5">
+              <Label htmlFor="order-notice-reason" className="text-xs">
+                Motivo
+              </Label>
+              <Select value={reason} onValueChange={(next) => setReason(next as OrderNoticeReason)}>
+                <SelectTrigger id="order-notice-reason" className="w-full">
+                  <SelectValue placeholder="Escolha o que o cliente precisa resolver" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ORDER_NOTICE_REASONS.map((option) => (
+                    <SelectItem
+                      key={option}
+                      value={option}
+                      disabled={ORDER_NOTICE_REASON[option].fixesShipping && !canFixShipping}
+                    >
+                      {ORDER_NOTICE_REASON[option].label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {!canFixShipping && (
+                <p className="text-[11px] text-muted-foreground">
+                  {order.requires_shipping_address
+                    ? "Neste status o cliente não corrige mais a entrega pelo site: só \"Outro assunto\"."
+                    : "Pedido sem entrega: só \"Outro assunto\"."}
+                </p>
+              )}
+            </div>
+
+            {meta && (
+              <p className="rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                O cliente vai ver: <span className="text-foreground">{meta.problem}</span>{" "}
+                {meta.fixesShipping
+                  ? "Com o botão \"Corrigir dados de entrega\". O aviso fecha sozinho quando ele salvar."
+                  : "O aviso fica aberto até você marcar como resolvido no pedido."}
+              </p>
+            )}
+
+            <div className="space-y-1.5">
+              <Label htmlFor="order-notice-message" className="text-xs">
+                {needsMessage ? "Mensagem" : "Mensagem (opcional)"}
+              </Label>
+              <Textarea
+                id="order-notice-message"
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder={
+                  needsMessage
+                    ? "Escreva o que o cliente precisa saber..."
+                    : "Ex.: o CPF informado não é válido na Receita. Confira os números."
+                }
+                className="min-h-24"
+                maxLength={ORDER_NOTICE_MESSAGE_MAX}
+                required={needsMessage}
+              />
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting}>
+                Cancelar
+              </Button>
+              <Button type="submit" className="gap-2" disabled={submitting || !canSubmit}>
+                {submitting ? <Loader2 className="size-4 animate-spin" /> : <BellRing className="size-4" />}
+                {submitting ? "Enviando..." : "Enviar aviso"}
+              </Button>
+            </DialogFooter>
+          </form>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/**
+ * "Aviso ao cliente" no detalhe do pedido: o aviso aberto (com o botão de
+ * fechar), ou o último já resolvido como histórico, e o botão de mandar um.
+ */
+function OrderNoticeSection({
+  notice,
+  resolving,
+  onResolve,
+  onNotify,
+}: {
+  notice: AdminOrderCustomerNotice | null
+  resolving: boolean
+  onResolve: () => void
+  onNotify: () => void
+}) {
+  const open = notice && !notice.resolved_at ? notice : null
+
+  return (
+    <div
+      className={cn(
+        "space-y-2 rounded-lg border p-3",
+        open ? "border-amber-500/40 bg-amber-500/10" : "border-border/60 bg-muted/20"
+      )}
+    >
+      <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <BellRing className="size-3.5" />
+        Aviso ao cliente
+      </p>
+
+      {open ? (
+        <div className="space-y-1 text-xs">
+          <p className="font-semibold text-amber-400">{ORDER_NOTICE_REASON[open.reason].label}</p>
+          {open.message && <p className="whitespace-pre-wrap break-words text-foreground">{open.message}</p>}
+          <p className="text-muted-foreground">
+            Enviado em {formatDateTime(open.sent_at)}.{" "}
+            {ORDER_NOTICE_REASON[open.reason].fixesShipping
+              ? "Fecha sozinho quando o cliente salvar os dados de entrega."
+              : "Fica aberto até você marcar como resolvido."}
+          </p>
+        </div>
+      ) : notice ? (
+        <p className="text-xs text-muted-foreground">
+          Último aviso ({ORDER_NOTICE_REASON[notice.reason].label}) resolvido em{" "}
+          {formatDateTime(notice.resolved_at!)}{" "}
+          {notice.resolved_by === "customer" ? (
+            <span className="font-medium text-emerald-400">pelo cliente, que salvou os dados de entrega</span>
+          ) : (
+            "pela equipe"
+          )}
+          .
+        </p>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          Cliente errou um dado (CPF, endereço) ou precisa saber de algo? O aviso vai por e-mail e fica em
+          destaque no pedido dele.
+        </p>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" variant="outline" className="gap-1.5" onClick={onNotify}>
+          <BellRing className="size-3.5" />
+          {open ? "Mandar outro aviso" : "Avisar cliente"}
+        </Button>
+        {open && (
+          <Button size="sm" variant="ghost" className="gap-1.5" onClick={onResolve} disabled={resolving}>
+            {resolving ? <Loader2 className="size-3.5 animate-spin" /> : <CheckCircle2 className="size-3.5" />}
+            Marcar como resolvido
+          </Button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function CarrierSelect({
   id,
   value,
@@ -1495,10 +1810,13 @@ function OrderManageDialog({
   order,
   onOpenChange,
   onOrderPatched,
+  onNotifyCustomer,
 }: {
   order: AdminOrder | null
   onOpenChange: (open: boolean) => void
   onOrderPatched: (id: string, patch: Partial<AdminOrder>) => void
+  /** Abre o "Avisar cliente" deste pedido (fecha o detalhe antes). */
+  onNotifyCustomer: (order: AdminOrder) => void
 }) {
   const [trackingCode, setTrackingCode] = useState("")
   const [carrier, setCarrier] = useState<StoreCarrier | "">("")
@@ -1523,6 +1841,7 @@ function OrderManageDialog({
   const [manualAmount, setManualAmount] = useState("")
   const [manualReference, setManualReference] = useState("")
   const [registeringManual, setRegisteringManual] = useState(false)
+  const [resolvingNotice, setResolvingNotice] = useState(false)
 
   useEffect(() => {
     if (!order) return
@@ -1653,6 +1972,32 @@ function OrderManageDialog({
 
   // Cartão segurado para revisão: aprovar captura a autorização e libera o
   // pedido. Recusar é o "Cancelar pedido" abaixo (solta a autorização).
+  // O aviso de outro assunto não tem o que o cliente corrigir pelo site:
+  // quem fecha é a equipe (o de entrega também pode, se resolveu por fora).
+  async function handleResolveNotice() {
+    if (!order?.customer_notice) return
+    setResolvingNotice(true)
+    try {
+      const res = await fetch(`/api/admin/store/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "resolve_notice" }),
+      })
+      const data = (await res.json().catch(() => ({}))) as { resolvedAt?: string; error?: string }
+      if (!res.ok || !data.resolvedAt) throw new Error(data.error ?? "Erro ao atualizar o aviso")
+
+      onOrderPatched(order.id, {
+        customer_notice: { ...order.customer_notice, resolved_at: data.resolvedAt, resolved_by: "admin" },
+      })
+      toast.success("Aviso marcado como resolvido", { description: "Saiu do pedido em Meus Pedidos." })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro ao atualizar o aviso"
+      toast.error("Erro ao atualizar o aviso", { description: message })
+    } finally {
+      setResolvingNotice(false)
+    }
+  }
+
   async function handleApproveCardReview() {
     if (!order) return
     setApprovingReview(true)
@@ -1935,6 +2280,13 @@ function OrderManageDialog({
               {order.user_id ? "Usuário cadastrado" : "Compra como convidado"}
             </p>
           </div>
+
+          <OrderNoticeSection
+            notice={order.customer_notice}
+            resolving={resolvingNotice}
+            onResolve={handleResolveNotice}
+            onNotify={() => onNotifyCustomer(order)}
+          />
 
           {/* Formulário pós-compra de serviço: o que o cliente pediu (Xianyu: produto, link, cor). */}
           {serviceFormLines(order.items).length > 0 && (

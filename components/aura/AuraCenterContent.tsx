@@ -4,7 +4,7 @@ import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
-import { Bird, Check, ChevronRight, HelpCircle, MessageSquare, Snowflake, Sparkles, SquarePen, Trophy } from "lucide-react"
+import { Bird, Check, ChevronRight, Gift, HelpCircle, ShoppingBag, Target, Zap, MessageSquare, Snowflake, Sparkles, SquarePen, Trophy } from "lucide-react"
 import { AURA_BRAND_FILL_CLASS, AuraAmount, AuraIcon } from "@/components/ui/AuraIcon"
 import { AuraFlame } from "@/components/ui/AuraFlame"
 import { AURA_EMBERS as EMBERS } from "@/components/aura/aura-embers"
@@ -53,6 +53,10 @@ import type { PrefillShipping } from "@/components/aura/PeripheralRedeemDialog"
 import { isYoutubeSubscriptionEnabled } from "@/lib/youtube-subscription"
 import type { PublicTrustSummary } from "@/lib/server/repositories/trust-repository"
 import { getDiscordMembershipFeedback } from "@/lib/discord-membership"
+import { GiveawaysShowcase } from "@/components/home/GiveawaysShowcase"
+import { AuraHub } from "@/components/aura/AuraHub"
+import { LaneProgress, PrizeLaneHeader } from "@/components/aura/PrizeLaneHeader"
+import type { ViewerGiveaways } from "@/lib/giveaways"
 
 type AuraUsage = {
   balance: number
@@ -116,6 +120,8 @@ interface AuraCenterContentProps {
    * (ver `can_redeem_physical_item`).
    */
   trust: PublicTrustSummary
+  /** Sorteios já resolvidos para quem está vendo; `null` = a flag `giveaways` não libera. */
+  giveaways: ViewerGiveaways | null
 }
 
 /**
@@ -159,6 +165,7 @@ export function AuraCenterContent({
   founderItemId,
   streakFrameItemIds,
   trust,
+  giveaways,
 }: AuraCenterContentProps) {
   // `initial*` só muda entre navegações de página inteira (novo render do
   // Server Component), nunca em re-render do client — então o valor inicial
@@ -433,67 +440,75 @@ export function AuraCenterContent({
         </div>
       </div>
 
-      {/* "Como funciona a Aura" mora na Central de Informações
-          (/informacoes/central-de-aura) — texto de referência, sem duplicar.
-          Aqui fica só a chamada, logo abaixo dos cards de status: quem chega
-          sem entender a moeda lê a regra antes de descer pela loja. */}
-      <Link
-        href="/informacoes/central-de-aura"
-        className={cn(
-          "group flex items-center gap-4 rounded-2xl border p-5 transition-colors hover:border-orange-500/40",
-          CARD_SURFACE
-        )}
-      >
-        <span className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-orange-500/30 bg-orange-500/10 text-orange-400">
-          <HelpCircle className="size-5" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <h2 className="font-display text-base font-bold text-foreground group-hover:text-orange-400">
-            Como funciona a Aura
-          </h2>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Todas as formas de ganhar e gastar Aura, o multiplicador de Ofensiva e VIP, e os
-            limites de reações — na Central de Informações.
-          </p>
-        </div>
-        <ChevronRight className="size-5 shrink-0 text-muted-foreground group-hover:text-orange-400" />
-      </Link>
+      {/* Painel de Prêmios — Sorteios (grátis, atrás da flag `giveaways`) e
+          Resgate com Aura (prêmio físico, estoque limitado, só Trust "Muito
+          Bom") num bloco só, logo abaixo do saldo: é o que a Central tem de
+          mais cobiçado. Some se não houver nenhum dos dois. */}
+      {(giveaways !== null || peripheralItems.length > 0) && (
+        <AuraHub
+          theme="prize"
+          icon={<Gift className="size-5" />}
+          title="Prêmios"
+          subtitle={
+            <>
+              <span className="font-semibold text-emerald-300">Sorteio de graça</span> ou{" "}
+              <span className="font-semibold text-orange-300">troca por Aura</span>, sempre periférico de verdade
+            </>
+          }
+        >
+          {/* O mesmo componente da Home, para o card e a participação não
+              divergirem entre as duas telas. */}
+          <GiveawaysShowcase initial={giveaways} resolvedForViewer variant="lane" />
 
-      {/* Produtos — prêmio físico, estoque limitado, só Trust "Muito Bom".
-          Fica logo abaixo do saldo: é o item mais cobiçado da Central, então
-          abre a área de troca em vez de ficar no rodapé da página. */}
-      <AuraPeripheralSection
-        items={peripheralItems}
-        owners={peripheralOwnerMap}
-        balance={currentBalance}
-        isLoggedIn={isLoggedIn}
-        isVip={vip.active}
-        trust={trust}
-        currentUserSlug={currentUserSlug}
-        currentUserAvatarUrl={currentUserAvatarUrl}
-        currentUserName={currentName}
-        shippingPrefill={shippingPrefill}
-        requireLogin={requireLogin}
-        onRedeemed={(itemId, cost, owner) => {
-          setPeripheralOwnerMap((prev) => {
-            const next = new Map(prev)
-            next.set(itemId, [...(next.get(itemId) ?? []), owner])
-            return next
-          })
-          setCurrentBalance((prev) => prev - cost)
-        }}
-      />
+          <AuraPeripheralSection
+            items={peripheralItems}
+            owners={peripheralOwnerMap}
+            balance={currentBalance}
+            isLoggedIn={isLoggedIn}
+            isVip={vip.active}
+            trust={trust}
+            currentUserSlug={currentUserSlug}
+            currentUserAvatarUrl={currentUserAvatarUrl}
+            currentUserName={currentName}
+            shippingPrefill={shippingPrefill}
+            requireLogin={requireLogin}
+            onRedeemed={(itemId, cost, owner) => {
+              setPeripheralOwnerMap((prev) => {
+                const next = new Map(prev)
+                next.set(itemId, [...(next.get(itemId) ?? []), owner])
+                return next
+              })
+              setCurrentBalance((prev) => prev - cost)
+            }}
+          />
+        </AuraHub>
+      )}
 
-      {/* Loja de itens — vantagens genéricas (VIP, troca de nome).
-          Escudo, Molduras, Fundos de Mini Perfil e Produtos têm seção própria.
+      {/* Loja de Aura — tudo que se compra para o próprio perfil e conta:
+          vantagens (VIP, troca de nome, escudo), molduras e fundos de mini
+          perfil, cada um numa faixa. Sempre disponíveis, sem limite de
+          unidades (o que tem estoque fica nos Prêmios, lá em cima).
           `id="vip"`: alvo do link "Assinar" vindo das configurações da conta. */}
-      <div id="vip" className="scroll-mt-20 space-y-3">
-        <div className="space-y-1">
-          <h2 className="font-display text-lg font-bold text-foreground">Itens da loja</h2>
-          <p className="text-xs text-muted-foreground">
-            Cosméticos de perfil e vantagens. Sempre disponíveis, sem limite de unidades.
-          </p>
-        </div>
+      <AuraHub
+        theme="shop"
+        id="vip"
+        icon={<ShoppingBag className="size-5" />}
+        title="Loja de Aura"
+        subtitle={
+          <>
+            Vantagens e <span className="font-semibold text-fuchsia-300">visual do seu perfil</span>, sem limite de
+            unidades
+          </>
+        }
+      >
+      <div className="space-y-3">
+        <PrizeLaneHeader
+          icon={<Sparkles className="size-4" />}
+          iconClassName="bg-gradient-to-br from-amber-200 to-violet-600 text-[#160626] shadow-[0_0_16px_-4px] shadow-violet-500/70"
+          title="Vantagens"
+          tag="Sempre disponível"
+          tagClassName="bg-violet-500/10 text-violet-200 ring-1 ring-violet-400/30"
+        />
         {nonShieldItems.length === 0 && !hasShieldItem ? (
           <p className="rounded-2xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">
             Nenhum item disponível no momento. Volte em breve!
@@ -613,6 +628,7 @@ export function AuraCenterContent({
         onShowVipBenefits={() => setVipUpsellOpen(true)}
         founderItemId={founderItemId}
         streakFrameItemIds={streakFrameItemIds}
+        lane
         // O RECORDE, nunca `streak.current`: o marco alcançado é permanente,
         // e a vitrine tem de mostrar as molduras já conquistadas mesmo com a
         // ofensiva quebrada.
@@ -634,12 +650,38 @@ export function AuraCenterContent({
           setCurrentBalance((prev) => prev - cost)
         }}
         onEquipChange={setEquippedMiniBgId}
+        lane
       />
+      </AuraHub>
 
-      {/* Missões diárias e conquistas da comunidade lado a lado: as duas são
-          "como ganhar Aura agora", e empilhadas a lista de missões esticava a
-          linha inteira e deixava a recompensa longe do texto. */}
-      <div className="grid items-start gap-8 lg:grid-cols-2 lg:gap-6">
+      {/* Ganhe Aura — missões do dia, conquistas da comunidade e indicação: tudo
+          que rende Aura fora do fórum. O "Como funciona a Aura" (que mora na
+          Central de Informações) virou o atalho do cabeçalho deste painel,
+          onde a dúvida aparece, em vez de um bloco próprio no meio da página. */}
+      <AuraHub
+        theme="earn"
+        icon={<Zap className="size-5" />}
+        title="Ganhe Aura"
+        subtitle={
+          <>
+            Missões que <span className="font-semibold text-emerald-300">renovam todo dia</span>, conquistas e
+            indicação
+          </>
+        }
+        right={
+          <Link
+            href="/informacoes/central-de-aura"
+            className="group flex items-center gap-1.5 rounded-full bg-white/[0.05] py-1.5 pl-2.5 pr-3 text-xs font-semibold text-foreground/80 ring-1 ring-white/10 transition-colors hover:bg-white/10 hover:text-foreground"
+          >
+            <HelpCircle className="size-3.5 text-emerald-300" />
+            Como funciona a Aura
+            <ChevronRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
+          </Link>
+        }
+      >
+      {/* Missões e conquistas lado a lado: as duas são "como ganhar Aura
+          agora", e empilhadas a lista de missões esticava a linha inteira. */}
+      <div className="grid items-start gap-6 lg:grid-cols-2">
       {/* Missões diárias reais — mesmo estado de daily_missions, feito/pendente hoje.
 
           `id="tarefas"`: alvo do botão "Ver missões diárias" da vitrine de
@@ -647,13 +689,15 @@ export function AuraCenterContent({
           apontava para /conquistas, que não tem missão nenhuma — a pessoa
           clicava e caía numa tela sem o que o botão prometia. */}
       <div id="tarefas" className="scroll-mt-20 space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="font-display text-lg font-bold text-foreground">Missões diárias</h2>
-          <span className="text-xs font-semibold text-muted-foreground">
-            {countCompletedMissions(missions)}/{TASKS.length} concluídas
-          </span>
-        </div>
-        <div className={cn("divide-y divide-border overflow-hidden rounded-2xl border", CARD_SURFACE)}>
+        <PrizeLaneHeader
+          icon={<Target className="size-4" />}
+          iconClassName="bg-gradient-to-br from-lime-200 to-emerald-600 text-[#03190d] shadow-[0_0_16px_-4px] shadow-emerald-500/70"
+          title="Missões do dia"
+          tag="Renova 00h"
+          tagClassName="bg-emerald-500/10 text-emerald-200 ring-1 ring-emerald-400/30"
+          right={<LaneProgress done={countCompletedMissions(missions)} total={TASKS.length} label="missões" />}
+        />
+        <div className="aura-hub-well divide-y divide-white/[0.06] overflow-hidden">
           {TASKS.map(({ key, icon: Icon, text, href }) => {
             const done = missions[key]
             const reward = DAILY_MISSION_REWARDS[key]
@@ -697,7 +741,14 @@ export function AuraCenterContent({
             )
           })}
           {/* Bônus por completar as 3 — linha de resumo, não clicável (não é uma ação própria). */}
-          <div className={cn("flex items-center gap-3 px-4 py-3", missions.bonus_claimed && "bg-emerald-400/[0.04]")}>
+          <div
+            className={cn(
+              "flex items-center gap-3 px-4 py-3",
+              missions.bonus_claimed
+                ? "bg-emerald-400/[0.04]"
+                : "bg-gradient-to-r from-amber-400/[0.08] via-transparent to-transparent"
+            )}
+          >
             <span
               className={cn(
                 "flex size-8 shrink-0 items-center justify-center rounded-lg border",
@@ -733,13 +784,14 @@ export function AuraCenterContent({
         discordConfirmed={discordOk}
         discordInviteUrl={discordInviteUrl}
         requireLogin={requireLogin}
+        lane
       />
       </div>
 
       {/* Programa de Indicação: outra forma de ganhar Aura fora do loop de
-          posts/comentários, mesma família das conquistas acima. Só o resumo —
-          a mecânica inteira é explicada em /indicar. */}
+          posts/comentários. Só o resumo — a mecânica inteira é explicada em /indicar. */}
       <ReferralAuraCard />
+      </AuraHub>
     </div>
     <VipUpsellModal open={vipUpsellOpen} onOpenChange={setVipUpsellOpen} />
     <AuraRankingModal open={rankingOpen} onOpenChange={setRankingOpen} />

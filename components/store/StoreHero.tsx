@@ -63,6 +63,8 @@ import { storageImgProps, storageWidthSrcSet } from "@/lib/storage-thumb"
  */
 
 const AUTOPLAY_MS = 7_000
+/** Duração do deslize (`.animate-hero-*` em globals.css). */
+const SLIDE_TRANSITION_MS = 600
 const SWIPE_THRESHOLD_PX = 40
 /** Teto do setTimeout (≈24,8 dias): além disso o navegador dispara na hora. */
 const MAX_TIMEOUT_MS = 2_147_483_647
@@ -303,12 +305,15 @@ function HeroVideoBackground({
   desktopUrl,
   mobileUrl,
   isCurrent,
+  isNext,
   eager,
   className,
 }: {
   desktopUrl: string
   mobileUrl: string | null
   isCurrent: boolean
+  /** Próximo da fila: baixa antes, senão entra transparente e mostra o slide anterior por baixo até carregar. */
+  isNext: boolean
   eager: boolean
   className: string
 }) {
@@ -356,7 +361,7 @@ function HeroVideoBackground({
       muted
       loop
       playsInline
-      preload={eager || isCurrent ? "auto" : "metadata"}
+      preload={eager || isCurrent || isNext ? "auto" : "metadata"}
       aria-hidden
       className={className}
     />
@@ -364,7 +369,17 @@ function HeroVideoBackground({
 }
 
 /** Fundo do slide: a arte enviada (desktop/mobile) ou, sem arte, uma composição com a foto do produto. */
-function HeroBackground({ slide, isCurrent, eager }: { slide: StoreHeroView; isCurrent: boolean; eager: boolean }) {
+function HeroBackground({
+  slide,
+  isCurrent,
+  isNext,
+  eager,
+}: {
+  slide: StoreHeroView
+  isCurrent: boolean
+  isNext: boolean
+  eager: boolean
+}) {
   const kenBurns = cn(
     "absolute inset-0 size-full object-cover motion-safe:transition-transform motion-safe:duration-[7000ms] motion-safe:ease-out",
     isCurrent ? "scale-100" : "motion-safe:scale-[1.05]"
@@ -376,6 +391,7 @@ function HeroBackground({ slide, isCurrent, eager }: { slide: StoreHeroView; isC
         desktopUrl={slide.imageDesktopUrl}
         mobileUrl={slide.imageMobileUrl}
         isCurrent={isCurrent}
+        isNext={isNext}
         eager={eager}
         className={kenBurns}
       />
@@ -454,6 +470,7 @@ function HeroSlide({
   index,
   total,
   isCurrent,
+  isNext,
   isLeaving,
   direction,
   onSlideInEnd,
@@ -462,6 +479,7 @@ function HeroSlide({
   index: number
   total: number
   isCurrent: boolean
+  isNext: boolean
   /** O slide que acabou de sair: continua visível enquanto desliza para fora. */
   isLeaving: boolean
   /** `null` na primeira pintura: o slide inicial aparece parado. */
@@ -493,7 +511,7 @@ function HeroSlide({
         animation
       )}
     >
-      <HeroBackground slide={slide} isCurrent={isCurrent} eager={index === 0} />
+      <HeroBackground slide={slide} isCurrent={isCurrent} isNext={isNext} eager={index === 0} />
 
       {/* Véu para o texto ler sobre qualquer arte: de baixo no celular (texto
           embaixo), da esquerda no desktop (texto à esquerda). */}
@@ -601,6 +619,15 @@ function HeroCarousel({ slides }: { slides: StoreHeroView[] }) {
     else goTo(currentIndex - 1, "prev")
   }
 
+  // Rede de segurança do `onSlideInEnd`: sem animação (menos movimento, aba
+  // em segundo plano) o `animationend` não chega, e o slide que saiu ficava
+  // visível atrás do novo até a próxima troca.
+  useEffect(() => {
+    if (!transition) return
+    const timer = window.setTimeout(() => setTransition(null), SLIDE_TRANSITION_MS + 100)
+    return () => window.clearTimeout(timer)
+  }, [transition])
+
   const hasControls = total > 1
 
   return (
@@ -640,6 +667,7 @@ function HeroCarousel({ slides }: { slides: StoreHeroView[] }) {
             index={index}
             total={total}
             isCurrent={index === currentIndex}
+            isNext={total > 1 && index === (currentIndex + 1) % total}
             isLeaving={transition?.from === index && index !== currentIndex}
             direction={transition?.direction ?? null}
             // Terminado o deslize, nenhum slide guarda transform: com o estado

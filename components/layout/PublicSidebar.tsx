@@ -35,6 +35,7 @@ import { useCart } from "@/components/providers/cart-context"
 import { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
 import { fetchRedeemableEvents } from "@/lib/client/redeemable-events"
+import { SIDEBAR_PANEL_TRANSITION, SidebarSectionLabel, SidebarTooltip, sidebarFade } from "@/components/layout/sidebar-motion"
 
 // Mesmo motivo de antes na TopBar: o painel busca os próprios endpoints e só
 // interessa a quem tem conta. Fora do bundle crítico das páginas públicas.
@@ -51,15 +52,6 @@ type NavItem = {
   badge?: number
 }
 
-function SectionLabel({ label, collapsed }: { label: string; collapsed: boolean }) {
-  if (collapsed) return <div className="my-2 h-px bg-white/10" />
-  return (
-    <p className="mb-1.5 mt-5 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-      {label}
-    </p>
-  )
-}
-
 function NavLink({
   item,
   isActive,
@@ -73,30 +65,33 @@ function NavLink({
 }) {
   const Icon = item.icon
   return (
-    <RouteLink
-      href={item.href}
-      onClick={onClick}
-      className={cn(
-        "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
-        collapsed && "justify-center",
-        isActive
-          ? "bg-primary text-primary-foreground"
-          : "text-foreground/75 hover:bg-white/[0.07] hover:text-foreground"
-      )}
-    >
-      <Icon className="size-[18px] shrink-0" />
-      <span className={cn("flex-1", collapsed && "hidden")}>{item.label}</span>
-      {!collapsed && !!item.badge && item.badge > 0 && (
-        <span
-          className={cn(
-            "flex min-w-[18px] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold",
-            isActive ? "bg-primary-foreground/25 text-primary-foreground" : "bg-primary text-primary-foreground"
+    <SidebarTooltip label={item.label} collapsed={collapsed} count={item.badge}>
+      <RouteLink
+        href={item.href}
+        onClick={onClick}
+        className={cn(
+          "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+          isActive
+            ? "bg-primary text-primary-foreground"
+            : "text-foreground/75 hover:bg-white/[0.07] hover:text-foreground"
+        )}
+      >
+        <Icon className="size-[18px] shrink-0" />
+        <span className={cn("flex flex-1 items-center gap-3", sidebarFade(collapsed))}>
+          <span className="flex-1">{item.label}</span>
+          {!!item.badge && item.badge > 0 && (
+            <span
+              className={cn(
+                "flex min-w-[18px] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold",
+                isActive ? "bg-primary-foreground/25 text-primary-foreground" : "bg-primary text-primary-foreground"
+              )}
+            >
+              {item.badge > 9 ? "9+" : item.badge}
+            </span>
           )}
-        >
-          {item.badge > 9 ? "9+" : item.badge}
         </span>
-      )}
-    </RouteLink>
+      </RouteLink>
+    </SidebarTooltip>
   )
 }
 
@@ -162,47 +157,61 @@ export function PublicSidebar() {
           // h-dvh e não h-screen: 100vh é o viewport *sem* a barra de URL do navegador
           // mobile, o que empurra o rodapé (painel de Aura, Patch Notes) para fora
           // da tela.
-          "fixed inset-y-0 left-0 z-40 flex h-dvh w-60 shrink-0 flex-col transition-all duration-300 md:relative md:inset-auto md:h-full md:translate-x-0",
+          "fixed inset-y-0 left-0 z-40 flex h-dvh w-60 shrink-0 flex-col md:relative md:inset-auto md:h-full md:translate-x-0",
           // Vidro (estilo macOS): painel flutuante, material em `.sidebar-glass`
           // (globals.css). `overflow-hidden` recorta a rolagem do <nav> no
           // raio do painel.
           "sidebar-glass overflow-hidden rounded-r-2xl border border-l-0 border-white/10 md:rounded-2xl md:border-l",
+          SIDEBAR_PANEL_TRANSITION,
           // Gaveta fechada no celular: fora da tela, mas antes seguia pintando
           // os destaques em loop (Loja/Promoções/Aura animam background-position
           // e drop-shadow, que não rodam no compositor) a cada frame, o tempo
           // todo — custo direto no INP. `invisible` tira da pintura e do Tab
-          // (a `transition-all` mantém visível durante o slide de saída) e
+          // (a transição de `visibility` mantém visível durante o slide de saída) e
           // `.sidebar-drawer-closed` pausa as animações (globals.css).
           isMobileOpen ? "translate-x-0" : "-translate-x-full max-md:invisible sidebar-drawer-closed",
           isCollapsed ? "md:w-16" : "md:w-60"
         )}
       >
-        <nav className="sidebar-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 pt-6 pb-6">
-          {/* Brand */}
-          <RouteLink
-            href="/"
-            onClick={close}
-            className={cn(
-              "flex pb-6",
-              isCollapsed ? "justify-center" : "items-center"
-            )}
-          >
-            {isCollapsed ? (
+        {/* Geometria do colapso: `px-2.5` aqui + `px-3` no item põem o centro
+            do ícone de 18px exatamente no meio dos 64px do painel fechado. O
+            ícone NÃO troca de posição entre os estados (antes o item virava
+            `justify-center` e o ícone pulava); item com borda ou ícone de
+            outro tamanho compensa no próprio padding. */}
+        <nav
+          className={cn(
+            "sidebar-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2.5 pt-6 pb-6",
+            isCollapsed && "sidebar-scroll-hidden"
+          )}
+        >
+          {/* Brand: o wordmark já abre com o mascote, então os dois ficam
+              empilhados no mesmo ponto e só trocam de opacidade. Fechando, o
+              texto esmaece e o mascote fica; não há troca de elemento. */}
+          <RouteLink href="/" onClick={close} className="relative mb-6 flex h-9 items-center pl-[3px]">
+            {/* WebP reduzido (606×108, 3x do h-9). O PNG original tem
+                14285×2546 px / 464 KB: no celular a decodificação dele
+                travava a primeira pintura. O PNG fica em /public porque o
+                card de /api/og lê o arquivo (Satori não lê WebP). */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/images/mascot/logo-wordmark.webp"
+              alt="Sunano Tierlist"
+              width={606}
+              height={108}
+              className={cn(
+                "h-9 w-auto max-w-none shrink-0 object-contain transition-opacity ease-out motion-reduce:transition-none",
+                isCollapsed ? "opacity-0 duration-150" : "opacity-100 delay-100 duration-200"
+              )}
+            />
+            <span
+              aria-hidden
+              className={cn(
+                "absolute left-[3px] top-0 transition-opacity ease-out motion-reduce:transition-none",
+                isCollapsed ? "opacity-100 duration-150" : "opacity-0 delay-100 duration-200"
+              )}
+            >
               <SunanoIcon />
-            ) : (
-              // WebP reduzido (606×108, 3x do h-9). O PNG original tem
-              // 14285×2546 px / 464 KB: no celular a decodificação dele
-              // travava a primeira pintura. O PNG fica em /public porque o
-              // card de /api/og lê o arquivo (Satori não lê WebP).
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src="/images/mascot/logo-wordmark.webp"
-                alt="Sunano Tierlist"
-                width={606}
-                height={108}
-                className="h-9 w-auto shrink-0 object-contain"
-              />
-            )}
+            </span>
           </RouteLink>
 
           {/* Início + Loja + Promoções. A Loja e as Promoções são os destinos que
@@ -218,61 +227,63 @@ export function PublicSidebar() {
             />
 
             {/* Loja */}
-            <RouteLink
-              href="/loja"
-              onClick={close}
-              className={cn(
-                "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
-                isCollapsed && "justify-center",
-                isLojaActive
-                  ? "bg-emerald-600 text-white shadow-sm shadow-emerald-900/40"
-                  : "nav-bag-holder border border-emerald-500/40 bg-emerald-500/10 hover:border-emerald-500/60 hover:bg-emerald-500/20"
-              )}
-            >
-              <ShoppingBag
-                className={cn("size-[18px] shrink-0", !isLojaActive && "nav-bag-icon")}
-              />
-              <span className={cn("flex-1", isCollapsed && "hidden", !isLojaActive && "nav-bag-text")}>
-                {t.nav.store}
-              </span>
-              {cartCount > 0 && (
-                <button
-                  onClick={(e) => { e.preventDefault(); openCart(true) }}
-                  className={cn(
-                    "flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-bold",
-                    isCollapsed ? "absolute -top-1 -right-1 bg-emerald-500 text-white" : "bg-white/20 text-white"
-                  )}
-                  title="Ver carrinho"
-                >
-                  {!isCollapsed && <ShoppingCart className="size-2.5" />}
-                  {cartCount > 9 ? "9+" : cartCount}
-                </button>
-              )}
-            </RouteLink>
+            <SidebarTooltip label={t.nav.store} collapsed={isCollapsed}>
+              <RouteLink
+                href="/loja"
+                onClick={close}
+                className={cn(
+                  "group relative flex items-center gap-3 rounded-lg px-[11px] py-2.5 text-sm font-medium transition-colors",
+                  isLojaActive
+                    ? "bg-emerald-600 text-white shadow-sm shadow-emerald-900/40"
+                    : "nav-bag-holder border border-emerald-500/40 bg-emerald-500/10 hover:border-emerald-500/60 hover:bg-emerald-500/20"
+                )}
+              >
+                <ShoppingBag
+                  className={cn("size-[18px] shrink-0", !isLojaActive && "nav-bag-icon")}
+                />
+                <span className={cn("flex-1", sidebarFade(isCollapsed))}>
+                  <span className={cn(!isLojaActive && "nav-bag-text")}>{t.nav.store}</span>
+                </span>
+                {cartCount > 0 && (
+                  <button
+                    onClick={(e) => { e.preventDefault(); openCart(true) }}
+                    className={cn(
+                      "flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-bold",
+                      isCollapsed ? "absolute -top-1 -right-1 bg-emerald-500 text-white" : "bg-white/20 text-white"
+                    )}
+                    title="Ver carrinho"
+                  >
+                    {!isCollapsed && <ShoppingCart className="size-2.5" />}
+                    {cartCount > 9 ? "9+" : cartCount}
+                  </button>
+                )}
+              </RouteLink>
+            </SidebarTooltip>
 
             {/* Promoções */}
-            <RouteLink
-              href="/offers"
-              onClick={close}
-              className={cn(
-                "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
-                isCollapsed && "justify-center",
-                isActive("/offers")
-                  ? "bg-sky-600 text-white shadow-sm shadow-sky-900/40"
-                  : "nav-bolt-holder border border-sky-500/40 bg-sky-500/10 hover:border-sky-500/60 hover:bg-sky-500/20"
-              )}
-            >
-              <BadgePercent
-                className={cn("size-[18px] shrink-0", !isActive("/offers") && "nav-bolt-icon")}
-              />
-              <span className={cn(isCollapsed && "hidden", !isActive("/offers") && "nav-bolt-text")}>
-                {t.nav.offers}
-              </span>
-            </RouteLink>
+            <SidebarTooltip label={t.nav.offers} collapsed={isCollapsed}>
+              <RouteLink
+                href="/offers"
+                onClick={close}
+                className={cn(
+                  "group relative flex items-center gap-3 rounded-lg px-[11px] py-2.5 text-sm font-medium transition-colors",
+                  isActive("/offers")
+                    ? "bg-sky-600 text-white shadow-sm shadow-sky-900/40"
+                    : "nav-bolt-holder border border-sky-500/40 bg-sky-500/10 hover:border-sky-500/60 hover:bg-sky-500/20"
+                )}
+              >
+                <BadgePercent
+                  className={cn("size-[18px] shrink-0", !isActive("/offers") && "nav-bolt-icon")}
+                />
+                <span className={sidebarFade(isCollapsed)}>
+                  <span className={cn(!isActive("/offers") && "nav-bolt-text")}>{t.nav.offers}</span>
+                </span>
+              </RouteLink>
+            </SidebarTooltip>
           </div>
 
           {/* Periféricos */}
-          <SectionLabel label={t.nav.peripherals} collapsed={isCollapsed} />
+          <SidebarSectionLabel label={t.nav.peripherals} collapsed={isCollapsed} />
           <div className="space-y-1">
             {peripheralItems.map((item) => (
               <NavLink
@@ -286,7 +297,7 @@ export function PublicSidebar() {
           </div>
 
           {/* Conteúdo */}
-          <SectionLabel label={t.nav.content} collapsed={isCollapsed} />
+          <SidebarSectionLabel label={t.nav.content} collapsed={isCollapsed} />
           <div className="space-y-1">
             {contentItems.map((item) => (
               <NavLink
@@ -304,7 +315,7 @@ export function PublicSidebar() {
             TopBar) e, por último, Patch Notes numa linha discreta. Fica fora
             da rolagem para o saldo estar sempre à vista. Deslogado não tem
             saldo: a Central aparece como link comum. */}
-        <div className="shrink-0 space-y-1 border-t border-white/10 px-3 pt-3 pb-3">
+        <div className="shrink-0 space-y-1 border-t border-white/10 px-2.5 pt-3 pb-3">
           {/* Convite VIP para quem NÃO é VIP AGORA (`isVip`, não "tem
               assinatura viva": quem cancelou dentro do período pago continua
               VIP até o fim dele). Ver lib/vip-status.ts. Encaixa no topo da
@@ -331,48 +342,49 @@ export function PublicSidebar() {
               onNavigate={close}
             />
           ) : (
-            <RouteLink
-              href="/aura"
-              onClick={close}
-              className={cn(
-                "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
-                isCollapsed && "justify-center",
-                showVipTab && "rounded-b-xl rounded-t-none border-t-0",
-                isActive("/aura")
-                  ? "bg-orange-600 text-white shadow-sm shadow-orange-900/40"
-                  : "nav-fire-holder border border-orange-500/40 bg-orange-500/10 hover:border-orange-500/60 hover:bg-orange-500/20"
-              )}
-            >
-              {/* A MESMA chama viva do card logado (`AuraMissionsBadge`):
-                  deslogado e logado não podem mostrar dois símbolos. */}
-              <AuraFlame size="lg" className="shrink-0" />
-              <span className={cn(isCollapsed && "hidden", !isActive("/aura") && "nav-fire-text")}>
-                Central de Aura
-              </span>
-            </RouteLink>
+            <SidebarTooltip label="Central de Aura" collapsed={isCollapsed}>
+              <RouteLink
+                href="/aura"
+                onClick={close}
+                className={cn(
+                  "group relative flex items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm font-medium transition-colors",
+                  showVipTab && "rounded-b-xl rounded-t-none border-t-0",
+                  isActive("/aura")
+                    ? "bg-orange-600 text-white shadow-sm shadow-orange-900/40"
+                    : "nav-fire-holder border border-orange-500/40 bg-orange-500/10 hover:border-orange-500/60 hover:bg-orange-500/20"
+                )}
+              >
+                {/* A MESMA chama viva do card logado (`AuraMissionsBadge`):
+                    deslogado e logado não podem mostrar dois símbolos. */}
+                <AuraFlame size="lg" className="shrink-0" />
+                <span className={sidebarFade(isCollapsed)}>
+                  <span className={cn(!isActive("/aura") && "nav-fire-text")}>Central de Aura</span>
+                </span>
+              </RouteLink>
+            </SidebarTooltip>
           )}
           </div>
 
-          <RouteLink
-            href="/changelog"
-            onClick={close}
-            title={isCollapsed ? t.nav.patchNotes : undefined}
-            className={cn(
-              "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs transition-colors",
-              isCollapsed && "justify-center px-0",
-              isActive("/changelog") ? "text-foreground" : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <Sparkles className="size-3.5 shrink-0" />
-            <span className={cn(isCollapsed && "hidden")}>{t.nav.patchNotes}</span>
-            {latestVersion && (
-              // Sem `opacity-70`: em cima do `text-muted-foreground` ela
-              // derrubava o contraste abaixo de 4,5:1 (Lighthouse).
-              <span className={cn("ml-auto tabular-nums", isCollapsed && "hidden")}>
-                {latestVersion}
+          <SidebarTooltip label={t.nav.patchNotes} collapsed={isCollapsed}>
+            <RouteLink
+              href="/changelog"
+              onClick={close}
+              className={cn(
+                "flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-xs transition-colors",
+                isActive("/changelog") ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <Sparkles className="size-3.5 shrink-0" />
+              <span className={cn("flex flex-1 items-center", sidebarFade(isCollapsed))}>
+                {t.nav.patchNotes}
+                {latestVersion && (
+                  // Sem `opacity-70`: em cima do `text-muted-foreground` ela
+                  // derrubava o contraste abaixo de 4,5:1 (Lighthouse).
+                  <span className="ml-auto tabular-nums">{latestVersion}</span>
+                )}
               </span>
-            )}
-          </RouteLink>
+            </RouteLink>
+          </SidebarTooltip>
         </div>
       </aside>
 

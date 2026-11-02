@@ -13,6 +13,7 @@ import {
   type MiniProfileBgTier,
 } from "@/lib/mini-profile-backgrounds"
 import { MiniProfileBgCard } from "@/components/aura/MiniProfileBgCard"
+import { PrizeLaneHeader } from "@/components/aura/PrizeLaneHeader"
 
 /** Ordem de exibição: do mais barato ao mais caro, como uma vitrine sobe de vitrine. */
 const TIER_ORDER: MiniProfileBgTier[] = ["raro", "epico", "lendario"]
@@ -27,6 +28,8 @@ interface MiniProfileBgSectionProps {
   requireLogin: () => boolean
   onRedeemed: (itemId: string, cost: number) => void
   onEquipChange: (nextEquippedId: string | null) => void
+  /** Faixa dentro de um painel (`AuraHub`). */
+  lane?: boolean
 }
 
 /**
@@ -50,6 +53,7 @@ export function MiniProfileBgSection({
   requireLogin,
   onRedeemed,
   onEquipChange,
+  lane = false,
 }: MiniProfileBgSectionProps) {
   const withTheme = items
     .map((item) => ({ item, theme: getMiniProfileBgTheme(item.slug) }))
@@ -61,13 +65,24 @@ export function MiniProfileBgSection({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <h2 className="font-display text-lg font-bold text-foreground">Fundos de Mini Perfil</h2>
-        <span className="flex items-center gap-1 rounded-full border border-border bg-muted/30 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
-          <Layers className="size-2.5" />
-          Aparece no cartão que abre ao passar o mouse na sua foto
-        </span>
-      </div>
+      {lane ? (
+        <PrizeLaneHeader
+          icon={<Layers className="size-4" />}
+          iconClassName="bg-gradient-to-br from-pink-300 to-rose-600 text-[#24030f] shadow-[0_0_16px_-4px] shadow-rose-500/70"
+          title="Fundos de Mini Perfil"
+          tag="Animado"
+          tagClassName="bg-pink-500/10 text-pink-200 ring-1 ring-pink-400/30"
+          right={<span className="text-[11px] text-muted-foreground">No cartão que abre sobre a sua foto</span>}
+        />
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="font-display text-lg font-bold text-foreground">Fundos de Mini Perfil</h2>
+          <span className="flex items-center gap-1 rounded-full border border-border bg-muted/30 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+            <Layers className="size-2.5" />
+            Aparece no cartão que abre ao passar o mouse na sua foto
+          </span>
+        </div>
+      )}
 
       {TIER_ORDER.map((tier) => {
         const ofTier = withTheme.filter((entry) => entry.theme.tier === tier)

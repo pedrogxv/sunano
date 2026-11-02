@@ -1,5 +1,8 @@
 import "./globals.css"
 
+import { changelogBannerProbeScript } from "@/lib/changelog-banner"
+import { ptBR } from "@/lib/i18n-pt-br"
+
 import type { Metadata, Viewport } from "next"
 import { Manrope, Space_Grotesk, Caveat } from "next/font/google"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -113,6 +116,9 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 }
 
+/** Versão mais recente das Patch Notes — a mesma nos dois idiomas. */
+const latestChangelogVersion = ptBR.changelog.entries[0]?.version ?? null
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -124,6 +130,12 @@ export default function RootLayout({
         {/* Antes de qualquer <img> do HTML: miniatura que ainda não existe
             volta para o original em vez de aparecer quebrada (lib/storage-thumb.ts). */}
         <script dangerouslySetInnerHTML={{ __html: IMAGE_THUMB_FALLBACK_SCRIPT }} />
+        {/* Esconde o aviso de versão nova antes de pintar, se já foi dispensado
+            (components/layout/ChangelogBanner.tsx). Mora aqui, e não no banner:
+            script criado por componente cliente não executa e o React acusa erro. */}
+        {latestChangelogVersion && (
+          <script dangerouslySetInnerHTML={{ __html: changelogBannerProbeScript(latestChangelogVersion) }} />
+        )}
         <OrganizationJsonLd />
       </head>
       <body className={`${manrope.variable} ${spaceGrotesk.variable} ${caveat.variable} font-sans`}>

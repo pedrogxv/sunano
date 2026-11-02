@@ -16,6 +16,7 @@ export const CHANGELOG_AREAS = [
   "aura",
   "seguranca",
   "desempenho",
+  "navegacao",
 ] as const
 
 export type ChangelogArea = (typeof CHANGELOG_AREAS)[number]

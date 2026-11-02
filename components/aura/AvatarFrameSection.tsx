@@ -6,6 +6,7 @@ import { toast } from "sonner"
 import { RouteLink } from "@/components/ui/route-link"
 
 import { AuraItemCard } from "@/components/aura/AuraItemCard"
+import { PrizeLaneHeader } from "@/components/aura/PrizeLaneHeader"
 import { ProfileAvatar } from "@/components/ui/ProfileAvatar"
 import {
   RANK_FRAMES,
@@ -37,6 +38,8 @@ interface AvatarFrameSectionProps {
   onEquipChange: (nextEquippedId: string | null) => void
   /** Abre o modal de benefícios do VIP (mesmo CTA do restante da Central). */
   onShowVipBenefits: () => void
+  /** Faixa dentro de um painel (`AuraHub`): cabeçalho de faixa no lugar do título solto. */
+  lane?: boolean
   /**
    * Id do item `vip:founder` no catálogo — `null` se a migration ainda não
    * rodou. Necessário para saber se o usuário a possui (`ownedItemIds`) e
@@ -84,6 +87,7 @@ export function AvatarFrameSection({
   founderItemId,
   streakFrameItemIds,
   longestStreak,
+  lane = false,
 }: AvatarFrameSectionProps) {
   const windowOpen = isVipFounderWindowOpen()
   const ownsFounder = founderItemId ? ownedItemIds.has(founderItemId) : false
@@ -96,19 +100,30 @@ export function AvatarFrameSection({
       : (STREAK_FRAMES.find((frame) => frame.slug === streakFrameSlug(reachedMilestone)) ?? null)
   const reachedItemId = reachedFrame ? (streakFrameItemIds[reachedFrame.slug] ?? null) : null
   return (
-    <div id="molduras" className="scroll-mt-20 space-y-4">
-      <div className="space-y-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <h2 className="font-display text-lg font-bold text-foreground">Molduras</h2>
-          <span className="flex items-center gap-1 rounded-full border border-border bg-muted/30 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
-            <Frame className="size-2.5" />
-            Aparece na sua foto em todo o site
-          </span>
+    <div id="molduras" className={cn("scroll-mt-20", lane ? "space-y-3" : "space-y-4")}>
+      {lane ? (
+        <PrizeLaneHeader
+          icon={<Frame className="size-4" />}
+          iconClassName="bg-gradient-to-br from-violet-300 to-fuchsia-600 text-[#1a0420] shadow-[0_0_16px_-4px] shadow-fuchsia-500/70"
+          title="Molduras"
+          tag="Uma por vez"
+          tagClassName="bg-violet-500/10 text-violet-200 ring-1 ring-violet-400/30"
+          right={<span className="text-[11px] text-muted-foreground">Aparece na sua foto em todo o site</span>}
+        />
+      ) : (
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="font-display text-lg font-bold text-foreground">Molduras</h2>
+            <span className="flex items-center gap-1 rounded-full border border-border bg-muted/30 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+              <Frame className="size-2.5" />
+              Aparece na sua foto em todo o site
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Uma moldura por vez. A que você equipar tem prioridade sobre a de VIP.
+          </p>
         </div>
-        <p className="text-xs text-muted-foreground">
-          Uma moldura por vez. A que você equipar tem prioridade sobre a de VIP.
-        </p>
-      </div>
+      )}
 
       {/* Compráveis primeiro: é o que a pessoa pode levar agora. */}
       {items.length > 0 && (
@@ -129,12 +144,16 @@ export function AvatarFrameSection({
         </div>
       )}
 
+      {/* Vitrines das que não se compram. Na faixa, em grade de duas
+          colunas (Fundador ao lado da VIP, Ofensiva ao lado do ranking). */}
+      <div className={lane ? "grid gap-3 md:grid-cols-2" : "space-y-4"}>
       {/* Fundador — primeiro entre as não-compráveis: é a única com PRAZO.
           Depois da janela ela some da vitrine para quem não tem: anunciar uma
           honraria que ninguém mais consegue obter só frustra. */}
       {(windowOpen || ownsFounder) && (
         <FrameShowcase
           title="Moldura de Fundador"
+          compact={lane}
           subtitle={
             ownsFounder
               ? "Você assinou o VIP na janela de lançamento. Ela é sua para sempre, mesmo que a assinatura acabe."
@@ -176,6 +195,7 @@ export function AvatarFrameSection({
       {/* Exclusiva de assinatura */}
       <FrameShowcase
         title="Exclusiva do VIP"
+          compact={lane}
         subtitle="Vem junto com a assinatura. Não se compra com Aura."
         icon={Crown}
         frames={[VIP_FRAME]}
@@ -207,6 +227,7 @@ export function AvatarFrameSection({
           dias faltam, em vez de uma vitrine que só diz "vire VIP". */}
       <FrameShowcase
         title="Molduras de Ofensiva"
+          compact={lane}
         subtitle={
           reachedMilestone === null
             ? "Complete as 3 missões diárias para começar uma ofensiva. Cada marco de dias libera uma moldura — e ela fica com você para sempre, mesmo que a ofensiva acabe."
@@ -278,6 +299,7 @@ export function AvatarFrameSection({
           falta é a colocação. */}
       <FrameShowcase
         title="Molduras de ranking"
+          compact={lane}
         subtitle="Entre no top 3 de um placar de todos os tempos e a moldura é sua — para sempre, mesmo que saia do pódio depois."
         icon={Trophy}
         frames={RANK_FRAMES}
@@ -293,6 +315,7 @@ export function AvatarFrameSection({
           </RouteLink>
         }
       />
+      </div>
     </div>
   )
 }
@@ -314,6 +337,7 @@ function FrameShowcase({
   badgeLabel,
   frameLockedLabel,
   frameAction,
+  compact = false,
 }: {
   title: string
   subtitle: string
@@ -343,7 +367,66 @@ function FrameShowcase({
    * mostrando todas acesas.
    */
   frameLockedLabel?: (frame: ProfileFrame) => string | null
+  /**
+   * Versão de faixa (dentro do painel da Loja): explicação numa linha só (a
+   * inteira fica no tooltip), avatar menor, nome da moldura no tooltip e a
+   * ação no rodapé, ao lado das fotos. As quatro vitrines cabem em duas
+   * linhas de grade em vez de quatro blocos de largura cheia.
+   */
+  compact?: boolean
 }) {
+  if (compact) {
+    return (
+      <div
+        className={cn(
+          "aura-hub-well flex min-w-0 flex-col gap-2 p-3",
+          highlight && "bg-amber-400/[0.06] shadow-[inset_0_0_0_1px] shadow-amber-400/35"
+        )}
+      >
+        <div className="flex min-w-0 items-center gap-1.5">
+          <Icon className={cn("size-3.5 shrink-0", highlight ? "text-amber-300" : "text-muted-foreground")} />
+          <h3 className="truncate font-display text-[13px] font-bold text-foreground">{title}</h3>
+          <span
+            className={cn(
+              "ml-auto flex shrink-0 items-center gap-1 rounded-full px-1.5 py-px text-[8.5px] font-bold uppercase tracking-wide",
+              highlight ? "bg-amber-400/15 text-amber-300" : "bg-white/[0.06] text-muted-foreground"
+            )}
+          >
+            <Lock className="size-2" />
+            {badgeLabel ?? "Não comprável"}
+          </span>
+        </div>
+        <p className="line-clamp-1 text-[10.5px] text-muted-foreground" title={subtitle}>
+          {subtitle}
+        </p>
+        <div className="mt-auto flex flex-wrap items-end justify-between gap-x-3 gap-y-2 pt-1">
+          <div className="flex flex-wrap gap-x-2 gap-y-1.5">
+            {frames.map((frame) => {
+              const lockedLabel = frameLockedLabel?.(frame) ?? null
+              const tileAction = !lockedLabel ? frameAction?.(frame) : null
+              return (
+                <div
+                  key={frame.slug}
+                  className="flex flex-col items-center gap-1"
+                  title={`${frame.name}${frame.description ? ` · ${frame.description}` : ""}`}
+                >
+                  <div className={cn(lockedLabel && "opacity-40 saturate-50")}>
+                    <ProfileAvatar name={name} avatarUrl={avatarUrl} size="md" frameOverride={frame} />
+                  </div>
+                  {lockedLabel && (
+                    <span className="text-[8.5px] font-medium leading-none text-muted-foreground/70">{lockedLabel}</span>
+                  )}
+                  {tileAction}
+                </div>
+              )
+            })}
+          </div>
+          <div className="shrink-0">{action}</div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div
       className={cn(

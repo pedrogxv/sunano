@@ -3,14 +3,13 @@
 import { useState } from "react"
 import Link from "next/link"
 import { Crown, Loader2 } from "lucide-react"
-import { AuraAmount } from "@/components/ui/AuraIcon"
 import { toast } from "sonner"
 
-import { cn } from "@/lib/utils"
-import { CARD_SURFACE_INTERACTIVE } from "@/lib/ui-styles"
 import { formatVipPrice } from "@/lib/vip-plan"
 import { isVipSubscriptionEnabled } from "@/lib/vip-signup"
 import type { AuraItem } from "@/lib/server/repositories/aura-store-repository"
+import { AuraPerkCard, PerkAction, PerkStatus, perkLinkClass } from "@/components/aura/AuraPerkCard"
+import { AuraPriceTag } from "@/components/aura/AuraPriceTag"
 import { PurchaseConfirmDialog } from "@/components/aura/PurchaseConfirmDialog"
 
 interface VipMonthCardProps {
@@ -95,38 +94,22 @@ export function VipMonthCard({ item, balance, vipActive, vipExpiresAt, requireLo
   }
 
   return (
-    <div
-      className={cn(
-        "flex flex-col overflow-hidden rounded-xl border transition-all duration-200 hover:-translate-y-1",
-        CARD_SURFACE_INTERACTIVE,
-        vipActive && "border-[var(--vip-accent-soft)]"
-      )}
-    >
-      <div className="relative flex aspect-[3/2] items-center justify-center overflow-hidden bg-[var(--card-image-bg)]">
-        <Crown className="size-11" style={{ color: "var(--vip-accent-soft)" }} strokeWidth={1.15} />
-      </div>
-
-      <div className="flex flex-1 flex-col gap-1 px-3 pb-2.5 pt-2">
-        <h3 className="line-clamp-1 font-sans text-[12px] font-semibold leading-tight tracking-normal text-foreground">
-          {item.name}
-        </h3>
-        {item.description && (
-          <p className="line-clamp-2 text-[9.5px] font-medium leading-snug text-muted-foreground">{item.description}</p>
-        )}
-        {onShowBenefits && (
-          <button
-            type="button"
-            onClick={onShowBenefits}
-            className="self-start text-[9.5px] font-semibold underline-offset-2 hover:underline"
-            style={{ color: "var(--vip-accent)" }}
-          >
-            Ver todas as vantagens
-          </button>
-        )}
-
-        <div className="mt-auto space-y-1.5 pt-1">
-          <AuraAmount value={item.auraCost} size="md" className="font-display text-[15px] font-bold text-orange-400" />
-
+    <AuraPerkCard
+      accent="vip"
+      icon={<Crown strokeWidth={1.5} />}
+      title={item.name}
+      description={item.description}
+      active={vipActive}
+      extra={
+        // As ações secundárias moram aqui, não no rodapé: o rodapé de toda
+        // vantagem é preço + UMA ação, senão este card sai mais alto e
+        // desalinha os vizinhos.
+        <div className="flex flex-col items-start gap-1">
+          {onShowBenefits && (
+            <button type="button" onClick={onShowBenefits} className={perkLinkClass("vip")}>
+              Ver todas as vantagens
+            </button>
+          )}
           {vipActive ? (
             // VIP ativo: nem "Ativar com Aura" nem "Assinar" servem aqui — a RPC
             // e o POST recusam quem já tem acesso. Mas o selo sozinho era um
@@ -134,69 +117,54 @@ export function VipMonthCard({ item, balance, vipActive, vipExpiresAt, requireLo
             // usando o período pago: a aba Assinatura é o único lugar que
             // conhece esse estado e sabe oferecer a reassinatura, então o card
             // aponta para lá em vez de terminar a conversa.
-            <div className="space-y-1.5">
-              <div
-                className="flex w-full flex-col items-center gap-0.5 rounded-lg border px-3 py-1.5 text-[10.5px] font-bold"
-                style={{ borderColor: "var(--vip-accent-soft)", backgroundColor: "var(--vip-accent-soft)", color: "var(--vip-accent)" }}
-              >
-                <span className="flex items-center gap-1.5">
-                  <Crown className="size-3" />
-                  Você já é VIP
-                </span>
-                {vipExpiresAt && (
-                  <span className="text-[9px] font-medium opacity-70">até {formatExpiresAt(vipExpiresAt)}</span>
-                )}
-              </div>
-              <Link
-                href="/conta#assinatura"
-                className="block text-center text-[9.5px] font-semibold text-muted-foreground underline-offset-2 hover:underline"
-              >
-                Gerenciar assinatura
-              </Link>
-            </div>
+            <Link href="/conta#assinatura" className={perkLinkClass("vip", "text-muted-foreground")}>
+              Gerenciar assinatura
+            </Link>
           ) : (
-            <div className="space-y-1.5">
+            subscriptionEnabled && (
               <button
                 type="button"
-                onClick={() => {
-                  if (!requireLogin()) return
-                  setConfirmOpen(true)
-                }}
-                disabled={loading || subscribing || !canAfford}
-                title={!canAfford ? "Saldo de Aura insuficiente" : undefined}
-                className={cn(
-                  "flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-[10.5px] font-bold transition-colors",
-                  canAfford
-                    ? "text-black hover:opacity-90"
-                    : "cursor-not-allowed bg-muted/40 text-muted-foreground"
-                )}
-                style={canAfford ? { backgroundColor: "var(--vip-accent)" } : undefined}
+                // Abre o modal em vez de disparar o POST direto QUANDO há
+                // handler: existem dois planos (mensal e anual) e só o modal
+                // deixa escolher. O POST direto continua como fallback — ele
+                // assina no MENSAL, que é o preço que este botão anuncia.
+                onClick={onShowBenefits ?? handleSubscribe}
+                disabled={loading || subscribing}
+                className={perkLinkClass("vip", "flex items-center gap-1 text-muted-foreground")}
               >
-                {loading && <Loader2 className="size-3 animate-spin" />}
-                {canAfford ? "Ativar com Aura" : "Saldo insuficiente"}
+                {subscribing && <Loader2 className="size-3 animate-spin" />}
+                ou assine a partir de {formatVipPrice("monthly")}/mês
               </button>
-
-              {subscriptionEnabled && (
-                <button
-                  type="button"
-                  // Abre o modal em vez de disparar o POST direto QUANDO há
-                  // handler: existem dois planos (mensal e anual) e só o modal
-                  // deixa escolher. O POST direto continua como fallback — ele
-                  // assina no MENSAL, que é o preço que este botão anuncia.
-                  onClick={onShowBenefits ?? handleSubscribe}
-                  disabled={loading || subscribing}
-                  className="flex w-full items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 text-[10.5px] font-bold transition-colors hover:bg-[var(--vip-accent-soft)] disabled:cursor-not-allowed disabled:opacity-50"
-                  style={{ borderColor: "var(--vip-accent-soft)", color: "var(--vip-accent)" }}
-                >
-                  {subscribing && <Loader2 className="size-3 animate-spin" />}
-                  A partir de {formatVipPrice("monthly")}/mês
-                </button>
-              )}
-            </div>
+            )
           )}
         </div>
-      </div>
-
+      }
+      // Sem desconto VIP no preço: quem já é VIP não compra este item (ver o
+      // diálogo abaixo), e quem compra nunca tem o desconto.
+      price={vipActive ? undefined : <AuraPriceTag listPrice={item.auraCost} isVip={false} />}
+      action={
+        vipActive ? (
+          <PerkStatus
+            accent="vip"
+            icon={<Crown />}
+            label="Você já é VIP"
+            detail={vipExpiresAt ? `até ${formatExpiresAt(vipExpiresAt)}` : null}
+          />
+        ) : (
+          <PerkAction
+            accent="vip"
+            label="Ativar com Aura"
+            canAfford={canAfford}
+            loading={loading}
+            disabled={subscribing}
+            onClick={() => {
+              if (!requireLogin()) return
+              setConfirmOpen(true)
+            }}
+          />
+        )
+      }
+    >
       <PurchaseConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
@@ -212,6 +180,6 @@ export function VipMonthCard({ item, balance, vipActive, vipExpiresAt, requireLo
         loading={loading}
         onConfirm={handlePurchase}
       />
-    </div>
+    </AuraPerkCard>
   )
 }

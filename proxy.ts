@@ -370,6 +370,11 @@ function trackVisit(request: NextRequest, event: NextFetchEvent, response: NextR
   )
 }
 
+// Telas do painel que são do CARGO WEB MASTER, não de uma permissão da matriz.
+// As rotas /api delas conferem o cargo de novo (`requireWebMaster`); isto só
+// evita que outro cargo abra a casca da página.
+const WEBMASTER_ONLY_ADMIN_PREFIXES = ["/admin/users", "/admin/feature-flags", "/admin/sorteios"]
+
 // Página mostrada a quem tem perfil administrativo mas nenhuma seção liberada.
 // Nunca exige permissão, senão vira destino de redirecionamento inalcançável.
 const NO_ACCESS_PATH = "/admin/sem-permissao"
@@ -408,6 +413,7 @@ function getRequiredPermission(pathname: string): AdminPermissionKey | null {
   if (pathname.startsWith("/admin/afiliados")) return "affiliates_read"
   if (pathname === NO_ACCESS_PATH) return null
   if (pathname.startsWith("/admin/users")) return null
+  if (pathname.startsWith("/admin/feature-flags") || pathname.startsWith("/admin/sorteios")) return null
   if (pathname.startsWith("/admin/settings")) return "settings_read"
   if (pathname.startsWith("/admin/tiers")) return "tiers_read"
   if (pathname.startsWith("/admin/maintenance")) return "maintenance_read"
@@ -849,7 +855,7 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     return rewriteResponse
   }
 
-  if (profile && pathname.startsWith("/admin/users") && !isWebMaster(profile)) {
+  if (profile && WEBMASTER_ONLY_ADMIN_PREFIXES.some((prefix) => pathname.startsWith(prefix)) && !isWebMaster(profile)) {
     const adminUrl = request.nextUrl.clone()
     adminUrl.pathname = "/admin"
 

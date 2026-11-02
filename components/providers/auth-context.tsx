@@ -7,6 +7,7 @@ import type { AuthChangeEvent } from "@supabase/supabase-js"
 import { readAuthSnapshot, writeAuthSnapshot } from "@/lib/client/auth-snapshot"
 import { isVipActive } from "@/lib/account-tier"
 import { resolveVipStatus, type VipStatus } from "@/lib/vip-status"
+import { isFeatureFlagKey, type FeatureFlagKey } from "@/lib/feature-flags"
 
 export type AuthContextUser = {
   id: string
@@ -84,6 +85,11 @@ export type AuthContextUser = {
   vip: VipStatus
   /** Se já criou algum post no fórum — controla a aba "Meus Posts" da listagem (só aparece com histórico). */
   hasForumPost: boolean
+  /**
+   * Feature flags ligadas para esta pessoa, já avaliadas no servidor. Leia por
+   * `useFeatureFlag` (lib/hooks/use-feature-flag.ts), nunca direto.
+   */
+  enabledFlags: FeatureFlagKey[]
 }
 
 type AuthContextValue = {
@@ -185,6 +191,7 @@ type MeResponse = {
   isFounder?: boolean
   longestStreak?: number | null
   frameOptOut?: boolean | null
+  enabledFlags?: string[] | null
 }
 
 /**
@@ -196,7 +203,7 @@ type MeResponse = {
  * lib/client/auth-snapshot.ts sobre por que isso ainda não é possível).
  */
 export function buildAuthUser(data: MeResponse): AuthContextUser | null {
-  const { user, userProfile, adminProfile, hasSupportTicket, supportTicketsAwaitingMe, ordersNeedingAttention, hasForumPost, accountTier, vipExpiresAt, subscriptionStatus, canUseStore, storeMaintenanceBypass, equippedFrameUrl, equippedFrameSlug, isFounder, longestStreak, frameOptOut } = data
+  const { user, userProfile, adminProfile, hasSupportTicket, supportTicketsAwaitingMe, ordersNeedingAttention, hasForumPost, accountTier, vipExpiresAt, subscriptionStatus, canUseStore, storeMaintenanceBypass, equippedFrameUrl, equippedFrameSlug, isFounder, longestStreak, frameOptOut, enabledFlags } = data
   if (!user) return null
 
   return {
@@ -226,6 +233,7 @@ export function buildAuthUser(data: MeResponse): AuthContextUser | null {
     longestStreak: longestStreak ?? 0,
     frameOptOut: Boolean(frameOptOut),
     hasForumPost: Boolean(hasForumPost),
+    enabledFlags: (enabledFlags ?? []).filter(isFeatureFlagKey),
   }
 }
 

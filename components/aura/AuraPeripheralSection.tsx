@@ -17,6 +17,8 @@ import { PeripheralRedeemDialog, type PrefillShipping } from "@/components/aura/
 import { shippingFormToPayload, type ShippingForm } from "@/components/store/ShippingAddressFields"
 import type { PublicTrustSummary } from "@/lib/server/repositories/trust-repository"
 import { TrustSeal } from "@/components/ui/TrustBadge"
+import { AuraIcon } from "@/components/ui/AuraIcon"
+import { PrizeLaneHeader } from "@/components/aura/PrizeLaneHeader"
 import { TRUST_PHYSICAL_REDEEM_LEVEL, trustLevelLabel } from "@/lib/trust-factor"
 import { storageImgProps } from "@/lib/storage-thumb"
 
@@ -74,84 +76,55 @@ export function AuraPeripheralSection({
 
   const canRedeemAny = trust.canRedeemPhysical
 
+  // Frase da trava, curta: o painel grande de antes ocupava mais altura que
+  // a fileira de produtos. A explicação inteira mora em /informacoes/trust-factor.
+  const gateText = !isLoggedIn
+    ? `Exige Trust "${trustLevelLabel(TRUST_PHYSICAL_REDEEM_LEVEL)}"`
+    : canRedeemAny
+      ? "Liberado para resgatar"
+      : trust.status === "active"
+        ? `Você: ${trustLevelLabel(trust.level)} · exige ${trustLevelLabel(TRUST_PHYSICAL_REDEEM_LEVEL)}`
+        : "Conta em análise: resgate pausado"
+
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <h2 className="font-display text-lg font-bold text-foreground">Produtos</h2>
-        <span className="flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-400">
-          <Lock className="size-2.5" />
-          Estoque limitado
-        </span>
-      </div>
+    <div className="space-y-3">
+      <PrizeLaneHeader
+        icon={<AuraIcon size="sm" tone="inherit" />}
+        iconClassName="bg-gradient-to-br from-amber-300 to-orange-600 text-[#1a0d00] shadow-[0_0_16px_-4px] shadow-orange-500/70"
+        title="Resgate com Aura"
+        tag={
+          <>
+            <Lock className="size-2.5" />
+            Estoque limitado
+          </>
+        }
+        tagClassName="bg-amber-500/10 text-amber-300 ring-1 ring-amber-500/30"
+        right={
+          // Trava do Trust Factor numa linha: "você está aqui" → "precisa
+          // chegar aqui", com os mesmos selos em tamanho de rótulo. Deslogado
+          // não tem faixa (o resumo padrão diria "Regular" ao visitante),
+          // então só o selo exigido.
+          <Link
+            href="/informacoes/trust-factor"
+            title="Como funciona o Trust Factor"
+            className={cn(
+              "group flex items-center gap-1.5 rounded-full border py-0.5 pl-0.5 pr-2.5 text-[11px] transition-colors",
+              canRedeemAny
+                ? "border-emerald-500/30 bg-emerald-500/[0.06] text-emerald-200 hover:bg-emerald-500/10"
+                : "border-amber-500/25 bg-amber-500/[0.06] text-amber-100 hover:bg-amber-500/10"
+            )}
+          >
+            {isLoggedIn && <TrustSeal level={trust.level} status={trust.status} size="xs" showLabel={false} />}
+            {isLoggedIn && !canRedeemAny && <ArrowRight className="size-3 shrink-0 opacity-50" />}
+            {(!isLoggedIn || !canRedeemAny) && (
+              <TrustSeal level={TRUST_PHYSICAL_REDEEM_LEVEL} size="xs" showLabel={false} />
+            )}
+            <span className="ml-0.5 font-medium">{gateText}</span>
+          </Link>
+        }
+      />
 
-      {/* Painel da trava — o Trust Factor é o ASSUNTO desta área (é o que
-          separa quem resgata de quem não resgata), então aqui ele aparece
-          como SELO grande, não como pílula. Os dois selos lado a lado dizem
-          a história inteira sem texto: "você está aqui" → "precisa chegar
-          aqui". Quem já pode ver só o próprio, com o aviso de liberado. */}
-      <div className={cn(
-        "flex flex-col gap-4 rounded-xl border p-4 sm:flex-row sm:items-center",
-        canRedeemAny
-          ? "border-emerald-500/30 bg-emerald-500/[0.04]"
-          : "border-amber-500/25 bg-amber-500/[0.04]"
-      )}>
-        <div className="flex items-center gap-3 sm:gap-4">
-          {/* Deslogado não tem faixa: o resumo padrão é a nota inicial
-              (Regular), e mostrá-la dizia ao visitante que a conta DELE
-              estava em Regular. Só o selo exigido. */}
-          {isLoggedIn && <TrustSeal level={trust.level} status={trust.status} size="md" />}
-          {isLoggedIn && !canRedeemAny && (
-            <ArrowRight className="size-4 shrink-0 text-muted-foreground/50" />
-          )}
-          {(!isLoggedIn || !canRedeemAny) && (
-            <TrustSeal level={TRUST_PHYSICAL_REDEEM_LEVEL} size="md" />
-          )}
-        </div>
-
-        <div className="min-w-0 flex-1 space-y-1">
-          <p className="text-sm font-semibold text-foreground">
-            {canRedeemAny
-              ? "Você pode resgatar produtos físicos"
-              : `Resgate exige Trust Factor "${trustLevelLabel(TRUST_PHYSICAL_REDEEM_LEVEL)}"`}
-          </p>
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            {!isLoggedIn ? (
-              <>
-                Os prêmios físicos são para contas na faixa{" "}
-                <strong className="text-foreground">{trustLevelLabel(TRUST_PHYSICAL_REDEEM_LEVEL)}</strong>{" "}
-                ou acima. O Trust Factor mede comportamento e integridade: sobe com participação
-                legítima e sem punições, e leva tempo de casa — não se compra nem se acelera com Aura.
-              </>
-            ) : canRedeemAny ? (
-              <>
-                Sua conta está na faixa{" "}
-                <strong className="text-foreground">{trustLevelLabel(trust.level)}</strong> e sem
-                restrições. Cada produto tem poucas unidades e uma por pessoa.
-              </>
-            ) : trust.status === "active" ? (
-              <>
-                Sua conta está na faixa{" "}
-                <strong className="text-foreground">{trustLevelLabel(trust.level)}</strong>. O Trust
-                Factor mede comportamento e integridade: sobe com participação legítima e sem
-                punições, e leva tempo de casa — não se compra nem se acelera com Aura.
-              </>
-            ) : (
-              "Sua conta está em análise pela equipe. O resgate fica indisponível até a revisão terminar."
-            )}{" "}
-            <Link href="/informacoes/trust-factor" className="text-primary hover:underline">
-              Como funciona o Trust Factor
-            </Link>
-            .
-          </p>
-        </div>
-      </div>
-
-      <p className="text-xs text-muted-foreground">
-        Prêmios físicos resgatáveis com Aura. Cada um tem poucas unidades: quando acabam, o
-        produto continua aqui marcado como esgotado, com o perfil de quem levou. Uma unidade por pessoa.
-      </p>
-
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+      <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
         {items.map((item) => (
           <AuraPeripheralCard
             key={item.id}
@@ -253,85 +226,94 @@ function AuraPeripheralCard({
 
   const done = ownedByMe || soldOut
 
+  const actionBase =
+    "flex h-7 shrink-0 items-center justify-center gap-1 rounded-md px-2.5 text-[11px] font-bold transition-colors"
+
+  // Horizontal: foto à esquerda, o resto em três linhas curtas à direita. O
+  // card vertical (foto quadrada + nome + descrição + preço + dono + botão
+  // empilhados) tinha quase 400px de altura para quatro informações.
   return (
     <div
       className={cn(
-        "flex flex-col overflow-hidden rounded-xl border transition-all duration-200",
-        done ? CARD_SURFACE : cn(CARD_SURFACE_INTERACTIVE, "hover:-translate-y-1")
+        "flex overflow-hidden rounded-xl border transition-all duration-200",
+        done ? CARD_SURFACE : cn(CARD_SURFACE_INTERACTIVE, "hover:-translate-y-0.5")
       )}
     >
-      <div className="relative aspect-square overflow-hidden bg-[var(--card-image-bg)]">
+      <div className="relative w-24 shrink-0 bg-[var(--card-image-bg)] sm:w-28">
         {item.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            {...storageImgProps(item.imageUrl, 240)}
+            {...storageImgProps(item.imageUrl, 128)}
             alt={item.name}
-            className={cn("h-full w-full object-contain p-3", soldOut && !ownedByMe && "opacity-40 grayscale")}
+            className={cn(
+              "absolute inset-0 size-full object-contain p-2",
+              soldOut && !ownedByMe && "opacity-40 grayscale"
+            )}
           />
         ) : (
           <div className="flex h-full items-center justify-center">
-            <Keyboard className="size-14 text-amber-500/50" strokeWidth={1.15} />
+            <Keyboard className="size-9 text-amber-500/50" strokeWidth={1.15} />
           </div>
         )}
 
         {ownedByMe ? (
-          <span className="absolute left-2 top-2 z-[1] flex items-center gap-1 rounded-md bg-emerald-500/90 px-1.5 py-0.5 text-[9px] font-bold text-[#04140d]">
+          <span className="absolute left-1.5 top-1.5 z-[1] flex items-center gap-0.5 rounded bg-emerald-500/90 px-1 py-px text-[9px] font-bold text-[#04140d]">
             <Check className="size-2.5" strokeWidth={2.5} />
-            Você resgatou
+            Seu
           </span>
         ) : soldOut ? (
-          <span className="absolute left-2 top-2 z-[1] flex items-center gap-1 rounded-md bg-slate-800/90 px-1.5 py-0.5 text-[9px] font-bold text-slate-200">
-            <PackageCheck className="size-2.5" strokeWidth={2.5} />
+          <span className="absolute left-1.5 top-1.5 z-[1] rounded bg-slate-800/90 px-1 py-px text-[9px] font-bold text-slate-200">
             Esgotado
           </span>
         ) : (
-          <span className="absolute left-2 top-2 z-[1] rounded-md bg-amber-500/90 px-1.5 py-0.5 text-[9px] font-bold text-[#1a1200]">
+          <span className="absolute left-1.5 top-1.5 z-[1] rounded bg-amber-500/90 px-1 py-px text-[9px] font-bold text-[#1a1200]">
             {unitsLeft} de {item.stock}
           </span>
         )}
       </div>
 
-      <div className="flex flex-1 flex-col gap-1.5 px-3 pb-3 pt-2.5">
-        <h3 className="line-clamp-2 font-sans text-[12.5px] font-semibold leading-[1.3] text-foreground">
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5 p-2.5">
+        <h3 className="line-clamp-1 font-sans text-[13px] font-semibold leading-tight text-foreground" title={item.name}>
           {item.name}
         </h3>
         {item.description && (
-          <p className="line-clamp-2 text-[10px] font-medium text-muted-foreground">{item.description}</p>
+          <p className="line-clamp-1 text-[10.5px] text-muted-foreground" title={item.description}>
+            {item.description}
+          </p>
         )}
 
-        <div className="mt-auto space-y-2 pt-1">
-          <AuraPriceTag listPrice={item.auraCost} isVip={isVip} />
-
-          {claimedCount > 0 && <OwnersRow owners={owners} />}
+        <div className="mt-auto flex items-end justify-between gap-2 pt-1.5">
+          <div className="min-w-0 space-y-0.5">
+            <AuraPriceTag listPrice={item.auraCost} isVip={isVip} priceClassName="text-base text-orange-400" />
+            {claimedCount > 0 && <OwnersInline owners={owners} />}
+          </div>
 
           {ownedByMe ? (
-            <div className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-emerald-400/40 bg-emerald-400/10 px-3 py-1.5 text-[11px] font-bold text-emerald-300">
+            <span className={cn(actionBase, "bg-emerald-400/10 text-emerald-300")}>
               <Check className="size-3" />
               Resgatado
-            </div>
+            </span>
           ) : soldOut ? (
-            <div className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-muted/40 px-3 py-1.5 text-[11px] font-bold text-muted-foreground">
+            <span className={cn(actionBase, "bg-muted/40 text-muted-foreground")}>
               <PackageCheck className="size-3" />
               Esgotado
-            </div>
+            </span>
           ) : !isLoggedIn ? (
             <button
               type="button"
               onClick={() => requireLogin()}
-              className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-orange-500 px-3 py-1.5 text-[11px] font-bold text-[#1a1200] transition-colors hover:bg-orange-400"
+              className={cn(actionBase, "bg-orange-500 text-[#1a1200] hover:bg-orange-400")}
             >
-              Entrar para resgatar
+              Entrar
             </button>
           ) : !canRedeem ? (
-            <button
-              type="button"
-              disabled
-              title={`Requer Trust Factor "${trustLevelLabel(TRUST_PHYSICAL_REDEEM_LEVEL)}" — veja o painel acima`}
-              className="flex w-full cursor-not-allowed items-center justify-center gap-1.5 rounded-lg bg-muted/40 px-3 py-1.5 text-[11px] font-bold text-muted-foreground"
+            <span
+              title={`Requer Trust Factor "${trustLevelLabel(TRUST_PHYSICAL_REDEEM_LEVEL)}"`}
+              className={cn(actionBase, "cursor-not-allowed bg-muted/40 text-muted-foreground")}
             >
               <Lock className="size-3" />
-              Trust {trustLevelLabel(TRUST_PHYSICAL_REDEEM_LEVEL)}
-            </button>
+              Trust
+            </span>
           ) : (
             <button
               type="button"
@@ -339,14 +321,14 @@ function AuraPeripheralCard({
               disabled={loading || !canAfford}
               title={!canAfford ? "Saldo de Aura insuficiente" : undefined}
               className={cn(
-                "flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-bold transition-colors",
+                actionBase,
                 canAfford
                   ? "bg-orange-500 text-[#1a1200] hover:bg-orange-400"
                   : "cursor-not-allowed bg-muted/40 text-muted-foreground"
               )}
             >
               {loading && <Loader2 className="size-3 animate-spin" />}
-              {canAfford ? "Resgatar" : "Saldo insuficiente"}
+              {canAfford ? "Resgatar" : "Sem saldo"}
             </button>
           )}
         </div>
@@ -368,37 +350,28 @@ function AuraPeripheralCard({
   )
 }
 
-/** Linha "resgatado por" — avatares empilhados, com "+N" quando passa de 3. */
-function OwnersRow({ owners }: { owners: PeripheralOwnerEntry[] }) {
+/**
+ * "Resgatado por" em UMA linha: avatares empilhados + o nome (um dono) ou
+ * "+N". Antes era um bloco com rótulo e caixa própria, a parte mais alta do card.
+ * Avatar de 20px sem moldura: chip empilhado, a exceção prevista no AGENTS.md.
+ */
+function OwnersInline({ owners }: { owners: PeripheralOwnerEntry[] }) {
   const shown = owners.slice(0, 3)
   const extra = owners.length - shown.length
   const single = owners.length === 1 ? owners[0] : null
 
+  if (single) return <OwnerChip owner={single} />
+
   return (
-    <div className="space-y-1">
-      <p className="text-[8.5px] font-bold uppercase tracking-wider text-muted-foreground/60">
-        {owners.length === 1 ? "Resgatado por" : `Resgatado por ${owners.length}`}
-      </p>
-      {single ? (
-        <OwnerChip owner={single} />
-      ) : (
-        <div className="flex items-center gap-1.5 rounded-lg border border-border bg-muted/30 px-2 py-1.5">
-          <div className="flex -space-x-2">
-            {shown.map((o, i) => (
-              <span
-                key={`${o.userId}-${i}`}
-                className="rounded-full ring-2 ring-[var(--card)]"
-                title={o.displayName}
-              >
-                <UserAvatar name={o.displayName} avatarUrl={o.avatarUrl} size={5} />
-              </span>
-            ))}
-          </div>
-          {extra > 0 && (
-            <span className="text-[10px] font-semibold text-muted-foreground">+{extra}</span>
-          )}
-        </div>
-      )}
+    <div className="flex items-center gap-1 text-[10px] text-muted-foreground" title="Resgatado por">
+      <div className="flex -space-x-1.5">
+        {shown.map((o, i) => (
+          <span key={`${o.userId}-${i}`} className="rounded-full ring-2 ring-[var(--card)]" title={o.displayName}>
+            <UserAvatar name={o.displayName} avatarUrl={o.avatarUrl} size={4} />
+          </span>
+        ))}
+      </div>
+      {extra > 0 && <span className="font-semibold">+{extra}</span>}
     </div>
   )
 }
@@ -407,15 +380,15 @@ function OwnersRow({ owners }: { owners: PeripheralOwnerEntry[] }) {
 function OwnerChip({ owner }: { owner: PeripheralOwnerEntry }) {
   const inner = (
     <>
-      <UserAvatar name={owner.displayName} avatarUrl={owner.avatarUrl} size={5} />
-      <span className="min-w-0 flex-1 truncate">{owner.displayName}</span>
+      <UserAvatar name={owner.displayName} avatarUrl={owner.avatarUrl} size={4} />
+      <span className="min-w-0 truncate">{owner.displayName}</span>
     </>
   )
   const base =
-    "flex items-center gap-1.5 rounded-lg border border-border bg-muted/30 px-2 py-1.5 text-[10.5px] font-semibold text-foreground"
+    "flex min-w-0 items-center gap-1 text-[10px] font-semibold text-muted-foreground"
 
   return owner.displaySlug ? (
-    <Link href={profilePath(owner.displaySlug)} className={cn(base, "transition-colors hover:bg-muted/50")}>
+    <Link href={profilePath(owner.displaySlug)} className={cn(base, "transition-colors hover:text-foreground")}>
       {inner}
     </Link>
   ) : (

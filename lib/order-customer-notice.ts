@@ -1,5 +1,5 @@
 /**
- * Aviso da loja ao cliente sobre um pedido (migration 20270107000000): um
+ * Aviso da loja ao cliente sobre um pedido (migration 20270109000000): um
  * dado de entrega errado ou faltando, que só o cliente pode corrigir, ou um
  * problema que ele precisa saber. Módulo puro, importável dos dois lados: o
  * admin escolhe o motivo, o servidor grava e avisa (e-mail + notificação), e

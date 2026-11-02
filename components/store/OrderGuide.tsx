@@ -17,7 +17,6 @@ import {
 } from "lucide-react"
 
 import { AuraAmount } from "@/components/ui/AuraIcon"
-import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { STORE_REVIEW_AURA, STORE_REVIEW_WITH_PHOTO_AURA } from "@/lib/store-review-aura"
 import { cn } from "@/lib/utils"
@@ -307,7 +306,7 @@ export function OrderGuideDialog({
       }}
     >
       <DialogContent
-        className="gap-0 overflow-hidden p-0 sm:max-w-2xl"
+        className="gap-0 p-0 sm:max-w-2xl sm:overflow-visible"
         onTouchStart={(e) => {
           touchStartX.current = e.touches[0]?.clientX ?? null
         }}
@@ -320,7 +319,7 @@ export function OrderGuideDialog({
         }}
       >
         {/* Palco do slide: a figurinha ganha o espaço, como num slide de apresentação. */}
-        <div className="relative grid gap-5 bg-gradient-to-br from-emerald-500/15 via-background to-background p-6 pt-10 sm:grid-cols-[220px_1fr] sm:items-center sm:gap-8 sm:p-8">
+        <div className="relative grid gap-5 overflow-hidden rounded-t-xl bg-gradient-to-br from-emerald-500/15 via-background to-background p-6 pt-10 sm:grid-cols-[220px_1fr] sm:items-center sm:gap-8 sm:p-8">
           <div className="relative mx-auto flex size-40 items-center justify-center sm:size-[220px]">
             <span aria-hidden className="absolute inset-4 rounded-full bg-emerald-500/20 blur-2xl" />
             <Image
@@ -349,7 +348,7 @@ export function OrderGuideDialog({
 
         {/* Pontinhos como os do hero da Loja: o atual vira pílula. Clicável
             para pular direto a um slide. */}
-        <div className="flex items-center justify-center gap-2 border-t border-border/60 px-4 pt-4">
+        <div className="flex items-center justify-center gap-2 border-t border-border/60 p-4">
           {SLIDES.map((s, i) => {
             const isCurrent = i === index
             return (
@@ -368,30 +367,45 @@ export function OrderGuideDialog({
           })}
         </div>
 
-        <div className="flex items-center justify-between gap-3 p-4">
-          <Button type="button" variant="ghost" size="sm" onClick={() => go(-1)} disabled={isFirst} className="gap-1">
-            <ChevronLeft className="size-4" />
-            Anterior
-          </Button>
-          {isLast ? (
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => {
-                setIndex(0)
-                onOpenChange(false)
-              }}
-            >
-              Entendi
-            </Button>
-          ) : (
-            <Button type="button" size="sm" onClick={() => go(1)} className="gap-1">
-              Próximo
-              <ChevronRight className="size-4" />
-            </Button>
-          )}
-        </div>
+        <GuideArrow direction="prev" hidden={isFirst} onClick={() => go(-1)} />
+        <GuideArrow direction="next" hidden={isLast} onClick={() => go(1)} />
       </DialogContent>
     </Dialog>
+  )
+}
+
+/**
+ * Seta lateral do guia. No desktop fica FORA do card, uma de cada lado; no
+ * celular não há margem para isso, então ela sobrepõe a borda na altura da
+ * figurinha (e o deslizar continua valendo). Na ponta some, sem mudar o
+ * layout: a do outro lado não pula de lugar.
+ */
+function GuideArrow({
+  direction,
+  hidden,
+  onClick,
+}: {
+  direction: "prev" | "next"
+  hidden: boolean
+  onClick: () => void
+}) {
+  const Chevron = direction === "prev" ? ChevronLeft : ChevronRight
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={hidden}
+      aria-hidden={hidden}
+      aria-label={direction === "prev" ? "Slide anterior" : "Próximo slide"}
+      className={cn(
+        "absolute top-[7.5rem] z-10 flex size-9 -translate-y-1/2 items-center justify-center rounded-full bg-background/80 text-foreground ring-1 ring-foreground/15 backdrop-blur-sm transition-[opacity,background-color,transform] hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/80 sm:top-1/2 sm:size-12",
+        direction === "prev"
+          ? "left-2 hover:-translate-x-0.5 sm:-left-16"
+          : "right-2 hover:translate-x-0.5 sm:-right-16",
+        hidden && "pointer-events-none opacity-0"
+      )}
+    >
+      <Chevron className="size-5 sm:size-6" />
+    </button>
   )
 }

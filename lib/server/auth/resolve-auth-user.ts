@@ -23,6 +23,9 @@ import { hasForumPostsByUser } from "@/lib/server/repositories/forum-repository"
 import { ownsVipFounderFrame } from "@/lib/server/repositories/vip-founder-repository"
 import { getUserStreakPairsByUser } from "@/lib/server/repositories/achievements-repository"
 import { getLatestSubscriptionForUser } from "@/lib/server/repositories/vip-subscription-repository"
+import type { AdminRole } from "@/lib/admin-permissions"
+import { ANONYMOUS_FLAG_CONTEXT, type FeatureFlagKey } from "@/lib/feature-flags"
+import { getEnabledFeatureFlags } from "@/lib/server/feature-flags"
 
 /**
  * Payload de sessão que o cliente consome — o MESMO formato devolvido por
@@ -84,6 +87,13 @@ export type AuthUserPayload = {
    * quem pediu para não ter moldura.
    */
   frameOptOut: boolean
+  /**
+   * Feature flags LIGADAS para esta pessoa (`lib/feature-flags.ts`). Só as
+   * ligadas: a lista não cita flag desligada, para o nome de uma feature não
+   * lançada não sair do servidor. É conforto visual — a rota da feature
+   * confere a flag de novo.
+   */
+  enabledFlags: FeatureFlagKey[]
 }
 
 /** Resposta para quem não está autenticado (ou ainda não concluiu o 2FA). */
@@ -106,6 +116,15 @@ function anonymousPayload(): AuthUserPayload {
     isFounder: false,
     longestStreak: 0,
     frameOptOut: false,
+    enabledFlags: [],
+  }
+}
+
+/** Anônimo + as flags em "Todos" (as únicas que valem para quem não tem conta). */
+async function anonymousPayloadWithFlags(): Promise<AuthUserPayload> {
+  return {
+    ...anonymousPayload(),
+    enabledFlags: await getEnabledFeatureFlags(ANONYMOUS_FLAG_CONTEXT).catch(() => []),
   }
 }
 
@@ -152,7 +171,7 @@ export const resolveAuthUser = cache(async function resolveAuthUser(): Promise<A
     supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
   ])
 
-  if (!authData.user) return anonymousPayload()
+  if (!authData.user) return anonymousPayloadWithFlags()
 
   // Sessão aal1 com fator verificado: o 2FA ainda não foi concluído. Trata
   // como anônimo para que a casca não exiba dados do perfil antes da
@@ -165,7 +184,7 @@ export const resolveAuthUser = cache(async function resolveAuthUser(): Promise<A
   // do laço (conta sunano, 23/10/2026).
   if (isMfaStepUpRequired({ current: aal?.currentLevel ?? null, next: aal?.nextLevel ?? null })) {
     const trustedToken = (await cookies()).get(TRUSTED_DEVICE_COOKIE_NAME)?.value
-    if (!(await isTrustedDevice(authData.user.id, trustedToken))) return anonymousPayload()
+    if (!(await isTrustedDevice(authData.user.id, trustedToken))) return anonymousPayloadWithFlags()
   }
 
   const user = { id: authData.user.id, email: authData.user.email ?? null }
@@ -216,6 +235,13 @@ export const resolveAuthUser = cache(async function resolveAuthUser(): Promise<A
     ),
   ])
 
+  // Depois do Promise.all porque precisa do cargo, que veio nele; as configs
+  // das flags saem de cache (unstable_cache), então não há round-trip novo.
+  const enabledFlags = await getEnabledFeatureFlags({
+    userId: user.id,
+    role: (adminProfile?.role as AdminRole | undefined) ?? null,
+  }).catch(() => [])
+
   return {
     user,
     userProfile: profileAndVip.profile,
@@ -234,5 +260,6 @@ export const resolveAuthUser = cache(async function resolveAuthUser(): Promise<A
     isFounder,
     longestStreak: streaks[user.id]?.longest ?? 0,
     frameOptOut: profileAndVip.frameOptOut,
+    enabledFlags,
   }
 })

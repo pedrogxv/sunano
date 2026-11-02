@@ -13,6 +13,7 @@ import {
   Link2,
   Mouse,
   Package,
+  PanelLeft,
   Search,
   ShieldCheck,
   ShoppingBag,
@@ -23,6 +24,8 @@ import {
 
 import { AnimatedCounter } from "@/components/animated-counter"
 import { markChangelogBannerSeen } from "@/components/layout/ChangelogBanner"
+import { ChangelogFeedbackProvider, ChangelogReactions, ChangelogVote } from "@/components/changelog/ChangelogFeedback"
+import { changelogFeedbackKeys } from "@/lib/changelog-feedback"
 import {
   AURA_BRAND_BG_CLASS,
   AURA_BRAND_COLOR_CLASS,
@@ -151,7 +154,23 @@ const AREA_STYLE: Record<ChangelogArea, AreaStyle> = {
     ring: "ring-lime-500/40",
     glow: "from-lime-500/20",
   },
+  navegacao: {
+    icon: PanelLeft,
+    text: "text-fuchsia-400",
+    soft: "bg-fuchsia-500/10",
+    dot: "bg-fuchsia-400",
+    ring: "ring-fuchsia-500/40",
+    glow: "from-fuchsia-500/20",
+  },
 }
+
+/**
+ * Lista que ocupa a largura toda do card em DUAS colunas de texto (no
+ * desktop), em vez de uma linha de 1.000px difícil de ler ou de meia largura
+ * com a outra metade vazia. `mb` no lugar de `space-y`: com `columns`, a
+ * margem de cima do primeiro item da 2ª coluna a desalinhava da 1ª.
+ */
+const WIDE_LIST = "lg:columns-2 lg:gap-10 [&>li]:mb-2.5 [&>li]:break-inside-avoid"
 
 function plural(n: number, one: string, many: string) {
   return `${n} ${n === 1 ? one : many}`
@@ -181,6 +200,11 @@ export function PatchNotes({
   entries: ChangelogEntryData[]
 }) {
   const entries = useMemo(() => normalizeChangelogEntries(rawEntries), [rawEntries])
+  // Âncora (muda com o idioma nas versões antigas) → chave do voto (igual nos dois).
+  const feedbackKeys = useMemo(() => {
+    const keys = changelogFeedbackKeys(rawEntries)
+    return new Map(entries.map((entry, i) => [entry.id, keys[i]]))
+  }, [entries, rawEntries])
   const [latest, ...older] = entries
 
   const [query, setQuery] = useState("")
@@ -258,37 +282,39 @@ export function PatchNotes({
   const searching = query.trim().length > 0
 
   return (
-    <div className="mx-auto max-w-6xl space-y-14 px-4 py-8 sm:py-12">
-      <Hero
-        title={title}
-        description={description}
-        latest={latest}
-        stats={{ versions: entries.length, changes: totalChanges, specialEditions }}
-        query={query}
-        setQuery={setQuery}
-        searchRef={searchRef}
-        onSurprise={surpriseMe}
-        constellation={older.slice(0, 6).map((e) => e.label)}
-      />
+    <ChangelogFeedbackProvider keyById={feedbackKeys}>
+      <div className="mx-auto max-w-6xl space-y-14 px-4 py-8 sm:py-12">
+        <Hero
+          title={title}
+          description={description}
+          latest={latest}
+          stats={{ versions: entries.length, changes: totalChanges, specialEditions }}
+          query={query}
+          setQuery={setQuery}
+          searchRef={searchRef}
+          onSurprise={surpriseMe}
+          constellation={older.slice(0, 6).map((e) => e.label)}
+        />
 
-      {searching ? (
-        <SearchResults entries={entries} query={query} setQuery={setQuery} onOpen={focusEntry} />
-      ) : (
-        <>
-          <LatestRelease entry={latest} isNew={newIds.has(latest.id)} />
-          {older.length > 0 && (
-            <Timeline
-              entries={older}
-              expanded={expanded}
-              setExpanded={setExpanded}
-              flashId={flashId}
-              newIds={newIds}
-              onJump={focusEntry}
-            />
-          )}
-        </>
-      )}
-    </div>
+        {searching ? (
+          <SearchResults entries={entries} query={query} setQuery={setQuery} onOpen={focusEntry} />
+        ) : (
+          <>
+            <LatestRelease entry={latest} isNew={newIds.has(latest.id)} />
+            {older.length > 0 && (
+              <Timeline
+                entries={older}
+                expanded={expanded}
+                setExpanded={setExpanded}
+                flashId={flashId}
+                newIds={newIds}
+                onJump={focusEntry}
+              />
+            )}
+          </>
+        )}
+      </div>
+    </ChangelogFeedbackProvider>
   )
 }
 
@@ -528,6 +554,9 @@ function LatestRelease({ entry, isNew }: { entry: NormalizedChangelogEntry; isNe
   }, [entry])
 
   const hasAreas = areaCounts.length > 0
+  // Mudança sem área (entrada que mistura `sections` com `items`) também
+  // entra no "Tudo": antes a aba contava ela e a lista não a desenhava.
+  const looseChanges = entry.changes.filter((c) => !c.area)
   const visible = area === "all" ? entry.changes : entry.changes.filter((c) => c.area === area)
 
   function pickArea(next: ChangelogArea) {
@@ -623,11 +652,15 @@ function LatestRelease({ entry, isNew }: { entry: NormalizedChangelogEntry; isNe
         <div role={hasAreas ? "tabpanel" : undefined} key={area}>
           {area === "all" && hasAreas ? (
             <div className="grid gap-x-10 gap-y-8 lg:grid-cols-2">
-              {areaCounts.map(({ area: a }) => {
+              {areaCounts.map(({ area: a }, gi) => {
                 const style = AREA_STYLE[a]
                 const Icon = style.icon
+                // Grupo sozinho na linha (o único, ou o último de uma conta
+                // ímpar) toma as duas colunas da grade e divide a própria
+                // lista em duas, em vez de deixar meio card vazio.
+                const spansRow = gi === areaCounts.length - 1 && areaCounts.length % 2 === 1
                 return (
-                  <div key={a} className="space-y-3">
+                  <div key={a} className={cn("space-y-3", spansRow && "lg:col-span-2")}>
                     <button
                       type="button"
                       onClick={() => setArea(a)}
@@ -638,7 +671,7 @@ function LatestRelease({ entry, isNew }: { entry: NormalizedChangelogEntry; isNe
                       </span>
                       {ui.areas[a]}
                     </button>
-                    <ul className="space-y-2">
+                    <ul className={spansRow ? WIDE_LIST : "space-y-2"}>
                       {entry.changes
                         .filter((c) => c.area === a)
                         .map((change, i) => (
@@ -648,15 +681,31 @@ function LatestRelease({ entry, isNew }: { entry: NormalizedChangelogEntry; isNe
                   </div>
                 )
               })}
+              {looseChanges.length > 0 && (
+                <ul className={cn("lg:col-span-2", WIDE_LIST)}>
+                  {looseChanges.map((change, i) => (
+                    <ChangeItem key={change.text} text={change.text} area={null} index={i} />
+                  ))}
+                </ul>
+              )}
             </div>
           ) : (
-            <ul className="space-y-2.5">
+            <ul className={WIDE_LIST}>
               {visible.map((change, i) => (
                 <ChangeItem key={change.text} text={change.text} area={change.area} index={i} />
               ))}
             </ul>
           )}
         </div>
+      </div>
+
+      {/* Voto e reações: depois da lista, que é onde a pessoa termina de ler */}
+      <div className="flex flex-col gap-4 rounded-2xl bg-secondary/30 p-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-semibold text-foreground">{ui.feedback.question}</span>
+          <ChangelogVote entryId={entry.id} />
+        </div>
+        <ChangelogReactions entryId={entry.id} variant="full" />
       </div>
     </section>
   )
@@ -917,6 +966,10 @@ function TimelineEntry({
                   ))}
                 </ul>
               )}
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <ChangelogVote entryId={entry.id} size="sm" />
+                <ChangelogReactions entryId={entry.id} variant="compact" />
+              </div>
             </div>
           </div>
         </div>

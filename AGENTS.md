@@ -597,3 +597,19 @@ cores diferentes.
   explicar o Trust LINKA para essa página (`TrustFactorFaqSection` é a fonte
   única, usada por ela e pela Central de Aura). Reescrever o texto na tela é
   como o site acumulou versões divergentes da mesma regra.
+
+# Patch Notes (changelog) — NUNCA FALE SOBRE FEATURES DE ADMIN NO CHANGELOG
+
+As Patch Notes (`changelog.entries` em `lib/i18n-pt-br.ts` e `lib/i18n-en-us.ts`,
+página pública `/changelog`) são para o MEMBRO do site. Ao escrever ou revisar
+uma entrada:
+
+- **Nada da área admin.** Nem tela, nem rota `/admin/...`, nem "painel",
+  "permissões", "fila de moderação", "formulário de produto (admin)", nem
+  "login para a equipe". Se a mudança só existe no admin, ela não entra. Se
+  tem um lado visível ao membro, descreva SÓ esse lado.
+- **Nada que exponha o sistema.** Sem nome de tabela, RLS, rate limit, regra
+  "reforçada no banco", gateway/fornecedor interno, rota de API, cron, ou como
+  a detecção de fraude funciona. "Rodada de melhorias de segurança" basta.
+- As duas línguas andam juntas: entrada nova ou correção em pt-BR tem o mesmo
+  texto em en-US.

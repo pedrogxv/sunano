@@ -16,9 +16,11 @@ import { AuraSpotlight } from "@/components/home/AuraSpotlight"
 import BannerCarousel from "@/components/home/BannerCarousel"
 import DefaultHero from "@/components/home/DefaultHero"
 import { EventsShowcase } from "@/components/home/EventsShowcase"
+import { GiveawaysShowcase } from "@/components/home/GiveawaysShowcase"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
 import { getHomeData } from "@/lib/server/repositories/home-repository"
+import { getHomeGiveaways } from "@/lib/server/repositories/giveaways-repository"
 import { formatBRL } from "@/lib/format"
 import { mapTier } from "@/lib/tier-utils"
 import { CARD_TIER_STYLES } from "@/lib/tierlist-theme"
@@ -107,8 +109,10 @@ function SectionHeader({
 }
 
 export default async function HomePage() {
-  const { banners, peripherals, products, auraPeripherals, forum, trendingForum, videos, events, counts } =
-    await getHomeData()
+  const [
+    { banners, peripherals, products, auraPeripherals, forum, trendingForum, videos, events, counts },
+    publicGiveaways,
+  ] = await Promise.all([getHomeData(), getHomeGiveaways()])
 
   return (
     <div className="mx-auto max-w-6xl space-y-12 px-2 py-6 sm:px-4 md:px-6 lg:px-8 md:py-10">
@@ -208,15 +212,23 @@ export default async function HomePage() {
         </section>
       )}
 
-      {/* ============ CENTRAL DE AURA ============ */}
-      {/* Logo abaixo de "Em Alta": é a seção que explica ao visitante por que
-          vale participar (prêmio físico de verdade) e como o site se sustenta
-          (VIP). Some sozinha se não houver nenhum produto cadastrado — sem
-          prêmio para mostrar, sobraria só o anúncio do VIP. */}
-      {auraPeripherals.length > 0 && <AuraSpotlight peripherals={auraPeripherals} />}
+      {/* ============ SORTEIOS ============ */}
+      {/* Logo abaixo de "Em Alta", atrás da feature flag `giveaways`
+          (/admin/feature-flags). `publicGiveaways` só vem com a flag em
+          "Todos"; nos outros modos a seção existe só para quem a flag libera,
+          e quem não está liberado não recebe nada (nem o HTML vazio). */}
+      <GiveawaysShowcase initial={publicGiveaways} />
 
       {/* ============ CONQUISTAS EM DESTAQUE ============ */}
       {events.length > 0 && <EventsShowcase events={events} />}
+
+      {/* ============ CENTRAL DE AURA ============ */}
+      {/* Explica ao visitante por que vale participar (prêmio físico de
+          verdade) e como o site se sustenta (VIP). Desceu para depois das
+          Conquistas quando os Sorteios ganharam o lugar dela. Some sozinha se
+          não houver nenhum produto cadastrado — sem prêmio para mostrar,
+          sobraria só o anúncio do VIP. */}
+      {auraPeripherals.length > 0 && <AuraSpotlight peripherals={auraPeripherals} />}
 
       {/* ============ LOJA ============ */}
       {SHOW_STORE_SECTION && products.length > 0 && (

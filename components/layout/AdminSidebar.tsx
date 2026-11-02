@@ -26,12 +26,14 @@ import {
   Newspaper,
   Package,
   PanelTop,
+  PartyPopper,
   PlaySquare,
   Receipt,
   Settings,
   ShoppingBag,
   Tag,
   Ticket,
+  ToggleRight,
   Trophy,
   Users,
   Wrench,
@@ -43,6 +45,7 @@ import { SunanoIcon } from "@/components/ui/SunanoLogo"
 import { useSidebar } from "@/components/providers/sidebar-context"
 import { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
+import { SIDEBAR_PANEL_TRANSITION, SidebarSectionLabel, SidebarTooltip, sidebarFade } from "@/components/layout/sidebar-motion"
 import {
   hasAdminPermission,
   isWebMaster,
@@ -69,15 +72,6 @@ interface NavGroup {
 // Mesmos tokens da PublicSidebar: as duas sidebars são o mesmo painel de
 // vidro, e item, seção e hover não podem divergir entre elas.
 const NAV_ITEM_IDLE = "text-foreground/75 hover:bg-white/[0.07] hover:text-foreground"
-
-function SectionLabel({ label, collapsed }: { label: string; collapsed: boolean }) {
-  if (collapsed) return <div className="my-2 h-px bg-white/10" />
-  return (
-    <p className="mb-1.5 mt-5 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-      {label}
-    </p>
-  )
-}
 
 /** Intervalo de atualização dos badges (pedidos pagos, suporte, cadastros). */
 const BADGE_REFRESH_MS = 60_000
@@ -134,6 +128,7 @@ export function AdminSidebar() {
         { href: "/admin/trust",  label: "Trust Factor",                 icon: ShieldCheck,   permission: "forum_read" },
         { href: "/admin/videos", label: "Vídeos",                       icon: PlaySquare },
         { href: "/admin/eventos", label: "Conquistas",                 icon: Medal,          permission: "events_read" },
+        { href: "/admin/sorteios", label: "Sorteios",                  icon: PartyPopper,    requiresWebMaster: true },
         {
           href: "/admin/aura-itens",
           label: "Itens de Aura",
@@ -188,6 +183,7 @@ export function AdminSidebar() {
           children: [
             { href: "/admin/users",        label: t.admin.sidebar.users,    icon: Users,     requiresWebMaster: true },
             { href: "/admin/notificacoes", label: "Avisos do sistema",      icon: Megaphone, requiresWebMaster: true },
+            { href: "/admin/feature-flags", label: "Feature flags",         icon: ToggleRight, requiresWebMaster: true },
             { href: "/admin/settings",     label: t.admin.sidebar.settings, icon: Settings,  permission: "settings_read" },
           ],
         },
@@ -308,7 +304,8 @@ export function AdminSidebar() {
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex h-dvh w-64 shrink-0 flex-col transition-all duration-300 md:relative md:inset-auto md:h-full md:translate-x-0",
+          "fixed inset-y-0 left-0 z-40 flex h-dvh w-64 shrink-0 flex-col md:relative md:inset-auto md:h-full md:translate-x-0",
+          SIDEBAR_PANEL_TRANSITION,
           // Mesmo painel de vidro flutuante da PublicSidebar (`.sidebar-glass`
           // em globals.css); `overflow-hidden` recorta a rolagem no raio.
           "sidebar-glass overflow-hidden rounded-r-2xl border border-l-0 border-white/10 md:rounded-2xl md:border-l",
@@ -317,32 +314,45 @@ export function AdminSidebar() {
           isCollapsed ? "md:w-16" : "md:w-64"
         )}
       >
-        <nav className="sidebar-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 pt-6 pb-6">
-          {/* Brand */}
-          <RouteLink
-            href="/admin"
-            onClick={close}
-            className={cn("flex pb-6", isCollapsed ? "justify-center" : "items-center gap-2.5")}
-          >
-            {isCollapsed ? (
+        {/* Mesma geometria da PublicSidebar (ver o comentário lá): o ícone
+            fica parado no centro dos 64px e só a largura anima. */}
+        <nav
+          className={cn(
+            "sidebar-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2.5 pt-6 pb-6",
+            isCollapsed && "sidebar-scroll-hidden"
+          )}
+        >
+          {/* Brand: wordmark e mascote empilhados, trocando só de opacidade */}
+          <RouteLink href="/admin" onClick={close} className="relative mb-6 flex h-9 items-center pl-[3px]">
+            <span
+              className={cn(
+                "flex shrink-0 items-center gap-2.5 transition-opacity ease-out motion-reduce:transition-none",
+                isCollapsed ? "opacity-0 duration-150" : "opacity-100 delay-100 duration-200"
+              )}
+            >
+              {/* Mesmo wordmark da PublicSidebar (ver o comentário lá sobre o
+                  WebP), um degrau menor para caber o selo do painel. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/images/mascot/logo-wordmark.webp"
+                alt="Sunano Admin"
+                width={606}
+                height={108}
+                className="h-7 w-auto max-w-none shrink-0 object-contain"
+              />
+              <span className="rounded-md border border-red-500/40 bg-red-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-red-400">
+                Admin
+              </span>
+            </span>
+            <span
+              aria-hidden
+              className={cn(
+                "absolute left-[3px] top-0 transition-opacity ease-out motion-reduce:transition-none",
+                isCollapsed ? "opacity-100 duration-150" : "opacity-0 delay-100 duration-200"
+              )}
+            >
               <SunanoIcon />
-            ) : (
-              <>
-                {/* Mesmo wordmark da PublicSidebar (ver o comentário lá sobre o
-                    WebP), um degrau menor para caber o selo do painel. */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="/images/mascot/logo-wordmark.webp"
-                  alt="Sunano Admin"
-                  width={606}
-                  height={108}
-                  className="h-7 w-auto shrink-0 object-contain"
-                />
-                <span className="rounded-md border border-red-500/40 bg-red-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-red-400">
-                  Admin
-                </span>
-              </>
-            )}
+            </span>
           </RouteLink>
 
           {isLoadingProfile ? (
@@ -350,18 +360,15 @@ export function AdminSidebar() {
             <div>
               {[2, 3, 2, 2, 2, 1].map((count, gi) => (
                 <div key={gi}>
-                  {isCollapsed ? (
-                    <div className="my-2 h-px bg-white/10" />
-                  ) : (
-                    <div className="mb-1.5 mt-5 mx-3 h-2.5 w-14 rounded bg-white/[0.07] animate-pulse" />
-                  )}
+                  <div className="mb-1.5 mt-5 flex h-4 items-end px-3">
+                    <div className={cn("h-2.5 rounded bg-white/[0.07] animate-pulse", isCollapsed ? "w-[18px]" : "w-14")} />
+                  </div>
                   <div className="space-y-1">
                     {Array.from({ length: count }).map((_, ii) => (
                       <div
                         key={ii}
                         className={cn(
-                          "h-10 rounded-lg bg-white/[0.06] animate-pulse",
-                          isCollapsed ? "w-10 mx-auto" : "w-full"
+                          "h-10 w-full rounded-lg bg-white/[0.06] animate-pulse"
                         )}
                       />
                     ))}
@@ -375,7 +382,7 @@ export function AdminSidebar() {
               if (visible.length === 0) return null
               return (
                 <div key={group.label}>
-                  <SectionLabel label={group.label} collapsed={isCollapsed} />
+                  <SidebarSectionLabel label={group.label} collapsed={isCollapsed} />
                   <div className="space-y-1">
                     {visible.map((item) => {
                       const Icon = item.icon
@@ -387,68 +394,80 @@ export function AdminSidebar() {
 
                         return (
                           <div key={item.href} className="relative">
-                            <button
-                              type="button"
-                              onClick={() => setExpandedHref((prev) => (prev === item.href ? null : item.href))}
-                              aria-expanded={open}
-                              className={cn(
-                                "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                                isCollapsed && "justify-center",
-                                activeChild ? "text-foreground" : NAV_ITEM_IDLE
-                              )}
-                            >
-                              <Icon className="size-[18px] shrink-0" />
-                              <span className={cn("flex-1 text-left", isCollapsed && "hidden")}>{item.label}</span>
-                              {Boolean(childrenBadgeCount) && (
-                                <span className={cn(
-                                  "flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-semibold text-white",
-                                  isCollapsed && "absolute right-1 top-1 h-4 min-w-4 px-0.5 text-[9px]"
-                                )}>
-                                  {childrenBadgeCount}
-                                </span>
-                              )}
-                              <ChevronDown
+                            <SidebarTooltip label={item.label} collapsed={isCollapsed} count={childrenBadgeCount}>
+                              <button
+                                type="button"
+                                onClick={() => setExpandedHref((prev) => (prev === item.href ? null : item.href))}
+                                aria-expanded={open}
                                 className={cn(
-                                  "size-3.5 shrink-0 transition-transform duration-200",
-                                  isCollapsed && "hidden",
-                                  open && "rotate-180"
+                                  "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                                  activeChild ? "text-foreground" : NAV_ITEM_IDLE
                                 )}
-                              />
-                            </button>
-                            {!isCollapsed && (
-                              <div
-                                className="grid overflow-hidden transition-[grid-template-rows] duration-200 ease-out"
-                                style={{ gridTemplateRows: open ? "1fr" : "0fr" }}
                               >
-                                <div className="min-h-0">
-                                  <div className="ml-4 mt-1 space-y-1 border-l border-white/10 pl-3">
-                                    {item.children.map((child) => {
-                                      const ChildIcon = child.icon
-                                      const childActiveState = child.href === activeChild
-                                      return (
-                                        <RouteLink
-                                          key={child.href}
-                                          href={child.href}
-                                          onClick={close}
-                                          className={cn(
-                                            "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                                            childActiveState ? "bg-primary text-primary-foreground" : NAV_ITEM_IDLE
-                                          )}
-                                        >
-                                          <ChildIcon className="size-4 shrink-0" />
-                                          <span className="flex-1">{child.label}</span>
-                                          {Boolean(child.badgeCount) && (
-                                            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-semibold text-white">
-                                              {child.badgeCount}
-                                            </span>
-                                          )}
-                                        </RouteLink>
-                                      )
-                                    })}
-                                  </div>
+                                <Icon className="size-[18px] shrink-0" />
+                                <span className={cn("flex flex-1 items-center gap-3", sidebarFade(isCollapsed))}>
+                                  <span className="flex-1 text-left">{item.label}</span>
+                                  {Boolean(childrenBadgeCount) && (
+                                    <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-semibold text-white">
+                                      {childrenBadgeCount}
+                                    </span>
+                                  )}
+                                  <ChevronDown
+                                    className={cn("size-3.5 shrink-0 transition-transform duration-200", open && "rotate-180")}
+                                  />
+                                </span>
+                                {/* Fechada, a contagem vira um ponto no canto do
+                                    ícone: o rótulo (e a pílula dentro dele) esmaeceu */}
+                                {Boolean(childrenBadgeCount) && (
+                                  <span
+                                    className={cn(
+                                      "absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-0.5 text-[9px] font-semibold text-white transition-[opacity,scale] duration-200 motion-reduce:transition-none",
+                                      isCollapsed ? "scale-100 opacity-100 delay-100" : "pointer-events-none scale-50 opacity-0"
+                                    )}
+                                  >
+                                    {childrenBadgeCount}
+                                  </span>
+                                )}
+                              </button>
+                            </SidebarTooltip>
+                            {/* Fechada, os filhos recolhem pela mesma grade
+                                que abre/fecha o grupo, em vez de sumirem */}
+                            <div
+                              className={cn(
+                                "grid overflow-hidden transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none",
+                                isCollapsed && "pointer-events-none opacity-0"
+                              )}
+                              style={{ gridTemplateRows: open && !isCollapsed ? "1fr" : "0fr" }}
+                              inert={isCollapsed || !open}
+                            >
+                              <div className="min-h-0">
+                                <div className="ml-4 mt-1 space-y-1 border-l border-white/10 pl-3">
+                                  {item.children.map((child) => {
+                                    const ChildIcon = child.icon
+                                    const childActiveState = child.href === activeChild
+                                    return (
+                                      <RouteLink
+                                        key={child.href}
+                                        href={child.href}
+                                        onClick={close}
+                                        className={cn(
+                                          "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                                          childActiveState ? "bg-primary text-primary-foreground" : NAV_ITEM_IDLE
+                                        )}
+                                      >
+                                        <ChildIcon className="size-4 shrink-0" />
+                                        <span className="flex-1">{child.label}</span>
+                                        {Boolean(child.badgeCount) && (
+                                          <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-semibold text-white">
+                                            {child.badgeCount}
+                                          </span>
+                                        )}
+                                      </RouteLink>
+                                    )
+                                  })}
                                 </div>
                               </div>
-                            )}
+                            </div>
                           </div>
                         )
                       }
@@ -461,24 +480,26 @@ export function AdminSidebar() {
                         isActive(item.href) &&
                         !allHrefs.some((href) => href.length > item.href.length && isActive(href))
                       return (
-                        <RouteLink
-                          key={item.href}
-                          href={item.href}
-                          onClick={close}
-                          className={cn(
-                            "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
-                            isCollapsed && "justify-center",
-                            active ? "bg-primary text-primary-foreground" : NAV_ITEM_IDLE
-                          )}
-                        >
-                          <Icon className="size-[18px] shrink-0" />
-                          <span className={cn("flex-1", isCollapsed && "hidden")}>{item.label}</span>
-                          {Boolean(item.badgeCount) && !isCollapsed && (
-                            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-semibold text-white">
-                              {item.badgeCount}
+                        <SidebarTooltip key={item.href} label={item.label} collapsed={isCollapsed} count={item.badgeCount}>
+                          <RouteLink
+                            href={item.href}
+                            onClick={close}
+                            className={cn(
+                              "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                              active ? "bg-primary text-primary-foreground" : NAV_ITEM_IDLE
+                            )}
+                          >
+                            <Icon className="size-[18px] shrink-0" />
+                            <span className={cn("flex flex-1 items-center gap-3", sidebarFade(isCollapsed))}>
+                              <span className="flex-1">{item.label}</span>
+                              {Boolean(item.badgeCount) && (
+                                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-semibold text-white">
+                                  {item.badgeCount}
+                                </span>
+                              )}
                             </span>
-                          )}
-                        </RouteLink>
+                          </RouteLink>
+                        </SidebarTooltip>
                       )
                     })}
                   </div>
@@ -490,19 +511,20 @@ export function AdminSidebar() {
           {/* Ver site */}
           {!isLoadingProfile && (
             <>
-              <SectionLabel label={t.admin.sidebar.actions} collapsed={isCollapsed} />
-              <RouteLink
-                href="/"
-                onClick={close}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
-                  NAV_ITEM_IDLE,
-                  isCollapsed && "justify-center"
-                )}
-              >
-                <Eye className="size-[18px] shrink-0" />
-                <span className={cn(isCollapsed && "hidden")}>{t.admin.sidebar.viewSite}</span>
-              </RouteLink>
+              <SidebarSectionLabel label={t.admin.sidebar.actions} collapsed={isCollapsed} />
+              <SidebarTooltip label={t.admin.sidebar.viewSite} collapsed={isCollapsed}>
+                <RouteLink
+                  href="/"
+                  onClick={close}
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                    NAV_ITEM_IDLE
+                  )}
+                >
+                  <Eye className="size-[18px] shrink-0" />
+                  <span className={sidebarFade(isCollapsed)}>{t.admin.sidebar.viewSite}</span>
+                </RouteLink>
+              </SidebarTooltip>
             </>
           )}
         </nav>

@@ -29,3 +29,23 @@ export async function getAuthorizedProfile(): Promise<AuthorizedProfileResult> {
 
   return { error: null, status: 200 as const, profile: profile as AdminProfile }
 }
+
+export type WebMasterResult =
+  | { ok: true; profile: AdminProfile }
+  | { ok: false; error: string; status: 401 | 403 }
+
+/**
+ * Rotas que só o WEB MASTER usa (feature flags, sorteios em lançamento).
+ * Cargo, não permissão da matriz: o mesmo corte de `/admin/users` e dos
+ * avisos do sistema, para o que muda o site inteiro de uma vez.
+ */
+export async function requireWebMaster(): Promise<WebMasterResult> {
+  const auth = await getAuthorizedProfile()
+  if (auth.error || !auth.profile) {
+    return { ok: false, error: auth.error ?? "Não autorizado.", status: auth.status === 401 ? 401 : 403 }
+  }
+  if (auth.profile.role !== "webmaster") {
+    return { ok: false, error: "Apenas o WEB Master tem acesso.", status: 403 }
+  }
+  return { ok: true, profile: auth.profile }
+}

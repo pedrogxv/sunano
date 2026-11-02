@@ -276,6 +276,10 @@ export function AuraMissionsBadge({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverAnchor asChild>
         <RouteLink
+          // Os dois estados são desenhos diferentes (não dá para esmaecer só
+          // o rótulo como nos itens): trocar a `key` remonta o card e o
+          // `animate-in` o faz surgir em vez de aparecer de uma vez.
+          key={collapsed ? "collapsed" : "expanded"}
           href="/aura"
           onClick={() => {
             setOpen(false)
@@ -290,7 +294,11 @@ export function AuraMissionsBadge({
             active
               ? "border-orange-500/60 bg-orange-500/15"
               : "border-orange-500/25 bg-orange-500/[0.06] hover:border-orange-500/45 hover:bg-orange-500/10",
-            collapsed ? "flex flex-col items-center gap-1 px-1 py-2" : "p-3"
+            "animate-in fade-in duration-300 ease-out motion-reduce:animate-none",
+            // Abrindo, o card nasce enquanto o painel ainda é estreito:
+            // `nowrap` impede o texto de quebrar em várias linhas (e o card
+            // de crescer em altura) nesse meio-tempo; a borda o recorta.
+            collapsed ? "flex flex-col items-center gap-1 px-1 py-2" : "whitespace-nowrap p-3"
           )}
         >
           {collapsed ? (

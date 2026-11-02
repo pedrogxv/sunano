@@ -226,6 +226,32 @@ h3,
   animation: carousel-progress var(--carousel-interval, 10s) linear forwards;
 }
 
+/* Deslize dos slides do Hero da Loja (components/store/StoreHero.tsx). O que
+   entra não guarda o estado final (sem fill-mode): com transform preso, o
+   Chrome desenhava a camada do <video> deslocada. O que sai segura o fim
+   (`both`) até o React tirá-lo da tela, senão pisca de volta no lugar. */
+@keyframes hero-in-next {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+@keyframes hero-in-prev {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+@keyframes hero-out-next {
+  from { transform: translateX(0); }
+  to { transform: translateX(-100%); }
+}
+@keyframes hero-out-prev {
+  from { transform: translateX(0); }
+  to { transform: translateX(100%); }
+}
+
+.animate-hero-in-next { animation: hero-in-next 600ms cubic-bezier(0.22, 1, 0.36, 1); }
+.animate-hero-in-prev { animation: hero-in-prev 600ms cubic-bezier(0.22, 1, 0.36, 1); }
+.animate-hero-out-next { animation: hero-out-next 600ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.animate-hero-out-prev { animation: hero-out-prev 600ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-in-up,
   .stagger-children > * {
@@ -236,7 +262,11 @@ h3,
   .animate-shimmer {
     animation: none;
   }
-  .animate-carousel-progress {
+  .animate-carousel-progress,
+  .animate-hero-in-next,
+  .animate-hero-in-prev,
+  .animate-hero-out-next,
+  .animate-hero-out-prev {
     animation: none;
   }
 }
@@ -314,6 +344,19 @@ html[data-changelog-dismissed] .changelog-banner {
 
 .sidebar-scroll::-webkit-scrollbar-thumb:active {
   background: rgb(255 255 255 / 0.7) padding-box;
+}
+
+/* Sidebar FECHADA: a calha de 10px sai do layout. Ela tirava largura dos
+   64px do painel e os fundos dos itens (Loja, Promoções, item ativo) ficavam
+   deslocados para a esquerda enquanto o ícone seguia no centro. A rolagem
+   continua pela roda e pelo toque; `scrollbar-width` aqui não atrapalha o
+   estilo acima porque nesse estado não há barra para estilizar. */
+.sidebar-scroll-hidden {
+  scrollbar-width: none;
+}
+
+.sidebar-scroll-hidden::-webkit-scrollbar {
+  display: none;
 }
 
 /* Firefox não tem os pseudo-elementos. Só aqui: no Chrome 121+, declarar
@@ -2581,4 +2624,266 @@ button:not(:disabled):hover .aura-icon-holder {
   .launch-violet-card::before {
     animation: none;
   }
+}
+
+/* Voto e reações das Patch Notes (components/changelog/ChangelogFeedback.tsx).
+   `pop`: o ícone salta com um leve rebote ao ser marcado. `float`: uma cópia
+   do emoji sobe e some, o "+1" visual da reação. Os dois são só transform e
+   opacity (compositor), e quem pediu menos movimento não vê nenhum. */
+@keyframes feedback-pop {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.4); }
+  100% { transform: scale(1); }
+}
+
+@keyframes feedback-float {
+  0% { opacity: 0; transform: translateY(0) scale(0.7); }
+  20% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-30px) scale(1.3); }
+}
+
+.feedback-pop {
+  animation: feedback-pop 420ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.feedback-float {
+  position: absolute;
+  left: 0.625rem;
+  top: 0.4rem;
+  pointer-events: none;
+  animation: feedback-float 700ms ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feedback-pop { animation: none; }
+  .feedback-float { display: none; }
+}
+
+/* ── Sorteios da Home (components/home/GiveawaysShowcase.tsx) ──────────────
+   A cor É a raridade: Azul = Raro, Vermelho = Especial, Amarelo = Lendário
+   (lib/giveaways.ts). Cada `.giveaway-rarity-*` só define as variáveis; o
+   resto lê delas, para as três raridades não divergirem em forma.
+   O anel é background com `background-clip` (Raro/Especial) ou um `::before`
+   mascarado (Lendário) — nunca `border-image`, que ignora o border-radius. */
+@property --giveaway-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.giveaway-rarity-rare {
+  --rarity: oklch(0.74 0.15 235);
+  --rarity-strong: oklch(0.62 0.19 250);
+  --rarity-soft: oklch(0.74 0.15 235 / 0.16);
+}
+.giveaway-rarity-special {
+  --rarity: oklch(0.68 0.22 25);
+  --rarity-strong: oklch(0.56 0.23 20);
+  --rarity-soft: oklch(0.68 0.22 25 / 0.16);
+}
+.giveaway-rarity-legendary {
+  --rarity: oklch(0.87 0.16 92);
+  --rarity-strong: oklch(0.76 0.17 75);
+  --rarity-soft: oklch(0.87 0.16 92 / 0.16);
+}
+
+.giveaway-card {
+  position: relative;
+  isolation: isolate;
+  border: 1.5px solid transparent;
+  border-radius: 0.9rem;
+  background:
+    radial-gradient(120% 70% at 50% 0%, var(--rarity-soft), transparent 60%) padding-box,
+    linear-gradient(var(--card), var(--card)) padding-box,
+    linear-gradient(165deg, var(--rarity), oklch(1 0 0 / 0.06) 45%, var(--rarity-strong)) border-box;
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+.giveaway-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 36px -14px var(--rarity);
+}
+
+/* Lendário: anel dourado girando + brilho que atravessa a foto. */
+.giveaway-rarity-legendary.giveaway-card {
+  background:
+    radial-gradient(120% 70% at 50% 0%, var(--rarity-soft), transparent 60%) padding-box,
+    linear-gradient(var(--card), var(--card)) padding-box,
+    linear-gradient(var(--rarity-strong), var(--rarity-strong)) border-box;
+  box-shadow: 0 0 26px -10px var(--rarity);
+}
+.giveaway-rarity-legendary.giveaway-card::before {
+  content: "";
+  position: absolute;
+  inset: -1.5px;
+  z-index: -1;
+  padding: 1.5px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--giveaway-angle),
+    var(--rarity-strong),
+    oklch(0.98 0.06 95),
+    var(--rarity),
+    var(--rarity-strong) 40%,
+    var(--rarity-strong)
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  animation: giveaway-ring-spin 4s linear infinite;
+  pointer-events: none;
+}
+.giveaway-rarity-legendary .giveaway-image::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 35%, oklch(1 0.05 95 / 0.28) 50%, transparent 65%);
+  transform: translateX(-130%);
+  animation: giveaway-sheen 5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes giveaway-ring-spin {
+  to { --giveaway-angle: 360deg; }
+}
+@keyframes giveaway-sheen {
+  0%, 65% { transform: translateX(-130%); }
+  90%, 100% { transform: translateX(130%); }
+}
+
+/* Picote do bilhete: linha tracejada na cor da raridade e dois meios-círculos
+   "mordendo" a borda de cima e de baixo, na cor do fundo da página. */
+.giveaway-perforation {
+  position: relative;
+  flex-shrink: 0;
+  width: 0;
+  margin: 10px 2px;
+  border-left: 1.5px dashed color-mix(in oklch, var(--rarity) 45%, transparent);
+}
+.giveaway-perforation::before,
+.giveaway-perforation::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  z-index: 1;
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  /* Fundo de quem envolve o bilhete: a página na Home, o painel de Prêmios na Central. */
+  background: var(--ticket-cut-bg, var(--background));
+  transform: translateX(-50%);
+}
+.giveaway-perforation::before { top: -19px; }
+.giveaway-perforation::after { bottom: -19px; }
+
+/* Ponto aceso da legenda de raridades. */
+.giveaway-rarity-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 9999px;
+  background: var(--rarity);
+  box-shadow: 0 0 0 2px var(--rarity-soft), 0 0 10px var(--rarity);
+}
+
+.giveaway-progress {
+  background: linear-gradient(90deg, var(--rarity-strong), var(--rarity));
+  box-shadow: 0 0 10px -2px var(--rarity);
+  transition: width 600ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.giveaway-cta {
+  background: linear-gradient(180deg, var(--rarity), var(--rarity-strong));
+  color: oklch(0.16 0.02 260);
+}
+.giveaway-cta:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+/* Confete do "Participar": 12 pedaços com direção e cor por variável inline. */
+.giveaway-confetti {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 6px;
+  height: 10px;
+  border-radius: 1px;
+  background: var(--confetti-color, var(--rarity));
+  opacity: 0;
+  pointer-events: none;
+  animation: giveaway-confetti-burst 900ms cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+@keyframes giveaway-confetti-burst {
+  0% { opacity: 1; transform: translate(-50%, -50%) rotate(0deg); }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(var(--rot));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .giveaway-card,
+  .giveaway-progress {
+    transition: none;
+  }
+  .giveaway-rarity-legendary.giveaway-card::before,
+  .giveaway-rarity-legendary .giveaway-image::after,
+  .giveaway-confetti {
+    animation: none;
+    display: none;
+  }
+}
+
+/* ── Painéis temáticos da Central de Aura (components/aura/AuraHub.tsx) ──────
+   Prêmios, Loja e Ganhe Aura: o mesmo corpo, uma cor por intenção. Cada tema
+   só define --hub-a (canto de cima, ícone) e --hub-b (canto de baixo). Borda
+   em gradiente por background-clip (nunca border-image) e uma grade
+   pontilhada que some antes de chegar aos cards. */
+.aura-hub-prize { --hub-a: oklch(0.74 0.18 55); --hub-b: oklch(0.62 0.22 305); --hub-c: oklch(0.88 0.15 85); }
+.aura-hub-shop { --hub-a: oklch(0.66 0.22 305); --hub-b: oklch(0.68 0.22 350); --hub-c: oklch(0.82 0.12 320); }
+.aura-hub-earn { --hub-a: oklch(0.74 0.17 160); --hub-b: oklch(0.8 0.16 80); --hub-c: oklch(0.9 0.12 140); }
+
+.aura-hub {
+  --ticket-cut-bg: var(--card);
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: 1.25rem;
+  background:
+    radial-gradient(55% 60% at 0% 0%, color-mix(in oklch, var(--hub-a) 13%, transparent), transparent 70%) padding-box,
+    radial-gradient(45% 55% at 100% 100%, color-mix(in oklch, var(--hub-b) 11%, transparent), transparent 70%) padding-box,
+    linear-gradient(var(--card), var(--card)) padding-box,
+    linear-gradient(
+      135deg,
+      color-mix(in oklch, var(--hub-a) 65%, transparent),
+      oklch(1 0 0 / 0.07) 38%,
+      oklch(1 0 0 / 0.07) 62%,
+      color-mix(in oklch, var(--hub-b) 55%, transparent)
+    ) border-box;
+  box-shadow: 0 24px 60px -36px color-mix(in oklch, var(--hub-a) 55%, transparent);
+}
+.aura-hub::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: radial-gradient(oklch(1 0 0 / 0.07) 1px, transparent 1px);
+  background-size: 14px 14px;
+  -webkit-mask-image: linear-gradient(180deg, #000, transparent 110px);
+  mask-image: linear-gradient(180deg, #000, transparent 110px);
+  pointer-events: none;
+}
+.aura-hub-icon {
+  color: oklch(0.18 0.03 50);
+  background: linear-gradient(135deg, var(--hub-c), var(--hub-a) 55%, var(--hub-b));
+  box-shadow:
+    0 0 0 4px color-mix(in oklch, var(--hub-a) 12%, transparent),
+    0 8px 24px -6px color-mix(in oklch, var(--hub-a) 70%, transparent);
+}
+
+/* Fileira de dentro de um painel (Missões, Conquistas, Indicação): um card
+   mais escuro que o painel, sem borda própria brigando com a dele. */
+.aura-hub-well {
+  border-radius: 1rem;
+  background: oklch(0 0 0 / 0.22);
+  box-shadow: inset 0 0 0 1px oklch(1 0 0 / 0.06);
 }

@@ -1024,6 +1024,103 @@ export type Database = {
         Insert: Omit<Database["public"]["Tables"]["peripheral_votes"]["Row"], "id" | "created_at">
         Update: Partial<Database["public"]["Tables"]["peripheral_votes"]["Insert"]>
       }
+      changelog_votes: {
+        Relationships: []
+        Row: {
+          user_id: string
+          entry_key: string
+          value: -1 | 1
+          created_at: string
+          updated_at: string
+        }
+        Insert: Omit<Database["public"]["Tables"]["changelog_votes"]["Row"], "created_at" | "updated_at"> & {
+          updated_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["changelog_votes"]["Insert"]>
+      }
+      changelog_reactions: {
+        Relationships: []
+        Row: {
+          user_id: string
+          entry_key: string
+          reaction: "party" | "heart" | "rocket" | "mindblown" | "eyes" | "confused"
+          created_at: string
+        }
+        Insert: Omit<Database["public"]["Tables"]["changelog_reactions"]["Row"], "created_at">
+        Update: Partial<Database["public"]["Tables"]["changelog_reactions"]["Insert"]>
+      }
+      feature_flags: {
+        Relationships: []
+        Row: {
+          key: string
+          mode: "off" | "webmaster" | "staff" | "percentage" | "everyone"
+          rollout_percent: number
+          allow_user_ids: string[]
+          note: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: Pick<Database["public"]["Tables"]["feature_flags"]["Row"], "key"> &
+          Partial<Omit<Database["public"]["Tables"]["feature_flags"]["Row"], "key">>
+        Update: Partial<Database["public"]["Tables"]["feature_flags"]["Row"]>
+      }
+      feature_flag_events: {
+        Relationships: []
+        Row: {
+          id: number
+          flag_key: string
+          actor_id: string | null
+          before: Record<string, unknown> | null
+          after: Record<string, unknown>
+          created_at: string
+        }
+        Insert: Omit<Database["public"]["Tables"]["feature_flag_events"]["Row"], "id" | "created_at">
+        Update: Partial<Database["public"]["Tables"]["feature_flag_events"]["Row"]>
+      }
+      giveaways: {
+        Relationships: []
+        Row: {
+          id: string
+          title: string
+          category: string
+          rarity: "rare" | "special" | "legendary"
+          peripheral_id: string | null
+          image_url: string | null
+          max_participants: number
+          entries_count: number
+          status: "draft" | "open" | "closed" | "drawn"
+          ends_at: string | null
+          winner_user_id: string | null
+          drawn_at: string | null
+          sort_order: number
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: Pick<
+          Database["public"]["Tables"]["giveaways"]["Row"],
+          "title" | "category" | "rarity" | "max_participants"
+        > &
+          Partial<
+            Omit<
+              Database["public"]["Tables"]["giveaways"]["Row"],
+              "id" | "title" | "category" | "rarity" | "max_participants" | "entries_count" | "created_at"
+            >
+          >
+        Update: Partial<
+          Omit<Database["public"]["Tables"]["giveaways"]["Row"], "id" | "entries_count" | "created_at">
+        >
+      }
+      giveaway_entries: {
+        Relationships: []
+        Row: {
+          giveaway_id: string
+          user_id: string
+          created_at: string
+        }
+        Insert: Omit<Database["public"]["Tables"]["giveaway_entries"]["Row"], "created_at">
+        Update: Partial<Database["public"]["Tables"]["giveaway_entries"]["Row"]>
+      }
       peripheral_review_votes: {
         Relationships: []
         Row: {
@@ -3456,6 +3553,18 @@ export type Database = {
       toggle_peripheral_vote: {
         Args: { p_voter_id: string; p_peripheral_id: string; p_kind: "like" | "dislike" }
         Returns: { reaction: "like" | "dislike" | null; likes: number; dislikes: number }[]
+      }
+      changelog_feedback_totals: {
+        Args: Record<string, never>
+        Returns: { entry_key: string; kind: string; total: number }[]
+      }
+      join_giveaway: {
+        Args: { p_giveaway_id: string; p_user_id: string }
+        Returns: Record<string, unknown>
+      }
+      draw_giveaway: {
+        Args: { p_giveaway_id: string }
+        Returns: Record<string, unknown>
       }
       toggle_peripheral_review_vote: {
         Args: { p_voter_id: string; p_review_id: string; p_kind: "like" | "dislike" }

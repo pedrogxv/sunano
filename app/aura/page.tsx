@@ -25,6 +25,7 @@ import { getDiscordInviteUrl, isDiscordMembershipEnabled } from "@/lib/discord-m
 import { getProfileShippingPrefill, getUserProfileSettings } from "@/lib/server/repositories/users-repository"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { AuraCenterContent } from "@/components/aura/AuraCenterContent"
+import { getViewerGiveaways } from "@/lib/server/repositories/giveaways-repository"
 import { getStreakFrameItemIds, getVipFounderItemId } from "@/lib/server/repositories/vip-founder-repository"
 import { getTrustSummary, toPublicTrust } from "@/lib/server/repositories/trust-repository"
 import { TRUST_BASE_SCORE, canRedeemPhysicalItem, testerEligibility, trustLevelOf } from "@/lib/trust-factor"
@@ -58,6 +59,7 @@ export default async function AuraCenterPage() {
     streakFrameItemIds,
     trust,
     totalEarned,
+    viewerGiveaways,
   ] = await Promise.all([
     userId ? getUserAuraBalance(userId) : Promise.resolve(0),
     userId ? getUserAuraRank(userId) : Promise.resolve(null),
@@ -122,6 +124,9 @@ export default async function AuraCenterPage() {
     // Nível da conta (trilha "Aura farmada"): sai do total histórico, não do
     // saldo — gastar Aura na loja não pode derrubar o nível.
     userId ? getUserAuraTotalEarned(userId) : Promise.resolve(0),
+    // Página dinâmica: a flag é avaliada para quem está vendo e a seção já
+    // chega pronta no HTML, sem a cascata sessão → flag → lista do cliente.
+    getViewerGiveaways(userId),
   ])
 
   return (
@@ -153,6 +158,7 @@ export default async function AuraCenterPage() {
         founderItemId={founderItemId}
         streakFrameItemIds={streakFrameItemIds}
         trust={trust}
+        giveaways={viewerGiveaways}
       />
     </Suspense>
   )

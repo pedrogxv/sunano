@@ -1,14 +1,14 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Loader2, Snowflake } from "lucide-react"
+import { Snowflake } from "lucide-react"
 import { toast } from "sonner"
 
 import { cn } from "@/lib/utils"
-import { CARD_SURFACE_INTERACTIVE } from "@/lib/ui-styles"
 import type { AuraItem } from "@/lib/server/repositories/aura-store-repository"
 import type { StreakShieldVariant } from "@/lib/server/repositories/aura-store-repository"
 import { auraPriceForVip } from "@/lib/aura-pricing"
+import { AuraPerkCard, PerkAction, PerkStatus } from "@/components/aura/AuraPerkCard"
 import { AuraPriceTag } from "@/components/aura/AuraPriceTag"
 import { PurchaseConfirmDialog } from "@/components/aura/PurchaseConfirmDialog"
 
@@ -106,102 +106,63 @@ export function StreakShieldCard({
   }
 
   return (
-    <div
-      className={cn(
-        "flex flex-col overflow-hidden rounded-xl border transition-all duration-200 hover:-translate-y-1",
-        CARD_SURFACE_INTERACTIVE,
-        shieldArmed && "border-sky-400/50"
-      )}
-    >
-      {/* Arte "gelo": floco frio, sem animação — o oposto do foguinho da ofensiva. */}
-      <div className="relative flex aspect-[3/2] items-center justify-center overflow-hidden bg-[var(--card-image-bg)]">
-        <Snowflake
-          className={cn(
-            "size-11 text-sky-400",
-            shieldArmed
-              ? "drop-shadow-[0_0_10px_rgba(56,189,248,0.55)]"
-              : "opacity-80"
-          )}
-          strokeWidth={1.15}
-        />
-      </div>
-
-      <div className="flex flex-1 flex-col gap-1 px-3 pb-2.5 pt-2">
-        <h3 className="line-clamp-1 font-sans text-[12px] font-semibold leading-tight tracking-normal text-foreground">
-          Proteção de Ofensiva
-        </h3>
-        <p className="line-clamp-2 text-[9.5px] font-medium leading-snug text-muted-foreground">
-          Fica guardada até você precisar: se perder um dia de missões, sua ofensiva não zera.
-        </p>
-
-        <div className="mt-auto space-y-1.5 pt-1">
-          {shieldArmed ? (
-            <div
-              className="flex w-full flex-col items-center gap-0.5 rounded-lg border border-sky-400/40 bg-sky-400/10 px-3 py-1.5 text-[10.5px] font-bold text-sky-300"
-            >
-              <span className="flex items-center gap-1.5">
-                <Snowflake className="size-3" />
-                Proteção guardada
-              </span>
-              <span className="text-[9px] font-medium opacity-70">
-                {shieldGraceDays && shieldGraceDays > 1
-                  ? `resgate em até ${shieldGraceDays} dias`
-                  : "resgate no dia seguinte"}
-              </span>
-            </div>
-          ) : (
-            <>
-              {/* Toggle Padrão / Margem estendida */}
-              {available.length > 1 && (
-                <div className="flex overflow-hidden rounded-lg border border-border text-[10px] font-bold">
-                  {available.map((v) => (
-                    <button
-                      key={v}
-                      type="button"
-                      onClick={() => pick(v)}
-                      className={cn(
-                        "flex-1 px-2 py-1 transition-colors",
-                        selected === v
-                          ? "bg-sky-400/15 text-sky-300"
-                          : "text-muted-foreground hover:bg-muted/40"
-                      )}
-                    >
-                      {VARIANT_META[v].label}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              <AuraPriceTag
-                listPrice={item?.auraCost ?? 0}
-                isVip={isVip}
-                icon="🧊"
-                priceClassName="text-sky-300"
-              />
-
+    <AuraPerkCard
+      accent="sky"
+      // Arte "gelo": floco frio, sem animação — o oposto do foguinho da ofensiva.
+      icon={<Snowflake strokeWidth={1.5} />}
+      title="Proteção de Ofensiva"
+      description="Fica guardada até você precisar: se perder um dia de missões, sua ofensiva não zera."
+      active={shieldArmed}
+      extra={
+        // Toggle Padrão / Margem estendida
+        !shieldArmed && available.length > 1 ? (
+          <div className="flex overflow-hidden rounded-lg border border-border text-[11px] font-bold">
+            {available.map((v) => (
               <button
+                key={v}
                 type="button"
-                onClick={() => {
-                  if (!requireLogin() || !item) return
-                  setConfirmOpen(true)
-                }}
-                disabled={loading || !canAfford || !item}
-                title={!canAfford ? "Saldo de Aura insuficiente" : undefined}
+                onClick={() => pick(v)}
                 className={cn(
-                  "flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-[10.5px] font-bold transition-colors",
-                  canAfford
-                    ? "bg-sky-500 text-[#04121c] hover:bg-sky-400"
-                    : "cursor-not-allowed bg-muted/40 text-muted-foreground"
+                  "flex-1 px-2 py-1 transition-colors",
+                  selected === v ? "bg-sky-400/15 text-sky-300" : "text-muted-foreground hover:bg-muted/40"
                 )}
               >
-                {loading && <Loader2 className="size-3 animate-spin" />}
-                {canAfford ? "Guardar proteção" : "Saldo insuficiente"}
+                {VARIANT_META[v].label}
               </button>
-            </>
-          )}
-        </div>
-      </div>
-
+            ))}
+          </div>
+        ) : undefined
+      }
+      price={
+        shieldArmed ? undefined : (
+          <AuraPriceTag listPrice={item?.auraCost ?? 0} isVip={isVip} icon="🧊" priceClassName="text-sky-300" />
+        )
+      }
+      action={
+        shieldArmed ? (
+          <PerkStatus
+            accent="sky"
+            icon={<Snowflake />}
+            label="Proteção guardada"
+            detail={
+              shieldGraceDays && shieldGraceDays > 1 ? `resgate em até ${shieldGraceDays} dias` : "resgate no dia seguinte"
+            }
+          />
+        ) : (
+          <PerkAction
+            accent="sky"
+            label="Guardar proteção"
+            canAfford={canAfford}
+            loading={loading}
+            disabled={!item}
+            onClick={() => {
+              if (!requireLogin() || !item) return
+              setConfirmOpen(true)
+            }}
+          />
+        )
+      }
+    >
       {item && (
         <PurchaseConfirmDialog
           open={confirmOpen}
@@ -215,6 +176,6 @@ export function StreakShieldCard({
           onConfirm={handlePurchase}
         />
       )}
-    </div>
+    </AuraPerkCard>
   )
 }

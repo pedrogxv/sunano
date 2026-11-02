@@ -1,4 +1,5 @@
 import type { ChangelogArea, ChangelogEntryData } from "@/lib/changelog"
+import type { ChangelogReaction } from "@/lib/changelog-feedback"
 
 export type LocaleCode = "pt-BR" | "en-US"
 
@@ -1212,6 +1213,18 @@ export type Translations = {
       noResultsHint: string
       openVersion: string
       searchSuggestions: string[]
+      /** Voto e reações por versão (`components/changelog/ChangelogFeedback.tsx`). */
+      feedback: {
+        question: string
+        voteUp: string
+        voteDown: string
+        score: string
+        addReaction: string
+        reactionsLabel: string
+        signInToReact: string
+        error: string
+        reactions: Record<ChangelogReaction, string>
+      }
       areas: Record<ChangelogArea, string>
     }
     entries: ChangelogEntryData[]

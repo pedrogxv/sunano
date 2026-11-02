@@ -1,8 +1,9 @@
 "use client"
 
-import { Check, Youtube } from "lucide-react"
+import { Check, Medal, Youtube } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { LaneProgress, PrizeLaneHeader } from "@/components/aura/PrizeLaneHeader"
 import { CARD_SURFACE } from "@/lib/ui-styles"
 import { DiscordIcon } from "@/components/auth/provider-icons"
 import { YoutubeSubscribeButton } from "@/components/auth/YoutubeSubscribeButton"
@@ -42,6 +43,8 @@ interface CommunityAchievementsProps {
   discordInviteUrl?: string | null
   requireLogin?: () => boolean
   className?: string
+  /** Faixa dentro de um painel (`AuraHub`). */
+  lane?: boolean
 }
 
 export function CommunityAchievements({
@@ -52,6 +55,7 @@ export function CommunityAchievements({
   discordInviteUrl,
   requireLogin,
   className,
+  lane = false,
 }: CommunityAchievementsProps) {
   const achievements: Achievement[] = []
 
@@ -105,46 +109,67 @@ export function CommunityAchievements({
 
   return (
     <div className={cn("space-y-3", className)}>
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="font-display text-lg font-bold text-foreground">Conquistas da comunidade</h2>
-        <span className="text-xs font-semibold text-muted-foreground">
-          {doneCount}/{achievements.length} conquistadas
-        </span>
-      </div>
-      <div className={cn("divide-y divide-border overflow-hidden rounded-2xl border", CARD_SURFACE)}>
+      {lane ? (
+        <PrizeLaneHeader
+          icon={<Medal className="size-4" />}
+          iconClassName="bg-gradient-to-br from-sky-300 to-indigo-600 text-[#03122a] shadow-[0_0_16px_-4px] shadow-sky-500/70"
+          title="Conquistas"
+          tag="Uma vez só"
+          tagClassName="bg-sky-500/10 text-sky-200 ring-1 ring-sky-400/30"
+          right={<LaneProgress done={doneCount} total={achievements.length} label="conquistadas" />}
+        />
+      ) : (
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="font-display text-lg font-bold text-foreground">Conquistas da comunidade</h2>
+          <span className="text-xs font-semibold text-muted-foreground">
+            {doneCount}/{achievements.length} conquistadas
+          </span>
+        </div>
+      )}
+      <div
+        className={cn(
+          "divide-y overflow-hidden",
+          lane ? "aura-hub-well divide-white/[0.06]" : cn("divide-border rounded-2xl border", CARD_SURFACE)
+        )}
+      >
         {achievements.map((a) => (
-          <div
-            key={a.key}
-            className={cn(
-              "flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3",
-              a.done && "bg-emerald-400/[0.04]"
-            )}
-          >
-            <span
-              className={cn(
-                "flex size-8 shrink-0 items-center justify-center rounded-lg border",
-                a.done
-                  ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-300"
-                  : cn(a.accent.border, a.accent.bg, a.accent.text)
-              )}
-            >
-              {a.done ? <Check className="size-4" /> : a.icon}
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className={cn("text-sm", a.done ? "text-muted-foreground" : "text-foreground")}>{a.label}</p>
-              {!a.done && <p className="text-xs text-muted-foreground">{a.hint}</p>}
-            </div>
-            {a.done ? (
-              <span className="rounded-full bg-emerald-400/10 px-2 py-0.5 text-xs font-bold text-emerald-300">
-                Conquistado
+          // Dois andares: em cima o que é (ícone, nome, dica, recompensa), embaixo
+          // o que fazer. Numa linha só, botão + link + recompensa espremiam a
+          // dica em cinco linhas na coluna estreita do painel.
+          <div key={a.key} className={cn("px-4 py-3", a.done && "bg-emerald-400/[0.04]")}>
+            <div className="flex items-center gap-3">
+              <span
+                className={cn(
+                  "flex size-8 shrink-0 items-center justify-center rounded-lg border",
+                  a.done
+                    ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-300"
+                    : cn(a.accent.border, a.accent.bg, a.accent.text)
+                )}
+              >
+                {a.done ? <Check className="size-4" /> : a.icon}
               </span>
-            ) : (
-              <div className="flex items-center gap-2">
-                <span className={cn("text-xs font-bold", a.accent.text)}>+50</span>
+              <div className="min-w-0 flex-1">
+                <p className={cn("text-sm", a.done ? "text-muted-foreground" : "font-medium text-foreground")}>
+                  {a.label}
+                </p>
+                {!a.done && <p className="text-xs leading-snug text-muted-foreground">{a.hint}</p>}
+              </div>
+              {/* Mesma pílula das Missões diárias: a recompensa é Aura, não a cor da marca. */}
+              <span
+                className={cn(
+                  "shrink-0 rounded-full px-2 py-0.5 text-xs font-bold",
+                  a.done ? "bg-emerald-400/10 text-emerald-300" : "bg-orange-500/10 text-orange-400"
+                )}
+              >
+                {a.done ? "Conquistado" : "+50"}
+              </span>
+            </div>
+            {!a.done && (
+              <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-2 pl-11">
                 {a.action}
+                {a.extra}
               </div>
             )}
-            {!a.done && a.extra && <div className="basis-full pl-11 sm:basis-auto sm:pl-0">{a.extra}</div>}
           </div>
         ))}
       </div>

@@ -7,6 +7,7 @@ import { ptBR } from "date-fns/locale"
 import {
   AlertCircle,
   CalendarIcon,
+  Check,
   CheckCircle2,
   ChevronsUpDown,
   Clock,
@@ -18,6 +19,7 @@ import {
   XCircle,
 } from "lucide-react"
 import type { DateRange } from "react-day-picker"
+import { toast } from "sonner"
 
 import { SunanoLoader } from "@/components/ui/SunanoLoader"
 import { usePageHeader } from "@/components/providers/page-header-context"
@@ -25,6 +27,17 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import {
   Popover,
   PopoverContent,
@@ -304,6 +317,54 @@ function DateRangeFilter({
   )
 }
 
+/** Fecha (resolve) o chamado direto da listagem, atrás de confirmação como na página do chamado. */
+function CloseTicketButton({ ticket, onClosed }: { ticket: SupportTicket; onClosed: () => void }) {
+  const [pending, setPending] = useState(false)
+
+  async function close() {
+    setPending(true)
+    try {
+      const res = await fetch(`/api/admin/support/${ticket.id}/close`, { method: "POST" })
+      const data = (await res.json().catch(() => ({}))) as { error?: string }
+      if (!res.ok) throw new Error(data.error ?? "Erro ao fechar chamado")
+      toast.success("Chamado marcado como resolvido")
+      onClosed()
+    } catch (err) {
+      toast.error("Não foi possível fechar o chamado", {
+        description: err instanceof Error ? err.message : undefined,
+      })
+    } finally {
+      setPending(false)
+    }
+  }
+
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button size="sm" variant="ghost" className="h-6 gap-1 px-2 text-[11px] text-muted-foreground" disabled={pending}>
+          {pending ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />}
+          Fechar
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Fechar este chamado?</AlertDialogTitle>
+          <AlertDialogDescription>
+            &ldquo;{ticket.subject}&rdquo; será marcado como resolvido. O cliente será notificado e poderá avaliar o
+            atendimento. Você pode reabri-lo depois pela página do chamado.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={pending}>Voltar</AlertDialogCancel>
+          <AlertDialogAction onClick={close} disabled={pending}>
+            Fechar chamado
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+}
+
 export default function AdminSupportPage() {
   const [tickets, setTickets] = useState<SupportTicket[]>([])
   const [total, setTotal] = useState(0)
@@ -527,9 +588,12 @@ export default function AdminSupportPage() {
                     <p className="text-sm text-foreground">{ticket.user_display_name ?? "Usuário"}</p>
                   </td>
                   <td className="px-4 py-3">
-                    <Badge variant="secondary" className={cn("text-[10px]", STATUS_STYLE[ticket.status])}>
-                      {STATUS_LABEL[ticket.status]}
-                    </Badge>
+                    <div className="flex items-center gap-1.5">
+                      <Badge variant="secondary" className={cn("text-[10px]", STATUS_STYLE[ticket.status])}>
+                        {STATUS_LABEL[ticket.status]}
+                      </Badge>
+                      {ticket.status === "open" && <CloseTicketButton ticket={ticket} onClosed={load} />}
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     {ticket.status === "open" && ticket.waiting_on === "admin" ? (

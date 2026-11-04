@@ -31,7 +31,18 @@ type ProductOption = {
   promo_price_cents?: number | null
 }
 
-export function SupportTicketForm() {
+export function SupportTicketForm({
+  compact = false,
+  onCreated,
+}: {
+  /** Versão do painel do botão flutuante: campos e textos mais enxutos. */
+  compact?: boolean
+  /**
+   * Chamado criado. Com este callback quem chama assume a tela seguinte (o
+   * painel abre a conversa do chamado novo) em vez da tela de sucesso.
+   */
+  onCreated?: (ticket: { id: string; subject: string }) => void
+} = {}) {
   const { user, loading: authLoading } = useAuthUser()
   const { openLogin } = useAuthModal()
   const { orders } = useUserOrders()
@@ -122,7 +133,9 @@ export function SupportTicketForm() {
         toast.error(data?.error ?? "Não foi possível abrir o chamado.")
         return
       }
-      setSubmittedTicket({ id: data.ticketId, subject: subject.trim() })
+      const created = { id: data.ticketId as string, subject: subject.trim() }
+      if (onCreated) onCreated(created)
+      else setSubmittedTicket(created)
     } catch {
       toast.error("Não foi possível abrir o chamado.")
     } finally {
@@ -183,7 +196,11 @@ export function SupportTicketForm() {
   }
 
   return (
-    <form ref={formRef} onSubmit={handleSubmit} className="flex animate-in fade-in-0 flex-col gap-5 duration-300">
+    <form
+      ref={formRef}
+      onSubmit={handleSubmit}
+      className={cn("flex animate-in fade-in-0 flex-col duration-300", compact ? "gap-4" : "gap-5")}
+    >
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between gap-2">
           <Label htmlFor="suporte-assunto">Assunto</Label>
@@ -330,7 +347,7 @@ export function SupportTicketForm() {
           onChange={(e) => setBody(e.target.value)}
           onKeyDown={handleTextareaKeyDown}
           placeholder="Descreve o que está acontecendo..."
-          className="min-h-32"
+          className={compact ? "min-h-24" : "min-h-32"}
           maxLength={4000}
           required
         />
@@ -383,13 +400,20 @@ export function SupportTicketForm() {
               </Button>
             </>
           )}
-          <span className="text-xs text-muted-foreground">Até {MAX_SUPPORT_IMAGES} imagens (JPG, PNG, WEBP ou GIF).</span>
+          {!compact && (
+            <span className="text-xs text-muted-foreground">Até {MAX_SUPPORT_IMAGES} imagens (JPG, PNG, WEBP ou GIF).</span>
+          )}
         </div>
 
-        <Button type="submit" className="gap-2 transition-transform active:scale-[0.98]" disabled={submitting}>
+        <Button
+          type="submit"
+          size={compact ? "sm" : "default"}
+          className="gap-2 transition-transform active:scale-[0.98]"
+          disabled={submitting}
+        >
           {submitting && <Loader2 className="size-4 animate-spin" />}
           {submitting ? "Abrindo chamado..." : "Abrir chamado"}
-          {!submitting && (
+          {!submitting && !compact && (
             <kbd className="ml-1 rounded border border-primary-foreground/30 bg-primary-foreground/10 px-1.5 py-0.5 text-[10px] font-medium leading-none">
               {shortcutLabel}+Enter
             </kbd>

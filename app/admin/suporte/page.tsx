@@ -7,7 +7,6 @@ import { ptBR } from "date-fns/locale"
 import {
   AlertCircle,
   CalendarIcon,
-  Check,
   CheckCircle2,
   ChevronsUpDown,
   Clock,
@@ -36,7 +35,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import {
   Popover,
@@ -98,6 +96,15 @@ const STATUS_STYLE: Record<TicketStatus, string> = {
   resolved: "bg-emerald-500/15 text-emerald-400",
   cancelled: "bg-muted text-muted-foreground",
 }
+
+/** Pílula do select de status na tabela — mesmo padrão do status de produto em `/admin/store`. */
+const STATUS_SELECT_STYLE: Record<TicketStatus, string> = {
+  open: "border-sky-500/30 bg-sky-500/10 text-sky-400 dark:bg-sky-500/10 dark:hover:bg-sky-500/20",
+  resolved: "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20",
+  cancelled: "border-border bg-slate-500/10 text-muted-foreground dark:bg-slate-500/10 dark:hover:bg-slate-500/20",
+}
+
+const TICKET_STATUSES: TicketStatus[] = ["open", "resolved", "cancelled"]
 
 const STATUS_FILTER_ICON_STYLE: Record<StatusFilter, string> = {
   all: "bg-primary/15 text-primary",
@@ -317,54 +324,6 @@ function DateRangeFilter({
   )
 }
 
-/** Fecha (resolve) o chamado direto da listagem, atrás de confirmação como na página do chamado. */
-function CloseTicketButton({ ticket, onClosed }: { ticket: SupportTicket; onClosed: () => void }) {
-  const [pending, setPending] = useState(false)
-
-  async function close() {
-    setPending(true)
-    try {
-      const res = await fetch(`/api/admin/support/${ticket.id}/close`, { method: "POST" })
-      const data = (await res.json().catch(() => ({}))) as { error?: string }
-      if (!res.ok) throw new Error(data.error ?? "Erro ao fechar chamado")
-      toast.success("Chamado marcado como resolvido")
-      onClosed()
-    } catch (err) {
-      toast.error("Não foi possível fechar o chamado", {
-        description: err instanceof Error ? err.message : undefined,
-      })
-    } finally {
-      setPending(false)
-    }
-  }
-
-  return (
-    <AlertDialog>
-      <AlertDialogTrigger asChild>
-        <Button size="sm" variant="ghost" className="h-6 gap-1 px-2 text-[11px] text-muted-foreground" disabled={pending}>
-          {pending ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />}
-          Fechar
-        </Button>
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Fechar este chamado?</AlertDialogTitle>
-          <AlertDialogDescription>
-            &ldquo;{ticket.subject}&rdquo; será marcado como resolvido. O cliente será notificado e poderá avaliar o
-            atendimento. Você pode reabri-lo depois pela página do chamado.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={pending}>Voltar</AlertDialogCancel>
-          <AlertDialogAction onClick={close} disabled={pending}>
-            Fechar chamado
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-  )
-}
-
 export default function AdminSupportPage() {
   const [tickets, setTickets] = useState<SupportTicket[]>([])
   const [total, setTotal] = useState(0)
@@ -377,9 +336,16 @@ export default function AdminSupportPage() {
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
   const [page, setPage] = useState(1)
+  const [canWrite, setCanWrite] = useState(false)
+  const [savingId, setSavingId] = useState<string | null>(null)
+  // Encerrar (resolver/cancelar) passa por confirmação, como na página do
+  // chamado: o cliente é notificado. Reabrir não precisa.
+  const [pendingClose, setPendingClose] = useState<{ ticket: SupportTicket; status: "resolved" | "cancelled" } | null>(
+    null
+  )
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  const load = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
+    if (!silent) setLoading(true)
     setError(null)
     try {
       const params = new URLSearchParams()
@@ -392,11 +358,18 @@ export default function AdminSupportPage() {
       params.set("pageSize", String(PAGE_SIZE))
 
       const res = await fetch(`/api/admin/support?${params.toString()}`)
-      const data = (await res.json()) as { tickets?: SupportTicket[]; total?: number; stats?: SupportStats; error?: string }
+      const data = (await res.json()) as {
+        tickets?: SupportTicket[]
+        total?: number
+        stats?: SupportStats
+        canWrite?: boolean
+        error?: string
+      }
       if (!res.ok) throw new Error(data.error ?? "Erro ao carregar chamados")
       setTickets(data.tickets ?? [])
       setTotal(data.total ?? 0)
       if (data.stats) setStats(data.stats)
+      setCanWrite(data.canWrite === true)
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao carregar chamados"
       setError(message)
@@ -411,6 +384,30 @@ export default function AdminSupportPage() {
   useEffect(() => {
     setPage(1)
   }, [statusFilter, waitingFilter, customerFilter, dateFrom, dateTo])
+
+  async function changeStatus(ticket: SupportTicket, status: TicketStatus) {
+    if (ticket.status === status) return
+    setSavingId(ticket.id)
+    try {
+      const res = await fetch(`/api/admin/support/${ticket.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      })
+      const data = (await res.json().catch(() => ({}))) as { error?: string }
+      if (!res.ok) throw new Error(data.error ?? "Erro ao atualizar o chamado")
+      toast.success(`Status: ${STATUS_LABEL[status]}`, { description: ticket.subject })
+      // Recarrega em vez de editar a linha: o turno muda junto, os contadores
+      // do topo também, e o chamado pode sair do filtro atual.
+      await load({ silent: true })
+    } catch (err) {
+      toast.error("Não foi possível atualizar o chamado", {
+        description: err instanceof Error ? err.message : undefined,
+      })
+    } finally {
+      setSavingId(null)
+    }
+  }
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const hasActiveFilters =
@@ -428,6 +425,34 @@ export default function AdminSupportPage() {
 
   return (
     <div className="space-y-6">
+      <AlertDialog open={pendingClose !== null} onOpenChange={(open) => !open && setPendingClose(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingClose?.status === "cancelled" ? "Cancelar este chamado?" : "Fechar este chamado?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              &ldquo;{pendingClose?.ticket.subject}&rdquo; será marcado como{" "}
+              {pendingClose?.status === "cancelled" ? "cancelado" : "resolvido"}. O cliente será notificado
+              {pendingClose?.status === "resolved" ? " e poderá avaliar o atendimento" : ""}. Você pode reabri-lo depois
+              pelo mesmo seletor.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (pendingClose) void changeStatus(pendingClose.ticket, pendingClose.status)
+                setPendingClose(null)
+              }}
+              className={pendingClose?.status === "cancelled" ? "bg-red-600 text-white hover:bg-red-500" : undefined}
+            >
+              {pendingClose?.status === "cancelled" ? "Cancelar chamado" : "Fechar chamado"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Resumo rápido — criados (abertos), resolvidos e cancelados */}
       {stats && (
         <div className="grid grid-cols-3 gap-3">
@@ -588,12 +613,39 @@ export default function AdminSupportPage() {
                     <p className="text-sm text-foreground">{ticket.user_display_name ?? "Usuário"}</p>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-1.5">
+                    {canWrite ? (
+                      <Select
+                        value={ticket.status}
+                        onValueChange={(v) => {
+                          const status = v as TicketStatus
+                          if (status === "open") void changeStatus(ticket, status)
+                          else if (status !== ticket.status) setPendingClose({ ticket, status })
+                        }}
+                        disabled={savingId === ticket.id}
+                      >
+                        <SelectTrigger
+                          size="sm"
+                          aria-label="Status do chamado"
+                          className={cn(
+                            "h-7 w-auto gap-1.5 rounded-full px-2.5 text-[11px] font-semibold",
+                            STATUS_SELECT_STYLE[ticket.status]
+                          )}
+                        >
+                          <SelectValue>{STATUS_LABEL[ticket.status]}</SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {TICKET_STATUSES.map((status) => (
+                            <SelectItem key={status} value={status}>
+                              {STATUS_LABEL[status]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
                       <Badge variant="secondary" className={cn("text-[10px]", STATUS_STYLE[ticket.status])}>
                         {STATUS_LABEL[ticket.status]}
                       </Badge>
-                      {ticket.status === "open" && <CloseTicketButton ticket={ticket} onClosed={load} />}
-                    </div>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     {ticket.status === "open" && ticket.waiting_on === "admin" ? (

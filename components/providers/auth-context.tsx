@@ -34,6 +34,10 @@ export type AuthContextUser = {
   hasSupportTicket: boolean
   /** Quantos tickets abertos estão aguardando resposta do usuário — alimenta o ponto amber no sino e em "Meus Tickets". */
   supportTicketsAwaitingMe: number
+  /** Chamados abertos (de qualquer turno) — com algum, o botão flutuante de suporte abre o painel de conversa. */
+  supportTicketsOpen: number
+  /** Id do chamado quando só há UM aberto — o painel de suporte abre direto nele, sem buscar a lista. */
+  supportSingleOpenTicketId: string | null
   /** Pedidos esperando o usuário (endereço faltando ou resposta da equipe) — badge de "Meus Pedidos" na TopBar. */
   ordersNeedingAttention: number
   /**
@@ -179,6 +183,8 @@ type MeResponse = {
   } | null
   hasSupportTicket?: boolean
   supportTicketsAwaitingMe?: number
+  supportTicketsOpen?: number
+  supportSingleOpenTicketId?: string | null
   ordersNeedingAttention?: number
   hasForumPost?: boolean
   accountTier?: string | null
@@ -203,7 +209,7 @@ type MeResponse = {
  * lib/client/auth-snapshot.ts sobre por que isso ainda não é possível).
  */
 export function buildAuthUser(data: MeResponse): AuthContextUser | null {
-  const { user, userProfile, adminProfile, hasSupportTicket, supportTicketsAwaitingMe, ordersNeedingAttention, hasForumPost, accountTier, vipExpiresAt, subscriptionStatus, canUseStore, storeMaintenanceBypass, equippedFrameUrl, equippedFrameSlug, isFounder, longestStreak, frameOptOut, enabledFlags } = data
+  const { user, userProfile, adminProfile, hasSupportTicket, supportTicketsAwaitingMe, supportTicketsOpen, supportSingleOpenTicketId, ordersNeedingAttention, hasForumPost, accountTier, vipExpiresAt, subscriptionStatus, canUseStore, storeMaintenanceBypass, equippedFrameUrl, equippedFrameSlug, isFounder, longestStreak, frameOptOut, enabledFlags } = data
   if (!user) return null
 
   return {
@@ -221,6 +227,8 @@ export function buildAuthUser(data: MeResponse): AuthContextUser | null {
     storeMaintenanceBypass: Boolean(storeMaintenanceBypass),
     hasSupportTicket: Boolean(hasSupportTicket),
     supportTicketsAwaitingMe: supportTicketsAwaitingMe ?? 0,
+    supportTicketsOpen: supportTicketsOpen ?? 0,
+    supportSingleOpenTicketId: supportSingleOpenTicketId ?? null,
     ordersNeedingAttention: ordersNeedingAttention ?? 0,
     isVip: isVipActive(accountTier, vipExpiresAt),
     accountTier: accountTier ?? null,

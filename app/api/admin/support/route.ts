@@ -46,5 +46,13 @@ export async function GET(request: NextRequest) {
     getSupportTicketStats(),
   ])
 
-  return NextResponse.json({ ok: true, tickets, total, page, pageSize, stats })
+  return NextResponse.json({
+    ok: true,
+    tickets,
+    total,
+    page,
+    pageSize,
+    stats,
+    canWrite: hasAdminPermission(auth.profile, "support_write"),
+  })
 }

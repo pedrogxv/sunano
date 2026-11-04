@@ -14,7 +14,7 @@ import {
 } from "@/lib/server/repositories/users-repository"
 import {
   countMyOrderTicketsAwaitingUser,
-  countMySupportTicketsAwaitingUser,
+  getMySupportTicketCounts,
   hasAnySupportTicket,
 } from "@/lib/server/repositories/support-repository"
 import { countMissingShippingByUser } from "@/lib/server/repositories/orders-repository"
@@ -48,6 +48,10 @@ export type AuthUserPayload = {
   } | null
   hasSupportTicket: boolean
   supportTicketsAwaitingMe: number
+  /** Chamados abertos (de qualquer turno) — expandem o botão flutuante de suporte. */
+  supportTicketsOpen: number
+  /** Id do chamado quando só há UM aberto — o painel de suporte abre direto nele. */
+  supportSingleOpenTicketId: string | null
   /**
    * Pedidos esperando o usuário: pago sem endereço de entrega + conversa de
    * pedido com resposta da equipe + aviso da loja pedindo correção. Badge do
@@ -104,6 +108,8 @@ function anonymousPayload(): AuthUserPayload {
     adminProfile: null,
     hasSupportTicket: false,
     supportTicketsAwaitingMe: 0,
+    supportTicketsOpen: 0,
+    supportSingleOpenTicketId: null,
     ordersNeedingAttention: 0,
     hasForumPost: false,
     accountTier: "common",
@@ -195,7 +201,7 @@ export const resolveAuthUser = cache(async function resolveAuthUser(): Promise<A
     profileAndVip,
     adminProfile,
     hasSupportTicket,
-    supportTicketsAwaitingMe,
+    supportTicketCounts,
     ordersMissingShipping,
     orderTicketsAwaitingMe,
     orderNoticesOpen,
@@ -210,7 +216,7 @@ export const resolveAuthUser = cache(async function resolveAuthUser(): Promise<A
     getUserProfileWithVipStatus(user.id),
     getAdminProfileSummary(user.id),
     hasAnySupportTicket(user.id),
-    countMySupportTicketsAwaitingUser(user.id),
+    getMySupportTicketCounts(user.id),
     countMissingShippingByUser(user.id),
     countMyOrderTicketsAwaitingUser(user.id),
     countOpenOrderNoticesByUser(user.id),
@@ -247,7 +253,9 @@ export const resolveAuthUser = cache(async function resolveAuthUser(): Promise<A
     userProfile: profileAndVip.profile,
     adminProfile,
     hasSupportTicket,
-    supportTicketsAwaitingMe,
+    supportTicketsAwaitingMe: supportTicketCounts.awaitingMe,
+    supportTicketsOpen: supportTicketCounts.open,
+    supportSingleOpenTicketId: supportTicketCounts.singleOpenId,
     ordersNeedingAttention: ordersMissingShipping + orderTicketsAwaitingMe + orderNoticesOpen,
     hasForumPost,
     accountTier: profileAndVip.vip?.account_tier ?? "common",

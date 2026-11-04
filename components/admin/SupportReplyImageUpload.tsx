@@ -77,8 +77,8 @@ export function SupportReplyImageUpload() {
           <Button
             type="button"
             size="sm"
-            variant="outline"
-            className="h-8 gap-1.5 border-border text-xs"
+            variant="ghost"
+            className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
             disabled={uploading}
             onClick={() => inputRef.current?.click()}
           >

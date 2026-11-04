@@ -14,5 +14,13 @@ export function SupportReplyTextarea() {
     }
   }
 
-  return <Textarea name="body" placeholder="Escreva sua resposta..." className="min-h-24" onKeyDown={handleKeyDown} required />
+  return (
+    <Textarea
+      name="body"
+      placeholder="Escreva sua resposta..."
+      className="max-h-80 min-h-24 resize-none rounded-none border-0 bg-transparent px-3.5 py-3 shadow-none focus-visible:ring-0 dark:bg-transparent"
+      onKeyDown={handleKeyDown}
+      required
+    />
+  )
 }

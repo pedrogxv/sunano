@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { useAuthUser } from "@/components/providers/auth-context"
 import type { SupportMessageSender, SupportTicketSummary } from "@/lib/hooks/use-support-tickets"
+import { loadSupportTicket, peekSupportTicket } from "@/lib/support-client-cache"
 
 export type SupportTicketDetail = SupportTicketSummary & {
   order_number: string | null
@@ -40,9 +41,13 @@ export type UseSupportTicketResult = {
  */
 export function useSupportTicket(ticketId: string | undefined): UseSupportTicketResult {
   const { user } = useAuthUser()
-  const [ticket, setTicket] = useState<SupportTicketDetail | null>(null)
-  const [messages, setMessages] = useState<SupportMessageRow[]>([])
-  const [loading, setLoading] = useState(true)
+  const userId = user?.id ?? null
+  // Já visto (painel do botão, prefetch no hover): começa com os dados na
+  // tela e revalida por baixo, sem loader.
+  const cached = userId && ticketId ? peekSupportTicket(userId, ticketId) : null
+  const [ticket, setTicket] = useState<SupportTicketDetail | null>(cached?.ticket ?? null)
+  const [messages, setMessages] = useState<SupportMessageRow[]>(cached?.messages ?? [])
+  const [loading, setLoading] = useState(!cached)
   const [notFound, setNotFound] = useState(false)
   const [version, setVersion] = useState(0)
 
@@ -62,7 +67,7 @@ export function useSupportTicket(ticketId: string | undefined): UseSupportTicket
   }, [])
 
   useEffect(() => {
-    if (!user || !ticketId) return
+    if (!userId || !ticketId) return
     function handleFocusOrVisible() {
       if (document.visibilityState === "visible") silentReload()
     }
@@ -72,26 +77,24 @@ export function useSupportTicket(ticketId: string | undefined): UseSupportTicket
       window.removeEventListener("focus", handleFocusOrVisible)
       document.removeEventListener("visibilitychange", handleFocusOrVisible)
     }
-  }, [user, ticketId, silentReload])
+  }, [userId, ticketId, silentReload])
 
   useEffect(() => {
-    if (!user || !ticketId) return
+    if (!userId || !ticketId) return
     let cancelled = false
-    fetch(`/api/support/tickets/${ticketId}`)
-      .then(async (res) => {
-        if (res.status === 404) {
-          if (!cancelled) setNotFound(true)
-          return null
+    // A primeira carga reaproveita a busca do prefetch (hover no botão) se
+    // ela ainda estiver em andamento; recarregamentos buscam do zero.
+    loadSupportTicket(userId, ticketId, { fresh: version > 0 })
+      .then((result) => {
+        if (cancelled) return
+        if (result === "not_found") {
+          setNotFound(true)
+          return
         }
-        return res.ok ? res.json() : null
-      })
-      .then((data: { ticket?: SupportTicketDetail; messages?: SupportMessageRow[] } | null) => {
-        if (cancelled || !data) return
-        setTicket(data.ticket ?? null)
-        setMessages(data.messages ?? [])
-      })
-      .catch(() => {
-        if (!cancelled) setNotFound(true)
+        if (!result) return
+        setNotFound(false)
+        setTicket(result.ticket)
+        setMessages(result.messages)
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -99,7 +102,7 @@ export function useSupportTicket(ticketId: string | undefined): UseSupportTicket
     return () => {
       cancelled = true
     }
-  }, [user, ticketId, version])
+  }, [userId, ticketId, version])
 
   return { ticket, messages, loading, notFound, reload }
 }

@@ -46,10 +46,15 @@ export function SupportTicketStatusActions({
 
   if (status === "open") {
     return (
-      <div className="flex gap-2 border-t border-border pt-3">
+      <div className="flex flex-col gap-2">
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <Button size="sm" variant="outline" className="h-8 gap-1.5 border-border text-xs" disabled={isPending}>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-9 w-full justify-center gap-2 border-emerald-500/30 bg-emerald-500/10 text-xs text-emerald-400 hover:bg-emerald-500/20 hover:text-emerald-300"
+              disabled={isPending}
+            >
               <Check className="size-3.5" />
               Marcar como resolvido
             </Button>
@@ -72,7 +77,12 @@ export function SupportTicketStatusActions({
 
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <Button size="sm" variant="ghost" className="h-8 gap-1.5 text-xs text-muted-foreground" disabled={isPending}>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-9 w-full justify-center gap-2 text-xs text-muted-foreground hover:bg-red-500/10 hover:text-red-400"
+              disabled={isPending}
+            >
               <X className="size-3.5" />
               Cancelar chamado
             </Button>
@@ -104,7 +114,12 @@ export function SupportTicketStatusActions({
     <div>
       <AlertDialog>
         <AlertDialogTrigger asChild>
-          <Button size="sm" variant="outline" className="h-8 gap-1.5 border-border text-xs" disabled={isPending}>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-9 w-full justify-center gap-2 border-sky-500/30 bg-sky-500/10 text-xs text-sky-400 hover:bg-sky-500/20 hover:text-sky-300"
+            disabled={isPending}
+          >
             <RotateCcw className="size-3.5" />
             Reabrir chamado
           </Button>

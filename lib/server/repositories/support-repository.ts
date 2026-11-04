@@ -9,9 +9,12 @@ import {
 import { SITE_OWNER_SLUG } from "@/lib/special-tag"
 import { orderNumber } from "@/lib/order-number"
 import { orderOwnerId } from "@/lib/server/repositories/orders-repository"
-import { clampPage, clampPageSize, rangeFor } from "@/lib/server/repositories/_shared"
+import { clampPage, clampPageSize, isUuid, rangeFor } from "@/lib/server/repositories/_shared"
 import { signSupportImageUrls } from "@/lib/server/support-media"
 import { serviceFormLines } from "@/lib/store-service-form"
+import { profileMediaProxyUrl } from "@/lib/account-tier"
+import type { ProfileFrameIdentity } from "@/lib/profile-frames"
+import { getProfileFramesByUser } from "@/lib/server/repositories/vip-founder-repository"
 
 /**
  * Repositório de tickets de suporte (`support_tickets` + `support_messages`).
@@ -140,40 +143,42 @@ export async function getMySupportTicket(
   ticketId: string,
   userId: string
 ): Promise<{ ticket: SupportTicketDetail; messages: SupportMessageRow[] } | null> {
+  if (!isUuid(ticketId)) return null
   const db = createSupabaseAdminClient()
-  const { data: ticket, error } = await db
-    .from("support_tickets")
-    .select(
-      `${TICKET_SUMMARY_COLUMNS}, rating_comment, rated_at, closed_at`
-    )
-    .eq("id", ticketId)
-    .eq("user_id", userId)
-    .maybeSingle()
+
+  // Ticket e mensagens em paralelo: o painel do botão de suporte abre nesta
+  // rota, e encadear as duas somava uma ida ao banco à espera. A posse é
+  // conferida pelo ticket (`user_id`) e as mensagens só saem daqui depois
+  // dela — buscá-las antes não expõe nada.
+  const [{ data: ticket, error }, { data: messages, error: messagesError }] = await Promise.all([
+    db
+      .from("support_tickets")
+      .select(`${TICKET_SUMMARY_COLUMNS}, rating_comment, rated_at, closed_at`)
+      .eq("id", ticketId)
+      .eq("user_id", userId)
+      .maybeSingle(),
+    db
+      .from("support_messages")
+      .select("id, sender_type, sender_id, sender_name, body, image_urls, created_at")
+      .eq("ticket_id", ticketId)
+      .order("created_at", { ascending: true }),
+  ])
 
   if (error) {
     console.error("[support-repository] getMySupportTicket:", error)
     return null
   }
   if (!ticket) return null
-
-  const [{ data: messages, error: messagesError }, labels] = await Promise.all([
-    db
-      .from("support_messages")
-      .select("id, sender_type, sender_id, sender_name, body, image_urls, created_at")
-      .eq("ticket_id", ticketId)
-      .order("created_at", { ascending: true }),
-    resolveOrderAndProductLabels(ticket.order_id, ticket.product_id),
-  ])
-
   if (messagesError) {
     console.error("[support-repository] getMySupportTicket messages:", messagesError)
     return null
   }
 
   const rows = (messages ?? []) as unknown as SupportMessageRow[]
-  const signedMessages = await Promise.all(
-    rows.map(async (row) => ({ ...row, image_urls: await signSupportImageUrls(row.image_urls) }))
-  )
+  const [labels, signedMessages] = await Promise.all([
+    resolveOrderAndProductLabels(ticket.order_id, ticket.product_id),
+    Promise.all(rows.map(async (row) => ({ ...row, image_urls: await signSupportImageUrls(row.image_urls) }))),
+  ])
 
   return {
     ticket: { ...(ticket as unknown as SupportTicketDetail), ...labels },
@@ -618,16 +623,72 @@ export async function searchSupportCustomers(query: string, limit = 20): Promise
     .map((m) => ({ userId: m.id, name: m.display_name }))
 }
 
+/** Foto + moldura de quem aparece no chamado (cliente e admins que responderam). */
+export type SupportParticipant = {
+  display_name: string | null
+  display_slug: string | null
+  avatar_url: string | null
+  frame: ProfileFrameIdentity
+  member_since: string | null
+}
+
 export type AdminSupportTicketDetail = SupportTicketDetail & {
   user_id: string
   user_display_name: string | null
   user_email: string | null
+  /** Quantos chamados o cliente já abriu, este incluso. */
+  user_ticket_count: number
+}
+
+/**
+ * Perfis de quem aparece no chamado, com a moldura em LOTE
+ * (`getProfileFramesByUser`): uma consulta para todos, nunca uma por avatar.
+ */
+async function getSupportParticipants(userIds: string[]): Promise<Record<string, SupportParticipant>> {
+  const ids = [...new Set(userIds.filter(isUuid))]
+  if (ids.length === 0) return {}
+
+  const db = createSupabaseAdminClient()
+  const [{ data, error }, frameOf] = await Promise.all([
+    db
+      .from("user_profiles")
+      .select("id, display_name, display_slug, avatar_url, account_tier, vip_expires_at, created_at")
+      .in("id", ids),
+    getProfileFramesByUser(ids),
+  ])
+  if (error) console.error("[support-repository] getSupportParticipants:", error)
+
+  const map: Record<string, SupportParticipant> = {}
+  for (const row of (data ?? []) as Array<{
+    id: string
+    display_name: string | null
+    display_slug: string | null
+    avatar_url: string | null
+    account_tier: string | null
+    vip_expires_at: string | null
+    created_at: string | null
+  }>) {
+    map[row.id] = {
+      display_name: row.display_name,
+      display_slug: row.display_slug,
+      // Nunca a coluna crua — ver `profileMediaProxyUrl` em `lib/account-tier.ts`.
+      avatar_url: row.avatar_url ? profileMediaProxyUrl(row.id, "avatar") : null,
+      frame: frameOf(row.id, row.account_tier, row.vip_expires_at),
+      member_since: row.created_at,
+    }
+  }
+  return map
 }
 
 /** Detalhe + thread para o admin — inclui contato do solicitante (sem filtro de ownership, qualquer admin autorizado pode ver). */
 export async function getSupportTicketForAdmin(
   ticketId: string
-): Promise<{ ticket: AdminSupportTicketDetail; messages: SupportMessageRow[] } | null> {
+): Promise<{
+  ticket: AdminSupportTicketDetail
+  messages: SupportMessageRow[]
+  participants: Record<string, SupportParticipant>
+} | null> {
+  if (!isUuid(ticketId)) return null
   const db = createSupabaseAdminClient()
   const { data: ticket, error } = await db
     .from("support_tickets")
@@ -641,7 +702,7 @@ export async function getSupportTicketForAdmin(
   }
   if (!ticket) return null
 
-  const [{ data: messages, error: messagesError }, labels, profiles, { data: authUser }] = await Promise.all([
+  const [{ data: messages, error: messagesError }, labels, profiles, { data: authUser }, { count: ticketCount }] = await Promise.all([
     db
       .from("support_messages")
       .select("id, sender_type, sender_id, sender_name, body, image_urls, created_at")
@@ -650,6 +711,7 @@ export async function getSupportTicketForAdmin(
     resolveOrderAndProductLabels(ticket.order_id, ticket.product_id),
     getUserProfiles([ticket.user_id]),
     db.auth.admin.getUserById(ticket.user_id),
+    db.from("support_tickets").select("id", { count: "exact", head: true }).eq("user_id", ticket.user_id),
   ])
 
   if (messagesError) {
@@ -658,9 +720,10 @@ export async function getSupportTicketForAdmin(
   }
 
   const rows = (messages ?? []) as unknown as SupportMessageRow[]
-  const signedMessages = await Promise.all(
-    rows.map(async (row) => ({ ...row, image_urls: await signSupportImageUrls(row.image_urls) }))
-  )
+  const [signedMessages, participants] = await Promise.all([
+    Promise.all(rows.map(async (row) => ({ ...row, image_urls: await signSupportImageUrls(row.image_urls) }))),
+    getSupportParticipants([ticket.user_id, ...rows.map((row) => row.sender_id)]),
+  ])
 
   return {
     ticket: {
@@ -668,8 +731,10 @@ export async function getSupportTicketForAdmin(
       ...labels,
       user_display_name: profiles[ticket.user_id]?.display_name ?? null,
       user_email: authUser?.user?.email ?? null,
+      user_ticket_count: ticketCount ?? 1,
     },
     messages: signedMessages,
+    participants,
   }
 }
 
@@ -809,6 +874,81 @@ export async function reopenSupportTicket(params: {
   return { ok: true }
 }
 
+/**
+ * O próprio cliente encerra o chamado ("meu problema foi resolvido"). Escopo
+ * por `user_id` no mesmo UPDATE: com service_role nenhuma policy barra um id
+ * trocado, e "não existe" e "não é seu" respondem igual (404).
+ *
+ * `closed_by` = o próprio dono: `push_notification` não notifica alguém da
+ * ação que ele mesmo fez, então quem encerra não recebe aviso de encerramento.
+ * Idempotente: encerrado de novo responde ok sem reescrever.
+ */
+export async function closeMySupportTicket(params: { ticketId: string; userId: string }): Promise<RepositoryResult> {
+  if (!isUuid(params.ticketId)) {
+    return { ok: false, error: "Chamado não encontrado.", status: 404 }
+  }
+  const db = createSupabaseAdminClient()
+
+  const { data: ticket, error: ticketError } = await db
+    .from("support_tickets")
+    .select("id, status")
+    .eq("id", params.ticketId)
+    .eq("user_id", params.userId)
+    .maybeSingle()
+
+  if (ticketError) {
+    console.error("[support-repository] closeMySupportTicket lookup:", ticketError)
+    return { ok: false, error: "Não foi possível encerrar o chamado.", status: 500 }
+  }
+  if (!ticket) {
+    return { ok: false, error: "Chamado não encontrado.", status: 404 }
+  }
+  if (ticket.status !== "open") {
+    return { ok: true }
+  }
+
+  const { error } = await db
+    .from("support_tickets")
+    .update({
+      status: "resolved",
+      waiting_on: "closed",
+      closed_at: new Date().toISOString(),
+      closed_by: params.userId,
+    })
+    .eq("id", params.ticketId)
+    .eq("user_id", params.userId)
+    .eq("status", "open")
+
+  if (error) {
+    console.error("[support-repository] closeMySupportTicket update:", error)
+    return { ok: false, error: "Não foi possível encerrar o chamado.", status: 500 }
+  }
+
+  return { ok: true }
+}
+
+/**
+ * Leva o ticket a qualquer status (select da tabela do admin). Reaproveita
+ * reabrir/encerrar em vez de gravar o status direto, para o turno e o
+ * `closed_*` seguirem as mesmas regras do detalhe. Trocar entre dois status
+ * encerrados (resolvido ↔ cancelado) reabre e encerra de novo, porque
+ * `closeSupportTicket` ignora ticket que já não está aberto.
+ */
+export async function setSupportTicketStatus(params: {
+  ticketId: string
+  status: SupportTicketStatus
+  adminId: string
+}): Promise<RepositoryResult> {
+  if (!isUuid(params.ticketId)) {
+    return { ok: false, error: "Chamado não encontrado.", status: 404 }
+  }
+
+  const reopened = await reopenSupportTicket({ ticketId: params.ticketId })
+  if (!reopened.ok || params.status === "open") return reopened
+
+  return closeSupportTicket({ ticketId: params.ticketId, status: params.status, adminId: params.adminId })
+}
+
 /** Contagem para o badge da sidebar — 1 query `head: true` sobre o índice parcial idx_support_tickets_waiting_admin, sem trazer linhas. */
 export async function countSupportTicketsAwaitingAdmin(): Promise<number> {
   const db = createSupabaseAdminClient()
@@ -825,21 +965,35 @@ export async function countSupportTicketsAwaitingAdmin(): Promise<number> {
   return count ?? 0
 }
 
-/** Contagem "meus tickets aguardando minha resposta" — badge amber no sino e em "Meus Tickets". Mesmo padrão de countSupportTicketsAwaitingAdmin, escopado por usuário via idx_support_tickets_user_waiting. */
-export async function countMySupportTicketsAwaitingUser(userId: string): Promise<number> {
+/**
+ * Chamados abertos do usuário e quantos deles esperam a resposta DELE (ponto
+ * âmbar no sino e em "Meus Tickets"; o total expande o botão flutuante de
+ * suporte). Uma consulta só para os dois números, sobre o índice parcial
+ * idx_support_tickets_user_open: o resolvedor de sessão roda em toda visita.
+ */
+export async function getMySupportTicketCounts(
+  userId: string
+): Promise<{ open: number; awaitingMe: number; singleOpenId: string | null }> {
   const db = createSupabaseAdminClient()
-  const { count, error } = await db
+  const { data, error } = await db
     .from("support_tickets")
-    .select("id", { count: "exact", head: true })
+    .select("id, waiting_on")
     .eq("user_id", userId)
     .eq("status", "open")
-    .eq("waiting_on", "user")
+    .limit(100)
 
   if (error) {
-    console.error("[support-repository] countMySupportTicketsAwaitingUser:", error)
-    return 0
+    console.error("[support-repository] getMySupportTicketCounts:", error)
+    return { open: 0, awaitingMe: 0, singleOpenId: null }
   }
-  return count ?? 0
+  const rows = (data ?? []) as Array<{ id: string; waiting_on: SupportWaitingOn }>
+  return {
+    open: rows.length,
+    awaitingMe: rows.filter((row) => row.waiting_on === "user").length,
+    // Com um chamado só, o painel abre direto na conversa: com o id já na
+    // sessão ele não precisa buscar a lista antes (eram duas idas em série).
+    singleOpenId: rows.length === 1 ? rows[0].id : null,
+  }
 }
 
 /**

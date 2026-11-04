@@ -117,11 +117,13 @@ function PeripheralTeaser({ item }: { item: HomeAuraPeripheral }) {
       href="/aura"
       className={cn(
         "group flex flex-col overflow-hidden rounded-xl border transition-all duration-200",
-        soldOut ? CARD_SURFACE : cn(CARD_SURFACE_INTERACTIVE, "hover:-translate-y-1")
+        // `top`, não `translate`: ver o card em `AuraPeripheralSection`.
+        soldOut ? CARD_SURFACE : cn(CARD_SURFACE_INTERACTIVE, "relative top-0 hover:-top-1")
       )}
     >
-      <div className="relative aspect-square overflow-hidden bg-[var(--card-image-bg)]">
+      <div className="relative aspect-square overflow-hidden">
         {item.imageUrl ? (
+          // `mix-blend-screen`: mesmo motivo do card em `AuraPeripheralSection`.
           // eslint-disable-next-line @next/next/no-img-element
           <img
             {...storageImgProps(item.imageUrl, 200)}
@@ -129,7 +131,7 @@ function PeripheralTeaser({ item }: { item: HomeAuraPeripheral }) {
             loading="lazy"
             decoding="async"
             className={cn(
-              "h-full w-full object-contain p-3 transition-transform duration-500 group-hover:scale-105",
+              "h-full w-full object-contain p-3 mix-blend-screen transition-transform duration-500 group-hover:scale-105",
               soldOut && "opacity-40 grayscale"
             )}
           />

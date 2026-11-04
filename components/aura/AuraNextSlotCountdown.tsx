@@ -53,13 +53,13 @@ export function AuraNextSlotCountdown({ nextSlotAt }: AuraNextSlotCountdownProps
 
   if (!timeLeft) {
     // Evita mismatch de hidratação: nada de números calculados no server render.
-    return <p className="font-display text-2xl font-bold text-foreground">--:--:--</p>
+    return <p className="font-display text-3xl font-bold text-foreground">--:--:--</p>
   }
 
   const pad = (n: number) => String(n).padStart(2, "0")
 
   return (
-    <p className="font-display text-2xl font-bold tabular-nums text-foreground" role="timer" aria-live="polite">
+    <p className="font-display text-3xl font-bold tabular-nums text-foreground" role="timer" aria-live="polite">
       {pad(timeLeft.hours)}:{pad(timeLeft.minutes)}:{pad(timeLeft.seconds)}
     </p>
   )

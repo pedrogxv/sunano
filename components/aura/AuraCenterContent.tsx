@@ -124,6 +124,13 @@ interface AuraCenterContentProps {
   giveaways: ViewerGiveaways | null
 }
 
+/** Linhas do painel de status: alturas fixas, para casarem entre as três colunas. */
+const STAT_COLUMN = "flex flex-col gap-2 p-5"
+const STAT_LABEL_ROW = "flex h-5 items-center gap-2"
+const STAT_LABEL = "text-xs font-semibold uppercase tracking-wider"
+const STAT_VALUE_ROW = "flex h-9 items-baseline gap-2"
+const STAT_VALUE = "font-display text-3xl font-bold"
+
 /**
  * Tarefas diárias reais (`daily_missions`/`complete_daily_mission`) — mesma
  * fonte de verdade do badge da TopBar (`AuraMissionsBadge`), não uma lista
@@ -242,6 +249,8 @@ export function AuraCenterContent({
 
   const heatTier = streakHeatTier(streak.current)
   const heatStyle = STREAK_HEAT_STYLES[heatTier]
+  const missionsDone = countCompletedMissions(missions)
+  const reactionsLeft = Math.max(usage.limit - usage.givenToday, 0)
 
   // As duas variantes do escudo viram UM card só (toggle 1d/3d); o resto da
   // loja renderiza normal. Enquanto há escudo guardado o card mostra o
@@ -324,69 +333,72 @@ export function AuraCenterContent({
         ))}
       </div>
 
-      {/* Cards de status */}
-      <div className="grid gap-4 sm:grid-cols-3">
-        {/* Aura atual — o card "aceso": a chama do rótulo queima de verdade
+      {/* Painel de status — as três colunas têm as MESMAS quatro linhas (rótulo,
+          valor, legenda, medidor no rodapé), então cada linha casa com a
+          vizinha, sem altura sobrando em nenhuma coluna. */}
+      <div
+        className={cn(
+          "grid divide-y divide-border/60 overflow-hidden rounded-2xl border sm:grid-cols-3 sm:divide-x sm:divide-y-0",
+          CARD_SURFACE
+        )}
+      >
+        {/* Aura atual — a coluna "acesa": a chama do rótulo queima de verdade
             (ver `.aura-balance-*` no globals.css) e a intensidade do fogo
             responde ao saldo, então quem tem mais Aura vê uma fogueira maior.
-            É o único card com fogo; os outros dois ficam sóbrios de propósito,
+            É a única com fogo; as outras duas ficam sóbrias de propósito,
             senão o destaque se dilui. */}
-        <div
-          className={cn(
-            "aura-balance-card relative flex flex-col gap-2 overflow-hidden rounded-2xl border p-5",
-            CARD_SURFACE
-          )}
-          data-heat={balanceHeat}
-        >
-          <div className="relative z-[1] flex items-center gap-2 text-muted-foreground">
+        <div className={cn("aura-balance-card relative overflow-hidden", STAT_COLUMN)} data-heat={balanceHeat}>
+          <div className={cn("relative z-[1] text-muted-foreground", STAT_LABEL_ROW)}>
             <AuraFlame size="lg" />
-            <span className="aura-title-text text-xs font-semibold uppercase tracking-wider">Aura atual</span>
+            <span className={cn("aura-title-text", STAT_LABEL)}>Aura atual</span>
           </div>
-          <p className="aura-title-text relative z-[1] font-display text-3xl font-bold tabular-nums">
-            {currentBalance.toLocaleString("pt-BR")}
-          </p>
-          {rank && (
-            <p className="relative z-[1] text-xs text-muted-foreground">
-              <span className="font-semibold text-foreground">#{rank}</span> no ranking
+          <div className={cn("relative z-[1]", STAT_VALUE_ROW)}>
+            <p className={cn("aura-title-text tabular-nums", STAT_VALUE)}>
+              {currentBalance.toLocaleString("pt-BR")}
             </p>
-          )}
+          </div>
+          <p className="relative z-[1] text-xs text-muted-foreground">
+            {rank ? (
+              <>
+                <span className="font-semibold text-foreground">#{rank}</span> no ranking
+              </>
+            ) : (
+              "Participe para entrar no ranking"
+            )}
+          </p>
           {/* Nível da conta: morava no card da sidebar, que ficou só com o
               saldo. Aqui ele tem espaço para o nome e a barra. */}
-          <div className="relative z-[1] mt-auto pt-1">
-            <div className="flex items-baseline justify-between gap-2 text-xs">
-              <span className="truncate font-semibold text-foreground">
+          <StatMeter
+            label={
+              <>
                 Nível {level.level}
                 {level.name && <span className="font-normal text-muted-foreground"> · {level.name}</span>}
-              </span>
-              <span className="shrink-0 tabular-nums text-muted-foreground">
-                {level.nextThreshold === null
-                  ? "Máximo"
-                  : `${totalEarned.toLocaleString("pt-BR")}/${level.nextThreshold.toLocaleString("pt-BR")}`}
-              </span>
-            </div>
-            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
-              <div
-                className={cn("h-full rounded-full transition-[width] duration-500", AURA_BRAND_FILL_CLASS)}
-                style={{ width: `${Math.round(level.ratio * 100)}%` }}
-              />
-            </div>
-          </div>
+              </>
+            }
+            value={
+              level.nextThreshold === null
+                ? "Máximo"
+                : `${totalEarned.toLocaleString("pt-BR")}/${level.nextThreshold.toLocaleString("pt-BR")}`
+            }
+            ratio={level.ratio}
+            fillClassName={AURA_BRAND_FILL_CLASS}
+          />
         </div>
 
         {/* Ofensiva + multiplicador — os dois números vêm da mesma fonte
             (dias consecutivos de missões completas), então moram juntos em
             vez de espalhados em dois cards separados. */}
-        <div id="multiplicador" className={cn("flex flex-col gap-2 rounded-2xl border p-5 scroll-mt-20", CARD_SURFACE)}>
-          <div className={cn("flex items-center gap-2", streak.frozen ? "text-sky-400" : heatStyle.text)}>
+        <div id="multiplicador" className={cn("scroll-mt-20", STAT_COLUMN)}>
+          <div className={cn(STAT_LABEL_ROW, streak.frozen ? "text-sky-400" : heatStyle.text)}>
             {streak.frozen ? (
               <Snowflake className="size-4 drop-shadow-[0_0_5px_rgba(56,189,248,0.7)]" strokeWidth={1.5} />
             ) : (
               <Bird className={cn("size-4", heatStyle.glow)} strokeWidth={1.5} />
             )}
-            <span className="text-xs font-semibold uppercase tracking-wider">Ofensiva</span>
+            <span className={STAT_LABEL}>Ofensiva</span>
           </div>
-          <div className="flex items-baseline gap-2">
-            <p className="font-display text-3xl font-bold text-foreground tabular-nums">
+          <div className={STAT_VALUE_ROW}>
+            <p className={cn("text-foreground tabular-nums", STAT_VALUE)}>
               {streak.current} dia{streak.current === 1 ? "" : "s"}
             </p>
             {streak.frozen ? (
@@ -416,27 +428,46 @@ export function AuraCenterContent({
           <p className="text-xs text-muted-foreground">
             {streak.frozen
               ? streak.frozenUntil
-                ? `Escudo ativado: complete as 3 missões até ${new Date(`${streak.frozenUntil}T00:00:00`).toLocaleDateString("pt-BR")} para retomar a ofensiva.`
-                : "Escudo ativado: complete as 3 missões para retomar a ofensiva."
+                ? `Escudo ativado: complete as 3 missões até ${new Date(`${streak.frozenUntil}T00:00:00`).toLocaleDateString("pt-BR")} para retomar a ofensiva`
+                : "Escudo ativado: complete as 3 missões para retomar a ofensiva"
               : streak.current > 0
                 ? <>Recorde: {streak.longest} dia{streak.longest === 1 ? "" : "s"}, bônus em todo ganho de Aura</>
-                : "Complete as 3 missões abaixo hoje para começar"}
+                : "Complete as 3 missões abaixo para começar"}
           </p>
+          <StatMeter
+            label="Missões de hoje"
+            value={`${missionsDone}/${TASKS.length}`}
+            ratio={missionsDone / TASKS.length}
+            segments={TASKS.length}
+            fillClassName={
+              missionsDone >= TASKS.length ? "bg-emerald-400" : streak.frozen ? "bg-sky-400" : "bg-amber-400"
+            }
+          />
         </div>
 
-        <div className={cn("flex flex-col gap-2 rounded-2xl border p-5", CARD_SURFACE)}>
-          <div className="flex items-center gap-2 text-muted-foreground">
+        <div className={STAT_COLUMN}>
+          <div className={cn("text-muted-foreground", STAT_LABEL_ROW)}>
             <AuraIcon size="lg" tone="inherit" />
-            <span className="text-xs font-semibold uppercase tracking-wider">Próxima aura liberada</span>
+            <span className={STAT_LABEL}>Próxima aura liberada</span>
           </div>
-          {usage.limitReached && usage.nextSlotAt ? (
-            <AuraNextSlotCountdown nextSlotAt={usage.nextSlotAt} />
-          ) : (
-            <p className="font-display text-2xl font-bold text-emerald-400">Disponível</p>
-          )}
+          <div className={STAT_VALUE_ROW}>
+            {usage.limitReached && usage.nextSlotAt ? (
+              <AuraNextSlotCountdown nextSlotAt={usage.nextSlotAt} />
+            ) : (
+              <p className={cn("text-emerald-400", STAT_VALUE)}>Disponível</p>
+            )}
+          </div>
           <p className="text-xs text-muted-foreground">
-            {usage.givenToday}/{usage.limit} reações dadas nas últimas 24h
+            {usage.limitReached
+              ? "Libera mais uma reação quando o tempo zerar"
+              : `Você ainda pode dar ${reactionsLeft} ${reactionsLeft === 1 ? "reação" : "reações"}`}
           </p>
+          <StatMeter
+            label="Reações em 24h"
+            value={`${usage.givenToday}/${usage.limit}`}
+            ratio={usage.limit > 0 ? usage.givenToday / usage.limit : 0}
+            fillClassName={usage.limitReached ? "bg-amber-400" : "bg-emerald-400"}
+          />
         </div>
       </div>
 
@@ -695,7 +726,7 @@ export function AuraCenterContent({
           title="Missões do dia"
           tag="Renova 00h"
           tagClassName="bg-emerald-500/10 text-emerald-200 ring-1 ring-emerald-400/30"
-          right={<LaneProgress done={countCompletedMissions(missions)} total={TASKS.length} label="missões" />}
+          right={<LaneProgress done={missionsDone} total={TASKS.length} label="missões" />}
         />
         <div className="aura-hub-well divide-y divide-white/[0.06] overflow-hidden">
           {TASKS.map(({ key, icon: Icon, text, href }) => {
@@ -796,5 +827,49 @@ export function AuraCenterContent({
     <VipUpsellModal open={vipUpsellOpen} onOpenChange={setVipUpsellOpen} />
     <AuraRankingModal open={rankingOpen} onOpenChange={setRankingOpen} />
     </>
+  )
+}
+
+/** Rodapé de uma coluna do painel de status: rótulo, valor e barra (contínua ou em `segments` partes). */
+function StatMeter({
+  label,
+  value,
+  ratio,
+  fillClassName,
+  segments,
+}: {
+  label: React.ReactNode
+  value: string
+  ratio: number
+  fillClassName: string
+  segments?: number
+}) {
+  return (
+    <div className="relative z-[1] mt-auto pt-2">
+      <div className="flex items-baseline justify-between gap-2 text-xs">
+        <span className="truncate font-semibold text-foreground">{label}</span>
+        <span className="shrink-0 tabular-nums text-muted-foreground">{value}</span>
+      </div>
+      {segments ? (
+        <div className="mt-1.5 flex gap-1" aria-hidden>
+          {Array.from({ length: segments }, (_, index) => (
+            <span
+              key={index}
+              className={cn(
+                "h-1.5 flex-1 rounded-full transition-colors",
+                index < Math.round(ratio * segments) ? fillClassName : "bg-muted"
+              )}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
+          <div
+            className={cn("h-full rounded-full transition-[width] duration-500", fillClassName)}
+            style={{ width: `${Math.min(Math.round(ratio * 100), 100)}%` }}
+          />
+        </div>
+      )}
+    </div>
   )
 }

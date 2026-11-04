@@ -236,17 +236,22 @@ function AuraPeripheralCard({
     <div
       className={cn(
         "flex overflow-hidden rounded-xl border transition-all duration-200",
-        done ? CARD_SURFACE : cn(CARD_SURFACE_INTERACTIVE, "hover:-translate-y-0.5")
+        // Sobe com `top`, não `translate`: transform isola o card e o
+        // `mix-blend-screen` da foto passa a misturar só com o fundo translúcido
+        // dele, e o preto da imagem reaparece como um quadrado no hover.
+        done ? CARD_SURFACE : cn(CARD_SURFACE_INTERACTIVE, "relative top-0 hover:-top-0.5")
       )}
     >
-      <div className="relative w-24 shrink-0 bg-[var(--card-image-bg)] sm:w-28">
+      <div className="relative w-24 shrink-0 sm:w-28">
         {item.imageUrl ? (
+          // `mix-blend-screen`: as fotos têm fundo preto no próprio arquivo (sem
+          // alfa), e o screen faz esse preto sumir sobre a superfície do card.
           // eslint-disable-next-line @next/next/no-img-element
           <img
             {...storageImgProps(item.imageUrl, 128)}
             alt={item.name}
             className={cn(
-              "absolute inset-0 size-full object-contain p-2",
+              "absolute inset-0 size-full object-contain p-2 mix-blend-screen",
               soldOut && !ownedByMe && "opacity-40 grayscale"
             )}
           />

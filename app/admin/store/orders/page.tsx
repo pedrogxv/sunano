@@ -26,6 +26,7 @@ import {
   MessageCirclePlus,
   Package,
   PackageCheck,
+  Repeat,
   RotateCcw,
   Search,
   Sparkles,
@@ -90,6 +91,7 @@ import {
 import { formatBRL } from "@/lib/format"
 import { orderNumber } from "@/lib/order-number"
 import {
+  ORDER_PAID_STATUSES,
   ORDER_STATUS_GROUPS,
   SHIPPING_EDITABLE_STATUSES,
   orderStatusLabel,
@@ -109,6 +111,7 @@ import { SHIPPING_RESIDENCE_TYPE_LABELS, isoToBirthDateInput } from "@/component
 import { serviceFormLines } from "@/lib/store-service-form"
 import { ServiceFormAnswerValue } from "@/components/store/ServiceFormAnswerValue"
 import { OrderComplementSection } from "@/components/admin/store/OrderComplementSection"
+import { OrderItemSwapDialog } from "@/components/admin/store/OrderItemSwapDialog"
 // `import type` é apagado no build: não puxa `server-only` para o bundle.
 import type {
   AdminOrderRow,
@@ -141,6 +144,8 @@ type OrderItem = {
   preorder_batch?: string | null
   /** Campos do formulário pós-compra de serviço (snapshot do checkout). */
   service_form?: unknown
+  /** O que foi comprado antes de o admin trocar o produto do item. */
+  swapped_from?: { name?: string | null; variant_label?: string | null } | null
 }
 
 type AdminOrder = {
@@ -1842,9 +1847,11 @@ function OrderManageDialog({
   const [manualReference, setManualReference] = useState("")
   const [registeringManual, setRegisteringManual] = useState(false)
   const [resolvingNotice, setResolvingNotice] = useState(false)
+  const [swapLine, setSwapLine] = useState<{ index: number; label: string } | null>(null)
 
   useEffect(() => {
     if (!order) return
+    setSwapLine(null)
     setTrackingCode(order.tracking_code ?? "")
     // Pedido antigo com texto livre que não casa com a lista: fica vazio e o
     // salvar mantém o texto gravado (ver handleUpdateTracking).
@@ -1876,6 +1883,8 @@ function OrderManageDialog({
   )
   const manualGatewayRefund = Boolean(order.infinitepay_transaction_nsu)
   const canRegisterManual = !isAuraOrder && MANUAL_PAYABLE_STATUSES.includes(order.status)
+  // Troca de produto do item: só em pedido pago (é o que libera a avaliação).
+  const canSwapItems = (ORDER_PAID_STATUSES as string[]).includes(order.status)
 
   async function handleAdvance() {
     if (!order || !next) return
@@ -2337,6 +2346,13 @@ function OrderManageDialog({
             onSaved={(complement) => onOrderPatched(order.id, { complement })}
           />
 
+          <OrderItemSwapDialog
+            orderId={order.id}
+            line={swapLine}
+            onOpenChange={(open) => !open && setSwapLine(null)}
+            onSwapped={(items) => onOrderPatched(order.id, { items: items as OrderItem[] })}
+          />
+
           {/* Endereço de entrega — snapshot do pedido, não o do perfil atual do cliente */}
           <div className="space-y-2 rounded-lg border border-border/60 bg-muted/20 p-3">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -2452,10 +2468,31 @@ function OrderManageDialog({
                         {item.preorder_batch && <span>{item.preorder_batch}</span>}
                       </span>
                     )}
+                    {item.swapped_from?.name && (
+                      <span className="mt-0.5 block text-[11px] text-amber-400">
+                        Trocado; comprado como {item.swapped_from.name}
+                        {item.swapped_from.variant_label ? ` · ${item.swapped_from.variant_label}` : ""}
+                      </span>
+                    )}
                   </span>
-                  {!isAuraOrder && typeof item.price_cents === "number" && (
-                    <span className="text-muted-foreground">{formatBRL(item.price_cents)}</span>
-                  )}
+                  <span className="flex shrink-0 items-center gap-2">
+                    {!isAuraOrder && typeof item.price_cents === "number" && (
+                      <span className="text-muted-foreground">{formatBRL(item.price_cents)}</span>
+                    )}
+                    {canSwapItems && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        title="O cliente recebeu outro produto (ex: acabou o estoque)"
+                        onClick={() => setSwapLine({ index: idx, label: item.name ?? "Produto" })}
+                      >
+                        <Repeat className="size-3.5" />
+                        Trocar
+                      </Button>
+                    )}
+                  </span>
                 </div>
               ))}
             </div>

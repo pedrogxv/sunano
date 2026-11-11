@@ -28,6 +28,8 @@ export type StoreAuditAction =
   /** Aviso ao cliente (dado de entrega a corrigir etc.) enviado ou marcado como resolvido. */
   | "order.customer_notice"
   | "order.customer_notice_resolve"
+  /** Produto de um item trocado (acabou o estoque e o cliente levou outro). */
+  | "order.item_swap"
   | "store_settings.update"
 
 type LogAdminActionParams = {

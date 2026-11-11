@@ -22,6 +22,7 @@ import {
 } from "@/lib/server/repositories/order-customer-notice-repository"
 import { ORDER_NOTICE_MESSAGE_MAX, ORDER_NOTICE_REASONS } from "@/lib/order-customer-notice"
 import { STORE_CARRIERS } from "@/lib/store-carriers"
+import { swapOrderItemProduct } from "@/lib/server/repositories/order-item-swap-repository"
 
 const patchSchema = z.discriminatedUnion("action", [
   z.object({
@@ -80,6 +81,14 @@ const patchSchema = z.discriminatedUnion("action", [
   }),
   // Fecha o aviso aberto (resolvido por outro caminho ou mandado por engano).
   z.object({ action: z.literal("resolve_notice") }),
+  // Troca o produto de um item (acabou o estoque e o cliente levou outro).
+  // A avaliação sai do item do pedido, então é isso que libera avaliar o certo.
+  z.object({
+    action: z.literal("swap_item"),
+    lineIndex: z.number().int().min(0).max(99),
+    productId: z.string().uuid(),
+    variantId: z.string().uuid().nullable(),
+  }),
 ])
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -150,6 +159,18 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       return NextResponse.json({ error: resolved.error }, { status: resolved.status })
     }
     return NextResponse.json({ ok: true, resolvedAt: resolved.resolvedAt })
+  }
+
+  if (parsed.data.action === "swap_item") {
+    const swap = await swapOrderItemProduct(
+      id,
+      { lineIndex: parsed.data.lineIndex, productId: parsed.data.productId, variantId: parsed.data.variantId },
+      auth.profile.id
+    )
+    if (!swap.ok) {
+      return NextResponse.json({ error: swap.error }, { status: swap.status })
+    }
+    return NextResponse.json({ ok: true, items: swap.items, movedReviews: swap.movedReviews })
   }
 
   if (parsed.data.action === "approve_card_review") {

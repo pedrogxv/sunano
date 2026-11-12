@@ -34,7 +34,7 @@ import { SupportReplySubmitButton } from "@/components/admin/SupportReplySubmitB
 import { SupportReplyTextarea } from "@/components/admin/SupportReplyTextarea"
 import { SupportTicketStatusActions } from "@/components/admin/SupportTicketStatusActions"
 import { ProfileAvatar } from "@/components/ui/ProfileAvatar"
-import { safeHref } from "@/lib/safe-url"
+import { SupportMessageBody, SupportMessageImages } from "@/components/support/SupportMessageContent"
 import { profilePath } from "@/lib/profile-name"
 import { cn } from "@/lib/utils"
 
@@ -294,23 +294,11 @@ export default async function AdminSupportTicketPage({ params }: { params: Promi
                             : "rounded-tl-md border-border bg-muted/40"
                         )}
                       >
-                        <p className="whitespace-pre-wrap break-words">{message.body}</p>
-                        {message.image_urls.length > 0 && (
-                          <div className="mt-2.5 flex flex-wrap gap-2">
-                            {message.image_urls.map((url) => (
-                              <a
-                                key={url}
-                                href={safeHref(url)}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="overflow-hidden rounded-lg border border-border transition-opacity hover:opacity-80"
-                              >
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={url} alt="Anexo" className="size-20 object-cover sm:size-24" />
-                              </a>
-                            ))}
-                          </div>
-                        )}
+                        <SupportMessageBody
+                          body={message.body}
+                          className="[&_a]:text-sky-400"
+                        />
+                        <SupportMessageImages urls={message.image_urls} triggerClassName="border border-border" />
                       </div>
                     </div>
                   </div>

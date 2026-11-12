@@ -17,6 +17,7 @@ import {
   XCircle,
 } from "lucide-react"
 
+import { SupportMessageBody, SupportMessageImages } from "@/components/support/SupportMessageContent"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -285,34 +286,12 @@ export function SupportMessageList({
                       : "rounded-tl-md border border-border bg-card text-foreground shadow-sm"
                   )}
                 >
-                  <p className="break-words whitespace-pre-wrap">
-                    {message.body}
-                  </p>
-                  {message.image_urls.length > 0 && (
-                    <div className="mt-2.5 flex flex-wrap gap-2">
-                      {message.image_urls.map((url) => (
-                        <a
-                          key={url}
-                          href={url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="overflow-hidden rounded-lg ring-1 ring-white/15 transition-opacity hover:opacity-80"
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={url}
-                            alt="Anexo"
-                            className={cn(
-                              "object-cover",
-                              compact ? "size-16" : "size-20 sm:size-24"
-                            )}
-                            loading="lazy"
-                            decoding="async"
-                          />
-                        </a>
-                      ))}
-                    </div>
-                  )}
+                  <SupportMessageBody body={message.body} />
+                  <SupportMessageImages
+                    urls={message.image_urls}
+                    thumbClassName={compact ? "size-16" : "size-20 sm:size-24"}
+                    triggerClassName="ring-1 ring-white/15"
+                  />
                 </div>
               </div>
             </div>

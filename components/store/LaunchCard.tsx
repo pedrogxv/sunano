@@ -5,6 +5,7 @@ import Link from "next/link"
 import { ArrowRight, Check, ShoppingCart, Truck } from "lucide-react"
 
 import { useCart } from "@/components/providers/cart-context"
+import { CardRating } from "@/components/store/CardRating"
 import { SaleWindowCountdown } from "@/components/store/SaleWindowCountdown"
 import { RouteLink } from "@/components/ui/route-link"
 import { formatBRL } from "@/lib/format"
@@ -150,6 +151,7 @@ export function LaunchCard(props: StoreProductCard) {
               {props.name}
             </Link>
           </h3>
+          <CardRating rating={props.rating} />
         </div>
 
         {props.highlights.length > 0 && (

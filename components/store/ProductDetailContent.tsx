@@ -204,8 +204,8 @@ export function ProductDetailContent({ filterOptions, rating, recommendations, .
   const sectionLinks: ProductSectionLink[] = [
     ...(product.description ? [{ id: "descricao" as const, label: "Descrição" }] : []),
     ...(specs.length > 0 ? [{ id: "especificacoes" as const, label: "Especificações" }] : []),
-    ...(recommendations.length > 0 ? [{ id: "relacionados" as const, label: "Relacionados" }] : []),
     ...(!complement ? [{ id: "avaliacoes" as const, label: "Avaliações", count: rating?.count ?? 0 }] : []),
+    ...(recommendations.length > 0 ? [{ id: "relacionados" as const, label: "Relacionados" }] : []),
   ]
   const showSectionNav = sectionLinks.length > 1
 
@@ -607,12 +607,6 @@ export function ProductDetailContent({ filterOptions, rating, recommendations, .
           )}
         </div>
 
-        {recommendations.length > 0 && (
-          <div id="relacionados" className={cn("mt-14", PRODUCT_SECTION_SCROLL_MARGIN)}>
-            <ProductRecommendations items={recommendations} />
-          </div>
-        )}
-
         {/* Complemento é pagamento de outro pedido, não um produto para avaliar. */}
         {!complement && (
           <section id="avaliacoes" className={cn("mt-14", PRODUCT_SECTION_SCROLL_MARGIN)}>
@@ -624,6 +618,14 @@ export function ProductDetailContent({ filterOptions, rating, recommendations, .
               productType={product.type}
             />
           </section>
+        )}
+
+        {/* Recomendados por último: as avaliações são do produto da página e
+            vêm antes do trilho que leva a pessoa para outro. */}
+        {recommendations.length > 0 && (
+          <div id="relacionados" className={cn("mt-14", PRODUCT_SECTION_SCROLL_MARGIN)}>
+            <ProductRecommendations items={recommendations} />
+          </div>
         )}
       </div>
 

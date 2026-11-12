@@ -15,12 +15,12 @@ import { hasFreeShipping } from "@/lib/store-shipping"
 import { useStoreSettings } from "@/lib/hooks/use-store-settings"
 import { useCart } from "@/components/providers/cart-context"
 import { Skeleton } from "@/components/ui/skeleton"
-import { StarRating } from "@/components/ui/star-rating"
 import { SoldOutStamp } from "@/components/store/SoldOutStamp"
 import { RouteLink } from "@/components/ui/route-link"
+import { CardRating } from "@/components/store/CardRating"
 import { LaunchCard } from "@/components/store/LaunchCard"
 import { PreorderCard } from "@/components/store/PreorderCard"
-import type { StoreCardRating, StoreProductCard } from "@/lib/server/repositories/store-repository"
+import type { StoreProductCard } from "@/lib/server/repositories/store-repository"
 import { storageImgProps } from "@/lib/storage-thumb"
 
 const CONDITION_LABEL: Record<"new" | "used" | "opened", string> = {
@@ -48,19 +48,6 @@ function CardBadge({ badge, large }: { badge: StoreCardBadge; large?: boolean })
       <Icon className={cn("shrink-0", large ? "size-3" : "size-2.5", iconClassName)} strokeWidth={2.5} />
       <span className="truncate">{label}</span>
     </span>
-  )
-}
-
-/** Nota com uma casa ("4,8") e quantidade. Sem avaliação, a linha fica vazia, mas ocupa o espaço. */
-function CardRating({ rating }: { rating: StoreCardRating | null }) {
-  if (!rating) return <div className="h-4" aria-hidden />
-  const average = rating.average.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })
-  return (
-    <div className="flex h-4 items-center gap-1.5 text-[11px] leading-none">
-      <StarRating value={Math.round(rating.average * 2) / 2} size="sm" className="gap-px" />
-      <span className="font-bold text-white">{average}</span>
-      <span className="text-[#7a7a7a]">({rating.count})</span>
-    </div>
   )
 }
 
@@ -354,7 +341,7 @@ function StandardProductCard(props: ProductCardProps) {
               {props.name}
             </h3>
 
-            <CardRating rating={props.rating} />
+            <CardRating rating={props.rating} reserveSpace />
             {!showcase && <CardHighlights items={highlights} />}
 
             {complement ? (

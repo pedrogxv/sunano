@@ -18,14 +18,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { AdaptiveDialog, AdaptiveDialogFooter } from "@/components/ui/adaptive-dialog"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { MAX_PENDING_PAYOUTS, MIN_PAYOUT_CENTS } from "@/lib/affiliate-payout"
@@ -294,7 +287,7 @@ export default function SaquesAfiliadoPage() {
                   Quanto você quer sacar?
                 </label>
                 <div className="relative">
-                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                  <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-sm text-muted-foreground">
                     R$
                   </span>
                   <Input
@@ -330,10 +323,7 @@ export default function SaquesAfiliadoPage() {
                     erro, ou quanto sobra — o feedback que faltava por completo. */}
                 <p
                   id="payout-amount-hint"
-                  className={cn(
-                    "mt-2 text-xs",
-                    amountError ? "font-medium text-destructive" : "text-muted-foreground"
-                  )}
+                  className={cn("mt-2 text-xs", amountError ? "font-medium text-destructive" : "text-muted-foreground")}
                 >
                   {amountError ??
                     (amountCents > 0
@@ -369,7 +359,9 @@ export default function SaquesAfiliadoPage() {
                   onChange={(e) => setPixKey(formatPixKeyInput(pixKeyType, e.target.value))}
                   onBlur={() => setTouched((t) => ({ ...t, pix: true }))}
                   placeholder={PIX_KEY_PLACEHOLDERS[pixKeyType]}
-                  inputMode={pixKeyType === "cpf" || pixKeyType === "cnpj" || pixKeyType === "phone" ? "numeric" : "text"}
+                  inputMode={
+                    pixKeyType === "cpf" || pixKeyType === "cnpj" || pixKeyType === "phone" ? "numeric" : "text"
+                  }
                   maxLength={200}
                   aria-invalid={!!pixError}
                   aria-describedby="payout-pix-hint"
@@ -422,8 +414,7 @@ export default function SaquesAfiliadoPage() {
                         {formatBRL(payout.amount_cents)}
                       </span>
                       <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                        {PIX_KEY_TYPE_LABELS[payout.pix_key_type]} ·{" "}
-                        {maskPixKey(payout.pix_key_type, payout.pix_key)}
+                        {PIX_KEY_TYPE_LABELS[payout.pix_key_type]} · {maskPixKey(payout.pix_key_type, payout.pix_key)}
                       </p>
                     </div>
                     <Badge variant={meta.variant} className="shrink-0 gap-1">
@@ -464,60 +455,65 @@ export default function SaquesAfiliadoPage() {
 
       {/* Confirmação com o valor e a chave por extenso: última chance de pegar
           um dígito errado antes de o dinheiro sair. */}
-      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Confirmar saque</DialogTitle>
-            <DialogDescription>Confira os dados: o PIX é enviado exatamente para esta chave.</DialogDescription>
-          </DialogHeader>
+      <AdaptiveDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Confirmar saque"
+        description="Confira os dados: o PIX é enviado exatamente para esta chave."
+        size="sm"
+        tone="emerald"
+      >
+        <dl className="space-y-3 rounded-lg border p-4 text-sm">
+          <div className="flex items-baseline justify-between gap-3">
+            <dt className="text-muted-foreground">Valor</dt>
+            <dd className="font-display text-xl font-bold tabular-nums">{formatBRL(amountCents)}</dd>
+          </div>
+          <div className="flex items-baseline justify-between gap-3">
+            <dt className="text-muted-foreground">{PIX_KEY_TYPE_LABELS[pixKeyType]}</dt>
+            <dd className="text-right font-medium break-all">{pixKey}</dd>
+          </div>
+          <div className="flex items-baseline justify-between gap-3 border-t pt-3">
+            <dt className="text-muted-foreground">Saldo depois</dt>
+            <dd className="tabular-nums">{formatBRL(remainingCents)}</dd>
+          </div>
+        </dl>
 
-          <dl className="space-y-3 rounded-lg border p-4 text-sm">
-            <div className="flex items-baseline justify-between gap-3">
-              <dt className="text-muted-foreground">Valor</dt>
-              <dd className="font-display text-xl font-bold tabular-nums">{formatBRL(amountCents)}</dd>
-            </div>
-            <div className="flex items-baseline justify-between gap-3">
-              <dt className="text-muted-foreground">{PIX_KEY_TYPE_LABELS[pixKeyType]}</dt>
-              <dd className="break-all text-right font-medium">{pixKey}</dd>
-            </div>
-            <div className="flex items-baseline justify-between gap-3 border-t pt-3">
-              <dt className="text-muted-foreground">Saldo depois</dt>
-              <dd className="tabular-nums">{formatBRL(remainingCents)}</dd>
-            </div>
-          </dl>
+        <AdaptiveDialogFooter>
+          <Button type="button" variant="outline" onClick={() => setConfirmOpen(false)} disabled={isSubmitting}>
+            Voltar e editar
+          </Button>
+          <Button type="button" onClick={handleConfirm} disabled={isSubmitting}>
+            {isSubmitting && <Loader2 className="size-4 animate-spin" />}
+            {isSubmitting ? "Enviando..." : "Confirmar saque"}
+          </Button>
+        </AdaptiveDialogFooter>
+      </AdaptiveDialog>
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setConfirmOpen(false)} disabled={isSubmitting}>
-              Voltar e editar
-            </Button>
-            <Button type="button" onClick={handleConfirm} disabled={isSubmitting}>
-              {isSubmitting && <Loader2 className="size-4 animate-spin" />}
-              {isSubmitting ? "Enviando..." : "Confirmar saque"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={!!cancelTarget} onOpenChange={(open) => !open && setCancelTarget(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Cancelar saque</DialogTitle>
-            <DialogDescription>
-              {cancelTarget &&
-                `Os ${formatBRL(cancelTarget.amount_cents)} voltam para o seu saldo disponível e você pode pedir de novo quando quiser.`}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setCancelTarget(null)} disabled={isCancelling}>
-              Manter saque
-            </Button>
-            <Button type="button" variant="destructive" onClick={handleCancel} disabled={isCancelling}>
-              {isCancelling && <Loader2 className="size-4 animate-spin" />}
-              {isCancelling ? "Cancelando..." : "Cancelar saque"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <AdaptiveDialog
+        open={!!cancelTarget}
+        onOpenChange={(open) => !open && setCancelTarget(null)}
+        title="Cancelar saque"
+        tone="red"
+        layout="center"
+        role="alertdialog"
+        description={
+          <>
+            {cancelTarget &&
+              `Os ${formatBRL(cancelTarget.amount_cents)} voltam para o seu saldo disponível e você pode pedir de novo quando quiser.`}
+          </>
+        }
+        size="sm"
+      >
+        <AdaptiveDialogFooter>
+          <Button type="button" variant="outline" onClick={() => setCancelTarget(null)} disabled={isCancelling}>
+            Manter saque
+          </Button>
+          <Button type="button" variant="destructive" onClick={handleCancel} disabled={isCancelling}>
+            {isCancelling && <Loader2 className="size-4 animate-spin" />}
+            {isCancelling ? "Cancelando..." : "Cancelar saque"}
+          </Button>
+        </AdaptiveDialogFooter>
+      </AdaptiveDialog>
     </div>
   )
 }

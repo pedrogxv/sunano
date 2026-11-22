@@ -5,14 +5,7 @@ import { Loader2, Truck } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { AdaptiveDialog, AdaptiveDialogFooter } from "@/components/ui/adaptive-dialog"
 import {
   EMPTY_SHIPPING_FORM,
   ShippingAddressFields,
@@ -113,39 +106,57 @@ export function OrderShippingAddressDialog({
     }
   }
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Truck className="size-4 text-emerald-400" />
-            {existing ? "Alterar endereço de entrega" : "Informar endereço de entrega"}
-          </DialogTitle>
-          <DialogDescription>
-            {existing
-              ? "Só é possível alterar enquanto o pedido não foi despachado."
-              : "Seu pedido só é despachado depois que este endereço for informado."}
-          </DialogDescription>
-        </DialogHeader>
+  // O pai zera o pedido ao fechar: o título segue o endereço de quando estava
+  // aberto, senão "Alterar" pisca para "Informar" na animação de saída.
+  const [shownExisting, setShownExisting] = useState(existing)
+  if (open && existing !== shownExisting) setShownExisting(existing)
+  const hasAddress = Boolean(open ? existing : shownExisting)
 
+  return (
+    <AdaptiveDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      size="md"
+      tone="emerald"
+      icon={<Truck />}
+      title={hasAddress ? "Alterar endereço de entrega" : "Informar endereço de entrega"}
+      description={
+        hasAddress
+          ? "Só é possível alterar enquanto o pedido não foi despachado."
+          : "Seu pedido só é despachado depois que este endereço for informado."
+      }
+    >
+      <form
+        id="order-shipping-address-form"
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (!saving && isShippingFormComplete(form)) void handleSave()
+        }}
+        className="space-y-4"
+      >
         <ShippingAddressFields form={form} onChange={setForm} disabled={saving} />
 
         {error && (
-          <p className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>
+          <p role="alert" className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400">
+            {error}
+          </p>
         )}
+      </form>
 
-        <DialogFooter>
-          <Button
-            type="button"
-            onClick={handleSave}
-            disabled={saving || !isShippingFormComplete(form)}
-            className="w-full gap-2 bg-emerald-600 text-white hover:bg-emerald-500 sm:w-auto"
-          >
-            {saving && <Loader2 className="size-4 animate-spin" />}
-            Salvar endereço
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      <AdaptiveDialogFooter>
+        <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>
+          Cancelar
+        </Button>
+        <Button
+          type="submit"
+          form="order-shipping-address-form"
+          disabled={saving || !isShippingFormComplete(form)}
+          className="gap-2 bg-emerald-600 text-white hover:bg-emerald-500"
+        >
+          {saving && <Loader2 className="size-4 animate-spin" />}
+          Salvar endereço
+        </Button>
+      </AdaptiveDialogFooter>
+    </AdaptiveDialog>
   )
 }

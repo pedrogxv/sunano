@@ -7,14 +7,7 @@ import { toast } from "sonner"
 
 import { PeripheralPicker } from "@/components/account/PeripheralPicker"
 import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { AdaptiveDialog, AdaptiveDialogFooter } from "@/components/ui/adaptive-dialog"
 import { StarRating } from "@/components/ui/star-rating"
 import { Textarea } from "@/components/ui/textarea"
 import {
@@ -103,86 +96,91 @@ export function ReviewFormDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{mode === "create" ? "Criar review" : "Editar review"}</DialogTitle>
-          <DialogDescription>
-            {peripheralLocked ? "Dê" : "Escolha o periférico, dê"} sua nota (1 a 5 estrelas, meia estrela
-            vale) e conte sua experiência ({BODY_MIN_LENGTH} a {BODY_MAX_LENGTH} caracteres).
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4">
-          {mode === "create" && !selected ? (
-            <PeripheralPicker
-              categories={REVIEWABLE_CATALOG_CATEGORIES}
-              excludeIds={excludePeripheralIds}
-              placeholder="Buscar periférico pra avaliar..."
-              autoFocus
-              onSelect={(p) => setSelected(p)}
-            />
-          ) : (
-            selected && (
-              <div className="flex items-center gap-3 rounded-lg border border-border p-2.5">
-                <div className="relative size-9 shrink-0">
-                  {selected.image_url ? (
-                    <Image src={selected.image_url} alt={selected.name} fill sizes="36px" className="object-contain" />
-                  ) : (
-                    <div className="size-full rounded bg-muted/40" />
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-foreground">{selected.name}</p>
-                  <p className="truncate text-xs text-muted-foreground">{selected.brand}</p>
-                </div>
-                {!peripheralLocked && (
-                  <Button type="button" variant="ghost" size="sm" onClick={() => setSelected(null)}>
-                    <X className="size-4" />
-                  </Button>
+    <AdaptiveDialog
+      open={open}
+      onOpenChange={handleOpenChange}
+      title={<>{mode === "create" ? "Criar review" : "Editar review"}</>}
+      description={
+        <>
+          {peripheralLocked ? "Dê" : "Escolha o periférico, dê"} sua nota (1 a 5 estrelas, meia estrela vale) e conte
+          sua experiência ({BODY_MIN_LENGTH} a {BODY_MAX_LENGTH} caracteres).
+        </>
+      }
+      size="md"
+      tone="amber"
+    >
+      <div className="space-y-4">
+        {mode === "create" && !selected ? (
+          <PeripheralPicker
+            categories={REVIEWABLE_CATALOG_CATEGORIES}
+            excludeIds={excludePeripheralIds}
+            placeholder="Buscar periférico pra avaliar..."
+            autoFocus
+            onSelect={(p) => setSelected(p)}
+          />
+        ) : (
+          selected && (
+            <div className="flex items-center gap-3 rounded-lg border border-border p-2.5">
+              <div className="relative size-9 shrink-0">
+                {selected.image_url ? (
+                  <Image src={selected.image_url} alt={selected.name} fill sizes="36px" className="object-contain" />
+                ) : (
+                  <div className="size-full rounded bg-muted/40" />
                 )}
               </div>
-            )
-          )}
-
-          {selected && (
-            <>
-              <div className="space-y-1.5">
-                <p className="text-xs font-medium text-muted-foreground">Sua nota</p>
-                <StarRating value={rating} onChange={setRating} size="lg" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-foreground">{selected.name}</p>
+                <p className="truncate text-xs text-muted-foreground">{selected.brand}</p>
               </div>
+              {!peripheralLocked && (
+                <Button type="button" variant="ghost" size="sm" onClick={() => setSelected(null)}>
+                  <X className="size-4" />
+                </Button>
+              )}
+            </div>
+          )
+        )}
 
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-medium text-muted-foreground">Comentário</p>
-                  <span className="text-[11px] text-muted-foreground/60">
-                    {body.length}/{BODY_MAX_LENGTH}
-                  </span>
-                </div>
-                <Textarea
-                  value={body}
-                  onChange={(e) => setBody(e.target.value.slice(0, BODY_MAX_LENGTH))}
-                  placeholder="Conte sua experiência com esse periférico..."
-                  className="min-h-24"
-                  maxLength={BODY_MAX_LENGTH}
-                />
-                {bodyLength > 0 && bodyTooShort && (
-                  <p className="text-[11px] text-muted-foreground">
-                    Mínimo de {BODY_MIN_LENGTH} caracteres.
-                  </p>
-                )}
+        {selected && (
+          <>
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground">Sua nota</p>
+              <StarRating value={rating} onChange={setRating} size="lg" />
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-muted-foreground">Comentário</p>
+                <span className="text-[11px] text-muted-foreground/60">
+                  {body.length}/{BODY_MAX_LENGTH}
+                </span>
               </div>
-            </>
-          )}
-        </div>
+              <Textarea
+                value={body}
+                onChange={(e) => setBody(e.target.value.slice(0, BODY_MAX_LENGTH))}
+                placeholder="Conte sua experiência com esse periférico..."
+                className="min-h-24"
+                maxLength={BODY_MAX_LENGTH}
+              />
+              {bodyLength > 0 && bodyTooShort && (
+                <p className="text-[11px] text-muted-foreground">Mínimo de {BODY_MIN_LENGTH} caracteres.</p>
+              )}
+            </div>
+          </>
+        )}
+      </div>
 
-        <DialogFooter>
-          <Button type="button" onClick={handleSubmit} disabled={!selected || rating < 1 || bodyTooShort || saving} className="gap-2">
-            {saving && <Loader2 className="size-4 animate-spin" />}
-            {mode === "create" ? "Enviar review" : "Salvar alterações"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      <AdaptiveDialogFooter>
+        <Button
+          type="button"
+          onClick={handleSubmit}
+          disabled={!selected || rating < 1 || bodyTooShort || saving}
+          className="gap-2"
+        >
+          {saving && <Loader2 className="size-4 animate-spin" />}
+          {mode === "create" ? "Enviar review" : "Salvar alterações"}
+        </Button>
+      </AdaptiveDialogFooter>
+    </AdaptiveDialog>
   )
 }

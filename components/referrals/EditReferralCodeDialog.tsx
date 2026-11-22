@@ -6,16 +6,7 @@ import { Loader2, Pencil } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
+import { AdaptiveDialog, AdaptiveDialogFooter } from "@/components/ui/adaptive-dialog"
 import { Input } from "@/components/ui/input"
 import {
   REFERRAL_CODE_MAX_LENGTH,
@@ -81,44 +72,42 @@ export function EditReferralCodeDialog({ currentCode }: { currentCode: string })
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground">
-          <Pencil className="size-3.5" />
-          Personalizar
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Personalizar seu cupom</DialogTitle>
-          <DialogDescription>
-            Você pode trocar seu cupom <strong>uma única vez</strong>. Depois de salvar, o cupom
-            antigo deixa de funcionar; quem já tiver seu link antigo precisará do novo.
-          </DialogDescription>
-        </DialogHeader>
-
+    <>
+      <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={() => setOpen(true)}>
+        <Pencil className="size-3.5" />
+        Personalizar
+      </Button>
+      <AdaptiveDialog
+        open={open}
+        onOpenChange={setOpen}
+        title="Personalizar seu cupom"
+        description={
+          <>
+            Você pode trocar seu cupom <strong>uma única vez</strong>. Depois de salvar, o cupom antigo deixa de
+            funcionar; quem já tiver seu link antigo precisará do novo.
+          </>
+        }
+        size="md"
+        tone="emerald"
+      >
         <div className="space-y-2">
           <Input
             value={code}
             onChange={(event) => setCode(event.target.value.toUpperCase())}
             maxLength={REFERRAL_CODE_MAX_LENGTH}
             placeholder="SEUCUPOM"
-            className="font-mono uppercase tracking-widest"
+            className="font-mono tracking-widest uppercase"
           />
-          {(localError || error) && (
-            <p className="text-xs text-destructive">{localError ?? error}</p>
-          )}
+          {(localError || error) && <p className="text-xs text-destructive">{localError ?? error}</p>}
           <p className="text-xs text-muted-foreground">
             Letras e números, de 4 a {REFERRAL_CODE_MAX_LENGTH} caracteres.
           </p>
         </div>
 
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button variant="ghost" type="button">
-              Cancelar
-            </Button>
-          </DialogClose>
+        <AdaptiveDialogFooter>
+          <Button variant="ghost" type="button" onClick={() => setOpen(false)}>
+            Cancelar
+          </Button>
           <Button
             onClick={submit}
             disabled={isSubmitting || Boolean(localError) || !code || code === currentCode}
@@ -128,8 +117,8 @@ export function EditReferralCodeDialog({ currentCode }: { currentCode: string })
             {isSubmitting && <Loader2 className="size-4 animate-spin" />}
             Salvar cupom
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </AdaptiveDialogFooter>
+      </AdaptiveDialog>
+    </>
   )
 }

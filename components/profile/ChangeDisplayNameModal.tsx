@@ -9,14 +9,7 @@ import type { AuraPrice } from "@/lib/aura-pricing"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { AdaptiveDialog, AdaptiveDialogFooter } from "@/components/ui/adaptive-dialog"
 import { DISPLAY_NAME_MAX_LENGTH, slugifyDisplayName, validateDisplayName } from "@/lib/profile-name"
 
 interface ChangeDisplayNameModalProps {
@@ -185,91 +178,92 @@ export function ChangeDisplayNameModal({
     !submitting
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Trocar nome de exibição</DialogTitle>
-          <DialogDescription>
-            {status.loading || !price ? (
-              "Cooldown de 3 dias entre trocas."
-            ) : (
-              <>
-                Custa{" "}
-                {price.discounted && (
-                  <span className="text-muted-foreground/70 line-through decoration-[1.5px]">
-                    {price.listPrice.toLocaleString("pt-BR")}
-                  </span>
-                )}{" "}
-                <span className="font-semibold text-orange-400">
-                  <AuraAmount value={price.finalPrice} /> Aura
+    <AdaptiveDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Trocar nome de exibição"
+      description={
+        <>
+          {status.loading || !price ? (
+            "Cooldown de 3 dias entre trocas."
+          ) : (
+            <>
+              Custa{" "}
+              {price.discounted && (
+                <span className="text-muted-foreground/70 line-through decoration-[1.5px]">
+                  {price.listPrice.toLocaleString("pt-BR")}
                 </span>
-                {price.discounted && (
-                  <span className="aura-vip-discount-badge ml-1.5 inline-flex items-center gap-0.5 rounded-full px-1.5 py-[2px] align-middle text-[9px] font-black uppercase leading-none tracking-wide">
-                    <Crown className="size-2.5" strokeWidth={2.5} />−{price.discountPercent}%
-                  </span>
-                )}{" "}
-                e tem cooldown de 3 dias entre trocas.
-              </>
-            )}
-          </DialogDescription>
-        </DialogHeader>
-
-        {status.loading ? (
-          <div className="flex items-center justify-center py-6">
-            <Loader2 className="size-5 animate-spin text-muted-foreground" />
-          </div>
-        ) : unavailable ? (
-          <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
-            A troca de nome está indisponível no momento.
-          </div>
-        ) : status.onCooldown && status.cooldownEndsAt ? (
-          <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
-            Você já trocou de nome recentemente. Disponível novamente em{" "}
-            <span className="font-semibold text-foreground">{formatCooldownEnds(status.cooldownEndsAt)}</span>.
-          </div>
-        ) : (
-          <div className="space-y-1.5">
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className={cn("border-border bg-background", nameCheck.state === "taken" && "border-red-500/50")}
-              placeholder="ex: Pedro"
-              maxLength={DISPLAY_NAME_MAX_LENGTH}
-              aria-invalid={nameCheck.state === "taken"}
-              autoFocus
-            />
-            <p className="truncate text-[10px] text-muted-foreground/60">
-              sunano.com.br/perfil/<span className="text-muted-foreground">{slugPreview}</span>
-            </p>
-            {nameCheck.state === "checking" && (
-              <p className="text-[10px] text-muted-foreground/60">Verificando disponibilidade…</p>
-            )}
-            {nameCheck.state === "free" && <p className="text-[10px] text-emerald-400">Nome disponível.</p>}
-            {nameCheck.state === "taken" && nameCheck.message && (
-              <p className="text-[10px] text-red-400">{nameCheck.message}</p>
-            )}
-            {insufficientBalance && (
-              <p className="text-[10px] text-red-400">
-                Saldo de Aura insuficiente ({status.balance.toLocaleString("pt-BR")}/
-                {cost.toLocaleString("pt-BR")}).
-              </p>
-            )}
-          </div>
-        )}
-
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
-          </Button>
-          {!status.onCooldown && !unavailable && (
-            <Button type="button" onClick={handleConfirm} disabled={!canConfirm}>
-              {submitting && <Loader2 className="size-3.5 animate-spin" />}
-              <AuraIcon tone="inherit" />
-              Confirmar ({cost.toLocaleString("pt-BR")} Aura)
-            </Button>
+              )}{" "}
+              <span className="font-semibold text-orange-400">
+                <AuraAmount value={price.finalPrice} /> Aura
+              </span>
+              {price.discounted && (
+                <span className="aura-vip-discount-badge ml-1.5 inline-flex items-center gap-0.5 rounded-full px-1.5 py-[2px] align-middle text-[9px] leading-none font-black tracking-wide uppercase">
+                  <Crown className="size-2.5" strokeWidth={2.5} />−{price.discountPercent}%
+                </span>
+              )}{" "}
+              e tem cooldown de 3 dias entre trocas.
+            </>
           )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </>
+      }
+      size="md"
+      tone="orange"
+    >
+      {status.loading ? (
+        <div className="flex items-center justify-center py-6">
+          <Loader2 className="size-5 animate-spin text-muted-foreground" />
+        </div>
+      ) : unavailable ? (
+        <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
+          A troca de nome está indisponível no momento.
+        </div>
+      ) : status.onCooldown && status.cooldownEndsAt ? (
+        <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
+          Você já trocou de nome recentemente. Disponível novamente em{" "}
+          <span className="font-semibold text-foreground">{formatCooldownEnds(status.cooldownEndsAt)}</span>.
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className={cn("border-border bg-background", nameCheck.state === "taken" && "border-red-500/50")}
+            placeholder="ex: Pedro"
+            maxLength={DISPLAY_NAME_MAX_LENGTH}
+            aria-invalid={nameCheck.state === "taken"}
+            autoFocus
+          />
+          <p className="truncate text-[10px] text-muted-foreground/60">
+            sunano.com.br/perfil/<span className="text-muted-foreground">{slugPreview}</span>
+          </p>
+          {nameCheck.state === "checking" && (
+            <p className="text-[10px] text-muted-foreground/60">Verificando disponibilidade…</p>
+          )}
+          {nameCheck.state === "free" && <p className="text-[10px] text-emerald-400">Nome disponível.</p>}
+          {nameCheck.state === "taken" && nameCheck.message && (
+            <p className="text-[10px] text-red-400">{nameCheck.message}</p>
+          )}
+          {insufficientBalance && (
+            <p className="text-[10px] text-red-400">
+              Saldo de Aura insuficiente ({status.balance.toLocaleString("pt-BR")}/{cost.toLocaleString("pt-BR")}).
+            </p>
+          )}
+        </div>
+      )}
+
+      <AdaptiveDialogFooter>
+        <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          Cancelar
+        </Button>
+        {!status.onCooldown && !unavailable && (
+          <Button type="button" onClick={handleConfirm} disabled={!canConfirm}>
+            {submitting && <Loader2 className="size-3.5 animate-spin" />}
+            <AuraIcon tone="inherit" />
+            Confirmar ({cost.toLocaleString("pt-BR")} Aura)
+          </Button>
+        )}
+      </AdaptiveDialogFooter>
+    </AdaptiveDialog>
   )
 }

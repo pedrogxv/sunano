@@ -5,7 +5,8 @@ import { secretsMatch } from "@/lib/server/secret-compare"
 
 /**
  * Cliente Mercado Pago — SERVIDOR APENAS. Gateway de CARTÃO da Loja quando
- * `STORE_CARD_GATEWAY=mercadopago` (ver `lib/server/payments/gateway.ts`).
+ * `STORE_CARD_GATEWAY=mercadopago` e de PIX quando
+ * `STORE_PIX_GATEWAY=mercadopago` (ver `lib/server/payments/gateway.ts`).
  *
  * Checkout Transparente pela **Orders API** (`/v1/orders`), com o Card Payment
  * Brick: os campos do cartão são iframes do Mercado Pago em `/checkout/card`,
@@ -232,7 +233,15 @@ type RawOrderPayment = {
   status_detail?: string | null
   amount?: string | null
   paid_amount?: string | null
-  payment_method?: { id?: string; type?: string; installments?: number | null } | null
+  payment_method?: {
+    id?: string
+    type?: string
+    installments?: number | null
+    /** PIX: copia-e-cola (BR Code). */
+    qr_code?: string | null
+    /** PIX: PNG em base64, sem o prefixo `data:`. */
+    qr_code_base64?: string | null
+  } | null
 }
 
 type RawOrder = {
@@ -385,17 +394,24 @@ async function postCardOrder(params: CreateMercadoPagoCardOrderParams): Promise<
         ],
       },
       // Dados do pedido melhoram a aprovação no antifraude do Mercado Pago.
-      items: itemsMatchingTotal(params.items, params.amountCents, params.description).map((item) => ({
-        // Máx. 30 caracteres (a API recusa o UUID de 36). Sem os hífens e
-        // cortado: é dado de antifraude, não chave — não precisa ser único.
-        external_code: item.id.replace(/-/g, "").slice(0, 30),
-        title: item.title.slice(0, 150),
-        quantity: item.quantity,
-        unit_price: toAmount(item.unitPriceCents),
-      })),
+      items: orderItemsPayload(params.items, params.amountCents, params.description),
     },
   })
   return snapshotOf(raw)
+}
+
+type OrderItemInput = { id: string; title: string; quantity: number; unitPriceCents: number }
+
+/** `items` da order: o que foi comprado, no painel/comprovante do Mercado Pago e no antifraude. */
+function orderItemsPayload(items: OrderItemInput[], amountCents: number, description: string) {
+  return itemsMatchingTotal(items, amountCents, description).map((item) => ({
+    // Máx. 30 caracteres (a API recusa o UUID de 36). Sem os hífens e
+    // cortado: é dado de antifraude, não chave — não precisa ser único.
+    external_code: item.id.replace(/-/g, "").slice(0, 30),
+    title: item.title.slice(0, 150),
+    quantity: item.quantity,
+    unit_price: toAmount(item.unitPriceCents),
+  }))
 }
 
 /**
@@ -406,11 +422,7 @@ async function postCardOrder(params: CreateMercadoPagoCardOrderParams): Promise<
  * quantidade 1; qualquer outra diferença vira uma linha única com o total —
  * os itens são dado de antifraude, quem manda no valor é `total_amount`.
  */
-function itemsMatchingTotal(
-  items: CreateMercadoPagoCardOrderParams["items"],
-  amountCents: number,
-  description: string
-): CreateMercadoPagoCardOrderParams["items"] {
+function itemsMatchingTotal(items: OrderItemInput[], amountCents: number, description: string): OrderItemInput[] {
   const single = [{ id: "pedido", title: description, quantity: 1, unitPriceCents: amountCents }]
   if (items.length === 0) return single
   const diff = amountCents - items.reduce((sum, item) => sum + item.unitPriceCents * item.quantity, 0)
@@ -418,6 +430,167 @@ function itemsMatchingTotal(
   const target = items.findIndex((item) => item.quantity === 1 && item.unitPriceCents + diff > 0)
   if (Math.abs(diff) > items.length || target === -1) return single
   return items.map((item, i) => (i === target ? { ...item, unitPriceCents: item.unitPriceCents + diff } : item))
+}
+
+// ---------------------------------------------------------------------------
+// PIX
+// ---------------------------------------------------------------------------
+
+/** O Mercado Pago aceita prazo de PIX entre 30 minutos e 30 dias. */
+const PIX_MIN_EXPIRATION_MINUTES = 30
+const PIX_MAX_EXPIRATION_MINUTES = 30 * 24 * 60
+
+/**
+ * Nome do pagador que faz a order de PIX de SANDBOX ser aprovada sozinha
+ * ~5 s depois de criada (valor pré-definido de teste do Mercado Pago).
+ *
+ * DESLIGADO por padrão: com ele, todo PIX gerado em ambiente de teste virava
+ * "pago" sem ninguém pagar nada, e isso parecia bug. Sem ele o PIX de teste
+ * fica em `waiting_transfer` (não há como pagar um QR de sandbox de verdade)
+ * e expira como um PIX abandonado. Para testar o caminho de pagamento
+ * aprovado (tela de sucesso, e-mail, Discord), ligue
+ * `MERCADOPAGO_SANDBOX_PIX_AUTO_APPROVE=true` — só vale em sandbox.
+ */
+const SANDBOX_PIX_APPROVE_NAME = "APRO"
+
+function sandboxPixAutoApprove(): boolean {
+  return process.env.MERCADOPAGO_SANDBOX_PIX_AUTO_APPROVE?.trim().toLowerCase() === "true"
+}
+
+export interface CreateMercadoPagoPixOrderParams {
+  orderId: string
+  amountCents: number
+  description: string
+  payer: {
+    email: string
+    firstName: string | null
+    lastName: string | null
+    /** Só dígitos: 11 = CPF, 14 = CNPJ. */
+    document: string | null
+  }
+  /**
+   * O que foi comprado, a preço de PIX. Vai para o detalhe da venda no painel,
+   * para o comprovante que o Mercado Pago manda ao comprador e para o
+   * antifraude. NÃO aparece no app do banco: o QR do Mercado Pago só carrega
+   * chave + identificador da transação, sem campo de mensagem ao pagador (a
+   * Asaas mostra a descrição lá porque o QR dela é dinâmico, com link).
+   */
+  items: OrderItemInput[]
+  /** Prazo da LOJA. O do Mercado Pago é ajustado para a faixa que ele aceita. */
+  expiresInMinutes: number
+  idempotencyKey: string
+}
+
+export interface MercadoPagoPixOrder {
+  order: MercadoPagoOrderSnapshot
+  /** Copia-e-cola (BR Code). É o que paga; o QR é a imagem dele. */
+  copyPaste: string
+  /** Data URI pronta para `<img src>` (a tela lê `pix_qr_code_base64` assim). */
+  qrCodeDataUri: string | null
+}
+
+/**
+ * `POST /v1/orders` do PIX, explicando a recusa mais comum. Conta SEM CHAVE
+ * PIX cadastrada não tem `pix` nos meios de pagamento, e o Mercado Pago
+ * recusa com um `402 processing_error` genérico, sem dizer o motivo (foi
+ * assim em 22/11/2026, na primeira tentativa com a conta real). Confere a
+ * lista de meios da conta e, se o PIX não estiver lá, troca o erro por um
+ * que diz o que fazer.
+ */
+async function createPixOrderOrExplain(init: { method: "POST"; idempotencyKey: string; body: unknown }): Promise<RawOrder> {
+  try {
+    return await request<RawOrder>("/v1/orders", init)
+  } catch (err) {
+    if (!(err instanceof MercadoPagoError) || err.status !== 402) throw err
+    const methods = await request<Array<{ id?: string }>>("/v1/payment_methods", { method: "GET" }).catch(() => null)
+    if (Array.isArray(methods) && !methods.some((m) => m.id === "pix")) {
+      throw new MercadoPagoConfigError(
+        "A conta do Mercado Pago não tem PIX habilitado (falta CHAVE PIX cadastrada). Cadastre uma chave no app do Mercado Pago (Pix → Minhas chaves) e tente de novo."
+      )
+    }
+    throw err
+  }
+}
+
+/**
+ * Cria a order de PIX e devolve QR e copia-e-cola para a tela `/checkout/pix`.
+ * A order nasce em `action_required` / `waiting_transfer`; o pagamento chega
+ * pelo webhook (tópico Order) ou pela conferência do polling, e é aplicado
+ * por `applyMercadoPagoOrder`, o mesmo caminho do cartão.
+ */
+export async function createMercadoPagoPixOrder(params: CreateMercadoPagoPixOrderParams): Promise<MercadoPagoPixOrder> {
+  await assertAccountMatchesEnvironment()
+  const amount = toAmount(params.amountCents)
+  const sandbox = resolveMercadoPagoEnvironment() === "sandbox"
+  const minutes = Math.min(
+    PIX_MAX_EXPIRATION_MINUTES,
+    Math.max(PIX_MIN_EXPIRATION_MINUTES, Math.ceil(params.expiresInMinutes))
+  )
+  const document = params.payer.document?.replace(/\D/g, "") ?? ""
+  const identification =
+    document.length === 11 ? { type: "CPF", number: document } : document.length === 14 ? { type: "CNPJ", number: document } : null
+
+  const raw = await createPixOrderOrExplain({
+    method: "POST",
+    idempotencyKey: params.idempotencyKey,
+    body: {
+      type: "online",
+      processing_mode: "automatic",
+      total_amount: amount,
+      external_reference: params.orderId,
+      description: params.description.slice(0, 150),
+      payer: sandbox
+        ? {
+            email: SANDBOX_PAYER_EMAIL,
+            ...(sandboxPixAutoApprove() ? { first_name: SANDBOX_PIX_APPROVE_NAME } : {}),
+          }
+        : {
+            email: params.payer.email,
+            ...(params.payer.firstName ? { first_name: params.payer.firstName } : {}),
+            ...(params.payer.lastName ? { last_name: params.payer.lastName } : {}),
+            ...(identification ? { identification } : {}),
+          },
+      transactions: {
+        payments: [
+          {
+            amount,
+            payment_method: { id: "pix", type: "bank_transfer" },
+            expiration_time: `PT${minutes}M`,
+          },
+        ],
+      },
+      items: orderItemsPayload(params.items, params.amountCents, params.description),
+    },
+  })
+
+  const method = raw.transactions?.payments?.[0]?.payment_method
+  if (!method?.qr_code) {
+    throw new Error(`Mercado Pago PIX sem QR code (order ${raw.id}, status ${raw.status}/${raw.status_detail ?? "?"}).`)
+  }
+  return {
+    order: snapshotOf(raw),
+    copyPaste: method.qr_code,
+    qrCodeDataUri: method.qr_code_base64 ? `data:image/png;base64,${method.qr_code_base64}` : null,
+  }
+}
+
+/**
+ * Cancela uma order ainda pagável (PIX não pago), para o QR parar de aceitar
+ * pagamento quando o pedido expira ou é cancelado. Order já finalizada
+ * (paga, expirada, cancelada) volta 4xx: é corrida esperada, ver
+ * `isMercadoPagoAlreadyFinalError`.
+ */
+export async function cancelMercadoPagoOrder(orderId: string): Promise<void> {
+  if (!isMercadoPagoOrderId(orderId)) throw new Error(`id de order do Mercado Pago inválido: ${orderId}`)
+  await request(`/v1/orders/${orderId}/cancel`, {
+    method: "POST",
+    idempotencyKey: `store-cancel-${orderId}`,
+  })
+}
+
+/** Cancelar uma order que já saiu de `action_required` (409/400 com a order finalizada). */
+export function isMercadoPagoAlreadyFinalError(err: unknown): boolean {
+  return err instanceof MercadoPagoError && (err.status === 409 || err.status === 400 || err.status === 404)
 }
 
 export async function getMercadoPagoOrder(orderId: string): Promise<MercadoPagoOrderSnapshot> {

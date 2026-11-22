@@ -11,7 +11,7 @@ export { orderPaymentGateway, type PaymentGateway } from "@/lib/payment-gateways
 /**
  * Gateways da Loja, POR FORMA DE PAGAMENTO:
  *
- *   STORE_PIX_GATEWAY   = asaas | stripe                 (quem emite o PIX)
+ *   STORE_PIX_GATEWAY   = asaas | stripe | mercadopago   (quem emite o PIX)
  *   STORE_CARD_GATEWAY  = asaas | stripe | mercadopago | infinitepay   (quem cobra o cartão)
  *   STORE_PAYMENT_METHODS = pix[,credit_card]            (cartão ligado ou não)
  *
@@ -28,7 +28,7 @@ export { orderPaymentGateway, type PaymentGateway } from "@/lib/payment-gateways
  * Escopo: Loja (checkout de produtos). A assinatura VIP continua na Asaas.
  */
 
-const PIX_GATEWAYS = ["asaas", "stripe"] as const satisfies readonly PaymentGateway[]
+const PIX_GATEWAYS = ["asaas", "stripe", "mercadopago"] as const satisfies readonly PaymentGateway[]
 const CARD_GATEWAYS = ["asaas", "stripe", "mercadopago", "infinitepay"] as const satisfies readonly PaymentGateway[]
 
 export type PixGateway = (typeof PIX_GATEWAYS)[number]

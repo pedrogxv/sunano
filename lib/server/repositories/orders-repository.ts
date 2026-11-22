@@ -1931,6 +1931,12 @@ export async function cancelOrder(
     }
   }
 
+  // PIX do Mercado Pago: fecha a order para o QR parar de aceitar pagamento.
+  if (existing.payment_gateway === "mercadopago") {
+    const { cancelMercadoPagoPixForOrders } = await import("@/lib/server/repositories/mercadopago-orders-repository")
+    await cancelMercadoPagoPixForOrders([existing.id])
+  }
+
   if (existing.asaas_payment_id) {
     const { cancelPayment } = await import("@/lib/server/integrations/asaas")
     try {
@@ -2095,6 +2101,13 @@ export async function expireStalePendingOrders(): Promise<ExpireStalePendingOrde
   await cancelStripeIntentsBestEffort(
     orders.map((order) => order.stripe_payment_intent_id).filter((id): id is string => Boolean(id))
   )
+  // Mesma coisa para o PIX do Mercado Pago (PIX tardio é quitado com
+  // re-reserva em `applyMercadoPagoOrder`).
+  const mercadoPagoOrderIds = orders.filter((order) => order.payment_gateway === "mercadopago").map((order) => order.id)
+  if (mercadoPagoOrderIds.length > 0) {
+    const { cancelMercadoPagoPixForOrders } = await import("@/lib/server/repositories/mercadopago-orders-repository")
+    await cancelMercadoPagoPixForOrders(mercadoPagoOrderIds)
+  }
 
   // Aviso no site: um insert por pedido, em lotes paralelos.
   for (let start = 0; start < orders.length; start += NOTIFY_BATCH_SIZE) {

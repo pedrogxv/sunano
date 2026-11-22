@@ -181,7 +181,8 @@ function BannerSlide({
 
   const content = banner.linkUrl ? (
     isInternalBannerLink(banner.linkUrl) ? (
-      <Link href={banner.linkUrl} className="block w-full" tabIndex={isCurrent ? 0 : -1}>
+      // Arrastar com o mouse troca o banner, e o arraste começa com um aperto.
+      <Link href={banner.linkUrl} className="block w-full" tabIndex={isCurrent ? 0 : -1} data-no-fast-link>
         {image}
       </Link>
     ) : (

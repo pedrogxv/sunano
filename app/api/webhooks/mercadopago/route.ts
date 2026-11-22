@@ -9,7 +9,9 @@ import { syncMercadoPagoOrder } from "@/lib/server/repositories/mercadopago-orde
 export const runtime = "nodejs"
 
 /**
- * Webhook do Mercado Pago — cartão da Loja (`STORE_CARD_GATEWAY=mercadopago`).
+ * Webhook do Mercado Pago — cartão (`STORE_CARD_GATEWAY=mercadopago`) e PIX
+ * (`STORE_PIX_GATEWAY=mercadopago`) da Loja. No PIX é ele que avisa o
+ * pagamento; o polling da tela também confere na origem, como reserva.
  *
  * Rede de segurança da resposta síncrona: a rota do cartão já aplica o
  * resultado da order na hora. Aqui chegam o que ela não vê — a decisão de uma

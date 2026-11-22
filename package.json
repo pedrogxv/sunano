@@ -19,6 +19,7 @@
     "@dnd-kit/modifiers": "^9.0.0",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
+    "@fast-link/next": "^0.0.2",
     "@hookform/resolvers": "^5.2.2",
     "@img/sharp-wasm32": "^0.35.3",
     "@mercadopago/sdk-react": "^1.0.7",

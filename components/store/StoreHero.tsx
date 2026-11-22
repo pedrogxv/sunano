@@ -200,6 +200,8 @@ function HeroProductChip({ product, tabIndex }: { product: StoreProductCard; tab
     <Link
       href={productHref(product.slug)}
       tabIndex={tabIndex}
+      // Hero arrastável com o mouse: o aperto pode ser o começo de um swipe.
+      data-no-fast-link
       className="group/chip flex w-full max-w-[380px] items-center gap-3 rounded-2xl border border-white/12 bg-black/45 p-2.5 pr-3.5 backdrop-blur-md transition-colors hover:border-white/30 hover:bg-black/60"
     >
       <span className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white/[0.06]">
@@ -244,6 +246,7 @@ function HeroProductAnalysis({ analysis, tabIndex }: { analysis: StoreHeroProduc
     <Link
       href={analysis.href}
       tabIndex={tabIndex}
+      data-no-fast-link
       className="group/analysis inline-flex w-fit max-w-full items-center gap-1.5 text-[11.5px] font-semibold text-white/70 transition-colors hover:text-white"
     >
       <Database className="size-3.5 shrink-0 text-sky-300" strokeWidth={2.2} />

@@ -6,14 +6,7 @@ import { Loader2, MessageCircle } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { AdaptiveDialog, AdaptiveDialogFooter } from "@/components/ui/adaptive-dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { orderNumber } from "@/lib/order-number"
 import type { UserOrder } from "@/lib/hooks/use-user-orders"
@@ -69,44 +62,47 @@ export function OrderChatDialog({
     }
   }
 
+  // Segura o último pedido para o conteúdo não sumir durante a animação de saída.
+  const [lastOrder, setLastOrder] = useState(order)
+  if (order && order !== lastOrder) setLastOrder(order)
+  const shown = order ?? lastOrder
+
   return (
-    <Dialog open={order !== null} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        {order && (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <MessageCircle className="size-4 text-emerald-400" />
-                Chat com a loja
-              </DialogTitle>
-              <DialogDescription>
-                Sobre o pedido #{orderNumber(order.id)}. A conversa fica salva neste pedido e você recebe
-                uma notificação quando a equipe responder
-              </DialogDescription>
-            </DialogHeader>
+    <AdaptiveDialog
+      open={order !== null}
+      onOpenChange={onOpenChange}
+      size="md"
+      tone="emerald"
+      icon={<MessageCircle />}
+      title="Chat com a loja"
+      description={
+        shown
+          ? `Sobre o pedido #${orderNumber(shown.id)}. A conversa fica salva neste pedido e você recebe uma notificação quando a equipe responder`
+          : undefined
+      }
+    >
+      <form onSubmit={handleSubmit} className="contents">
+        <Textarea
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          placeholder="Escreva sua dúvida sobre este pedido..."
+          className="min-h-32"
+          maxLength={4000}
+          aria-label="Mensagem para a loja"
+          autoFocus
+          required
+        />
 
-            <Textarea
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              placeholder="Escreva sua dúvida sobre este pedido..."
-              className="min-h-28"
-              maxLength={4000}
-              autoFocus
-              required
-            />
-
-            <DialogFooter>
-              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting}>
-                Cancelar
-              </Button>
-              <Button type="submit" className="gap-2" disabled={submitting || !body.trim()}>
-                {submitting ? <Loader2 className="size-4 animate-spin" /> : <MessageCircle className="size-4" />}
-                {submitting ? "Enviando..." : "Enviar mensagem"}
-              </Button>
-            </DialogFooter>
-          </form>
-        )}
-      </DialogContent>
-    </Dialog>
+        <AdaptiveDialogFooter>
+          <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting}>
+            Cancelar
+          </Button>
+          <Button type="submit" className="gap-2" disabled={submitting || !body.trim()}>
+            {submitting ? <Loader2 className="size-4 animate-spin" /> : <MessageCircle className="size-4" />}
+            {submitting ? "Enviando..." : "Enviar mensagem"}
+          </Button>
+        </AdaptiveDialogFooter>
+      </form>
+    </AdaptiveDialog>
   )
 }

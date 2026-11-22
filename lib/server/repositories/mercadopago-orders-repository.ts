@@ -3,15 +3,17 @@ import "server-only"
 import { randomUUID } from "crypto"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import {
+  cancelMercadoPagoOrder,
   createMercadoPagoCardOrder,
   getMercadoPagoOrder,
+  isMercadoPagoAlreadyFinalError,
   MercadoPagoError,
   refundMercadoPagoOrder,
   type MercadoPagoOrderSnapshot,
 } from "@/lib/server/integrations/mercadopago"
 import { isUuid } from "@/lib/server/repositories/_shared"
 import { patchOrderMetadata } from "@/lib/server/repositories/order-metadata-repository"
-import { orderOwnerId } from "@/lib/server/repositories/orders-repository"
+import { orderOwnerId, reReserveStockForLatePayment } from "@/lib/server/repositories/orders-repository"
 import { creditCommissionForOrder, syncCommissionForChargeback } from "@/lib/server/repositories/affiliates-repository"
 import { notifyOrderStatusChange } from "@/lib/server/repositories/notifications-repository"
 import { notifyDiscordOrderEvent } from "@/lib/server/repositories/discord-orders-repository"
@@ -22,8 +24,10 @@ import { orderNumber } from "@/lib/order-number"
 import type { OrderEventStatus } from "@/lib/server/integrations/discord-order-card"
 
 /**
- * Pedidos da Loja cobrados no cartão pelo Mercado Pago (Orders API): criar a
- * order com o token do Brick e aplicar o resultado no pedido. Chamado pela
+ * Pedidos da Loja cobrados pelo Mercado Pago (Orders API), no cartão e no PIX.
+ * Cartão: criar a order com o token do Brick e aplicar o resultado no pedido.
+ * PIX: a order nasce no checkout e é aplicada quando paga (webhook ou a
+ * conferência do polling em `/api/store/orders/[id]`). Chamado pela
  * rota do cartão (`/api/store/orders/[id]/card-payment`, resposta síncrona) e
  * pelo webhook (`/api/webhooks/mercadopago`, rede de segurança) — os dois
  * passam pela MESMA `applyMercadoPagoOrder`, idempotente.
@@ -180,7 +184,7 @@ export async function applyMercadoPagoOrder(
   const db = createSupabaseAdminClient()
   const { data: order } = await db
     .from("store_orders")
-    .select("id, status, total_cents, refunded_cents, payment_gateway, mercadopago_payment_id")
+    .select("id, status, total_cents, refunded_cents, payment_gateway, payment_method, mercadopago_payment_id")
     .eq("id", orderId)
     .maybeSingle()
 
@@ -238,7 +242,12 @@ export async function applyMercadoPagoOrder(
   }
 
   if (mp.status !== "processed") return "ignored"
-  if (order.mercadopago_payment_id === mp.id) return "already"
+
+  // PIX: a order é gravada no pedido JÁ NA CRIAÇÃO (é ela que o QR paga), então
+  // coluna preenchida não quer dizer "pago" — quem diz é o status. No cartão a
+  // coluna só é gravada na aprovação, e preenchida com a mesma order = já aplicado.
+  const isPix = order.payment_method === "pix"
+  if (order.mercadopago_payment_id === mp.id && (!isPix || PAID_STATUSES.includes(order.status))) return "already"
 
   const returnPayment = async (note: string, status: OrderEventStatus) => {
     try {
@@ -261,35 +270,97 @@ export async function applyMercadoPagoOrder(
     )
   }
 
-  const { data: updated } = await db
-    .from("store_orders")
-    .update({
-      status: "paid",
-      mercadopago_payment_id: mp.id,
-      ...(mp.installments ? { installment_count: mp.installments } : {}),
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", order.id)
-    .eq("status", "pending")
-    .is("mercadopago_payment_id", null)
+  // PIX de OUTRA order para este pedido (não deveria existir: o checkout cria
+  // uma só). Devolve em vez de quitar com um pagamento que o pedido não conhece.
+  if (isPix && order.mercadopago_payment_id && order.mercadopago_payment_id !== mp.id) {
+    return returnPayment(
+      `PIX pago na order ${mp.id}, mas o pedido está amarrado à order ${order.mercadopago_payment_id} — devolvido automaticamente.`,
+      "payment_mismatch"
+    )
+  }
+
+  // PIX pago depois de o pedido expirar também quita (igual Stripe e
+  // InfinitePay): o cron cancela a order no Mercado Pago, mas o pagamento pode
+  // ter entrado no mesmo instante. O estoque que o cron devolveu é retomado
+  // abaixo. Cartão segue só de `pending` (ver o comentário do devolvido).
+  // O UPDATE é condicional ao status LIDO: se o cron expirar o pedido entre a
+  // leitura e o UPDATE, a segunda volta vê `expired`.
+  const payableFrom = isPix ? ["pending", "expired"] : ["pending"]
+  let fromStatus: string = order.status
+  let boundOrderId: string | null = order.mercadopago_payment_id
+  let paidOrder: {
+    id: string
+    affiliate_id: string | null
+    metadata: unknown
+    status: string
+    requires_shipping_address: boolean | null
+  } | null = null
+  for (
+    let attempt = 0;
+    attempt < 2 && !paidOrder && payableFrom.includes(fromStatus) && (!boundOrderId || boundOrderId === mp.id);
+    attempt++
+  ) {
+    let update = db
+      .from("store_orders")
+      .update({
+        status: "paid",
+        mercadopago_payment_id: mp.id,
+        ...(mp.installments ? { installment_count: mp.installments } : {}),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", order.id)
+      .eq("status", fromStatus as typeof order.status)
+    // A order é a que o pedido conhece — ou nenhuma ainda (PIX aprovado antes
+    // de o checkout gravar o QR, o que acontece no sandbox).
+    update = boundOrderId
+      ? update.eq("mercadopago_payment_id", mp.id)
+      : update.is("mercadopago_payment_id", null)
     // `status` volta já decidido pelo trigger de etapa de entrega:
     // pago sem endereço é `awaiting_shipping_info`, não `paid`.
-    .select("id, affiliate_id, metadata, status, requires_shipping_address")
+    const { data: updated } = await update.select("id, affiliate_id, metadata, status, requires_shipping_address")
 
-  const paidOrder = updated?.[0]
+    paidOrder = updated?.[0] ?? null
+    if (!paidOrder) {
+      const { data: current } = await db
+        .from("store_orders")
+        .select("status, mercadopago_payment_id")
+        .eq("id", order.id)
+        .maybeSingle()
+      fromStatus = current?.status ?? "?"
+      boundOrderId = current?.mercadopago_payment_id ?? null
+    }
+  }
+
   if (!paidOrder) {
-    // O pedido saiu de pendente no meio (expirou, foi cancelado) ou já foi
-    // pago por OUTRO pagamento. Diferente do PIX, o cartão não fica pendurado:
-    // devolver é mais seguro que re-reservar um estoque que já voltou à
-    // prateleira (e talvez já foi vendido).
-    const { data: current } = await db.from("store_orders").select("status").eq("id", order.id).maybeSingle()
-    const alreadyPaid = PAID_STATUSES.includes(current?.status ?? "")
+    // O pedido saiu de pendente no meio (cancelado; no cartão, também
+    // expirado) ou já foi pago por OUTRO pagamento. O cartão não fica
+    // pendurado: devolver é mais seguro que re-reservar um estoque que já
+    // voltou à prateleira (e talvez já foi vendido). O PIX expirado não chega
+    // aqui: é quitado acima.
+    const alreadyPaid = PAID_STATUSES.includes(fromStatus)
     return returnPayment(
       alreadyPaid
         ? `Pagamento em DUPLICIDADE no Mercado Pago (${mp.id}) para um pedido já pago — devolvido automaticamente.`
-        : `Cartão aprovado (${mp.id}) depois de o pedido sair de pendente (${current?.status ?? "?"}) — devolvido automaticamente.`,
+        : `${isPix ? "PIX pago" : "Cartão aprovado"} (${mp.id}) depois de o pedido sair de pendente (${fromStatus}) — devolvido automaticamente.`,
       "payment_mismatch"
     )
+  }
+
+  // PIX pago depois de expirar: o cron já devolveu as unidades à prateleira.
+  if (fromStatus === "expired") {
+    try {
+      const { restocked, oversoldItems } = await reReserveStockForLatePayment(paidOrder.id)
+      if (!restocked) {
+        await notifyDiscordOrderEvent({
+          orderId: paidOrder.id,
+          status: "oversold",
+          actor: webhookActor,
+          note: `PIX pago no Mercado Pago depois de expirar, sem estoque para: ${oversoldItems.join(", ")}`,
+        })
+      }
+    } catch (err) {
+      console.error("[mercadopago-orders] reReserveStockForLatePayment:", err)
+    }
   }
 
   if (paidOrder.affiliate_id) {
@@ -333,4 +404,43 @@ export async function syncMercadoPagoOrder(orderId: string): Promise<void> {
     throw err
   }
   await applyMercadoPagoOrder(mpOrder, "webhook-mercadopago")
+}
+
+/** Cancelamentos simultâneos no Mercado Pago: cabe nos 30 s do cron sem rajada. */
+const CANCEL_BATCH_SIZE = 8
+
+/**
+ * Fecha no Mercado Pago o PIX de pedidos que acabaram de sair de `pending`
+ * (expirados pelo cron, cancelados pelo cliente/admin, pagos por fora), para
+ * o QR parar de aceitar pagamento. Nunca lança: order já finalizada é corrida
+ * esperada, e um PIX que entrar mesmo assim é quitado ou devolvido por
+ * `applyMercadoPagoOrder`.
+ *
+ * Recebe ids de PEDIDO (o retorno de `release_pending_store_orders` não traz
+ * a coluna do Mercado Pago) e lê as orders em lote.
+ */
+export async function cancelMercadoPagoPixForOrders(storeOrderIds: string[]): Promise<void> {
+  const ids = storeOrderIds.filter(isUuid)
+  if (ids.length === 0) return
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("store_orders")
+    .select("mercadopago_payment_id")
+    .in("id", ids)
+    .eq("payment_gateway", "mercadopago")
+    .eq("payment_method", "pix")
+    .not("mercadopago_payment_id", "is", null)
+  if (error) {
+    console.error("[mercadopago-orders] cancelMercadoPagoPixForOrders — leitura:", error)
+    return
+  }
+  const mpOrderIds = (data ?? []).map((row) => row.mercadopago_payment_id).filter((id): id is string => Boolean(id))
+  for (let start = 0; start < mpOrderIds.length; start += CANCEL_BATCH_SIZE) {
+    const batch = mpOrderIds.slice(start, start + CANCEL_BATCH_SIZE)
+    const results = await Promise.allSettled(batch.map((id) => cancelMercadoPagoOrder(id)))
+    results.forEach((result, index) => {
+      if (result.status === "fulfilled" || isMercadoPagoAlreadyFinalError(result.reason)) return
+      console.error(`[mercadopago-orders] cancelar ${batch[index]} no Mercado Pago:`, result.reason)
+    })
+  }
 }

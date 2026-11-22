@@ -8,15 +8,9 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { AdaptiveDialog, AdaptiveDialogFooter } from "@/components/ui/adaptive-dialog"
 import { orderNumber } from "@/lib/order-number"
+import { storageImgProps } from "@/lib/storage-thumb"
 import {
   SERVICE_FORM_ANSWER_MAX,
   SERVICE_FORM_MAX_IMAGES,
@@ -73,7 +67,7 @@ function ServiceFormImageField({
         {urls.map((url) => (
           <div key={url} className="relative size-20 overflow-hidden rounded-lg border border-border bg-muted/20">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={url} alt="" className="h-full w-full object-cover" />
+            <img {...storageImgProps(url, 80)} alt="" className="h-full w-full object-cover" />
             <button
               type="button"
               onClick={() => onChange(urls.filter((entry) => entry !== url))}
@@ -148,8 +142,10 @@ function ServiceFormChoiceField({
 
 /**
  * Campos do formulário pós-compra de serviço, com o envio. Mora dentro de um
- * Dialog (janela pós-compra e Meus Pedidos), por isso o rodapé é um
- * `DialogFooter`. O servidor valida tudo de novo pelo snapshot do pedido.
+ * `AdaptiveDialog` (janela pós-compra e Meus Pedidos): o rodapé é o
+ * `AdaptiveDialogFooter`, grudado no fundo, e quem rola é o modal — sem
+ * rolador próprio aqui dentro (rolagem dentro de rolagem prendia o dedo no
+ * celular). O servidor valida tudo de novo pelo snapshot do pedido.
  */
 export function ServiceOrderForm({
   orderId,
@@ -220,7 +216,7 @@ export function ServiceOrderForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="max-h-[55vh] space-y-4 overflow-y-auto pr-1">
+      <div className="space-y-4">
         {lines.map((line) => (
           <fieldset key={line.line} className="space-y-3">
             {lines.length > 1 && (
@@ -292,15 +288,19 @@ export function ServiceOrderForm({
         ))}
       </div>
 
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && (
+        <p role="alert" className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400">
+          {error}
+        </p>
+      )}
 
-      <DialogFooter className="gap-2 sm:gap-2">
+      <AdaptiveDialogFooter>
         {secondaryAction}
         <Button type="submit" className="gap-2" disabled={saving}>
           {saving ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
           {answers ? "Salvar alterações" : "Enviar informações"}
         </Button>
-      </DialogFooter>
+      </AdaptiveDialogFooter>
     </form>
   )
 }
@@ -321,34 +321,44 @@ export function OrderServiceFormDialog({
   onOpenChange: (open: boolean) => void
   onSaved: () => void
 }) {
+  // O pai zera o pedido ao fechar: segurar o último mantém o formulário na
+  // tela durante a animação de saída. A `session` muda a cada abertura e entra
+  // na `key`, então reabrir sempre parte das respostas salvas, não do rascunho.
+  const [shown, setShown] = useState({ orderId, lines, answers, session: 0 })
+  if (open && (orderId !== shown.orderId || lines !== shown.lines || answers !== shown.answers)) {
+    setShown({ orderId, lines, answers, session: shown.session + (orderId !== shown.orderId ? 1 : 0) })
+  }
+  const [wasOpen, setWasOpen] = useState(open)
+  if (open !== wasOpen) {
+    setWasOpen(open)
+    if (open) setShown((prev) => ({ ...prev, session: prev.session + 1 }))
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <ClipboardList className="size-5 text-sky-400" />
-            Informações do pedido{orderId ? ` #${orderNumber(orderId)}` : ""}
-          </DialogTitle>
-          <DialogDescription>
-            A equipe precisa disto para começar o seu serviço. Tudo chega na conversa do pedido.
-          </DialogDescription>
-        </DialogHeader>
-        {/* `key` remonta o form por pedido: abrir o B depois do A não herda as respostas do A. */}
-        {orderId && open && (
-          <ServiceOrderForm
-            key={orderId}
-            orderId={orderId}
-            lines={lines}
-            answers={answers}
-            onSaved={onSaved}
-            secondaryAction={
-              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-                Cancelar
-              </Button>
-            }
-          />
-        )}
-      </DialogContent>
-    </Dialog>
+    <AdaptiveDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      size="md"
+      tone="sky"
+      icon={<ClipboardList />}
+      title={`Informações do pedido${shown.orderId ? ` #${orderNumber(shown.orderId)}` : ""}`}
+      description="A equipe precisa disto para começar o seu serviço. Tudo chega na conversa do pedido."
+    >
+      {/* `key` remonta o form por pedido: abrir o B depois do A não herda as respostas do A. */}
+      {shown.orderId && (
+        <ServiceOrderForm
+          key={`${shown.orderId}:${shown.session}`}
+          orderId={shown.orderId}
+          lines={shown.lines}
+          answers={shown.answers}
+          onSaved={onSaved}
+          secondaryAction={
+            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+              Cancelar
+            </Button>
+          }
+        />
+      )}
+    </AdaptiveDialog>
   )
 }

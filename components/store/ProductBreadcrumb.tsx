@@ -53,6 +53,8 @@ export function ProductBreadcrumb({ productName, category, brand, className }: P
     >
       <a
         href={parentHref}
+        // O clique troca a navegação por `router.back()`: não pode ir no aperto.
+        data-no-fast-link
         onClick={(event) => {
           // Deixa passar os cliques que o usuário quer em outra aba/janela.
           if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return

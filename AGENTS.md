@@ -230,6 +230,46 @@ Regras:
   usam a chama no sentido de "popular/quente". Trocá-los pelo símbolo da
   moeda faria a tela prometer Aura onde não há.
 
+# Modal — SEMPRE o componente central
+
+Modal novo (formulário, detalhe, confirmação) usa
+`components/ui/adaptive-dialog.tsx`, não `Dialog` + `DialogHeader` +
+`DialogFooter` montados à mão. Foi assim que cada tela teve o seu `max-h`, o
+seu `overflow` e o seu rodapé — e cada uma quebrou de um jeito: card
+estourando a largura do modal, rolagem lateral, botão de enviar escondido
+embaixo de formulário comprido, rolagem dentro de rolagem no celular.
+
+```tsx
+import { AdaptiveDialog, AdaptiveDialogFooter, ConfirmDialog } from "@/components/ui/adaptive-dialog"
+
+<AdaptiveDialog open={open} onOpenChange={setOpen} tone="emerald" icon={<Truck />}
+  title="Informar endereço" description="...">
+  <form id="x" onSubmit={...}>...</form>
+  <AdaptiveDialogFooter>
+    <Button variant="ghost" onClick={() => setOpen(false)}>Cancelar</Button>
+    <Button type="submit" form="x">Salvar</Button>
+  </AdaptiveDialogFooter>
+</AdaptiveDialog>
+
+<ConfirmDialog open={...} onOpenChange={...} title="Cancelar este pedido?"
+  confirmLabel="Confirmar" destructive onConfirm={async () => { ... }} />
+```
+
+- Desktop: central, cresce do ponto do clique. Celular: gaveta (vaul).
+  `layout="center"` mantém central no celular (o `ConfirmDialog` já usa,
+  porque abre por cima de gaveta).
+- **Nunca ponha rolador próprio dentro do modal** (`max-h-[55vh]
+  overflow-y-auto`): quem rola é o corpo do modal. Rolagem dentro de rolagem
+  prendia o dedo no celular.
+- **Rodapé é `AdaptiveDialogFooter`**, que gruda no fundo. Ele pode ficar no
+  corpo (botão com `form="<id>"`) ou dentro do `<form>`.
+- **Confirmação é `ConfirmDialog`, não `AlertDialog`**: o `AlertDialogAction`
+  fecha no clique, antes de a requisição terminar, e o erro aparecia com a
+  janela já fechada. `onConfirm` que LANÇA mantém o modal aberto.
+- Conteúdo que depende de um item (`order`, `target`) que o pai zera ao
+  fechar: segure o último no estado (`lastOrder`), senão o painel encolhe
+  vazio na animação de saída.
+
 # Foto de usuário — SEMPRE o componente central
 
 **Toda** referência nova a foto de perfil, avatar ou mini perfil usa

@@ -108,6 +108,13 @@ export async function registerManualPayment(
     }
   }
 
+  // PIX do Mercado Pago ainda vivo: mesma razão do Stripe acima. Se ele
+  // entrar mesmo assim, `applyMercadoPagoOrder` devolve como duplicidade.
+  {
+    const { cancelMercadoPagoPixForOrders } = await import("@/lib/server/repositories/mercadopago-orders-repository")
+    await cancelMercadoPagoPixForOrders([existing.id])
+  }
+
   const manualPayment: OrderManualPayment = {
     method: params.method,
     amount_cents: params.amountCents,
@@ -126,6 +133,10 @@ export async function registerManualPayment(
       status: "paid",
       payment_method: params.method,
       total_cents: params.amountCents,
+      // A order de PIX do Mercado Pago (única que fica gravada num pedido
+      // expirado/cancelado) deixa de quitar este pedido: um pagamento tardio
+      // nela passa a ser devolvido como duplicidade, não tomado como "já aplicado".
+      mercadopago_payment_id: null,
       updated_at: new Date().toISOString(),
       metadata: { ...metadata, manual_payment: manualPayment },
     })

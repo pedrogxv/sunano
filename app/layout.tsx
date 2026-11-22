@@ -6,6 +6,7 @@ import { ptBR } from "@/lib/i18n-pt-br"
 import type { Metadata, Viewport } from "next"
 import { Manrope, Space_Grotesk, Caveat } from "next/font/google"
 import { TooltipProvider } from "@/components/ui/tooltip"
+import { AppFastLinkRegion } from "@/components/providers/fast-link-region"
 import { Toaster } from "@/components/ui/toaster"
 import { LocaleProvider } from "@/components/providers/locale-context"
 import { SidebarProvider } from "@/components/providers/sidebar-context"
@@ -149,7 +150,9 @@ export default function RootLayout({
                     <CartProvider>
                       <PageHeaderProvider>
                         <TooltipProvider delayDuration={200}>
-                          <LayoutShell>{children}</LayoutShell>
+                          <AppFastLinkRegion>
+                            <LayoutShell>{children}</LayoutShell>
+                          </AppFastLinkRegion>
                           <Toaster />
                           <AuthHashErrorListener />
                           <ImpersonationBanner />

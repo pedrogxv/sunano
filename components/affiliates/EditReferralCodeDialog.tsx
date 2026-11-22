@@ -5,15 +5,7 @@ import { useRouter } from "next/navigation"
 import { Check, Loader2, Pencil, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
+import { AdaptiveDialog, AdaptiveDialogFooter } from "@/components/ui/adaptive-dialog"
 import { Input } from "@/components/ui/input"
 import { normalizeAffiliateCode, validateAffiliateCode } from "@/lib/affiliate-code"
 import { resetAffiliateCodeCache } from "@/lib/hooks/use-affiliate-code"
@@ -108,18 +100,12 @@ export function EditReferralCodeDialog({ currentCode }: { currentCode: string })
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button type="button" variant="outline" size="sm">
-          <Pencil className="size-3.5" />
-          Alterar código
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Alterar código de indicação</DialogTitle>
-        </DialogHeader>
-
+    <>
+      <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)}>
+        <Pencil className="size-3.5" />
+        Alterar código
+      </Button>
+      <AdaptiveDialog open={open} onOpenChange={setOpen} title="Alterar código de indicação" size="md" tone="emerald">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="mb-1 block text-sm font-medium">Novo código</label>
@@ -138,7 +124,7 @@ export function EditReferralCodeDialog({ currentCode }: { currentCode: string })
                   codeState === "available" && "border-emerald-500 focus-visible:ring-emerald-500"
                 )}
               />
-              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">
+              <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2">
                 {codeState === "checking" && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
                 {codeState === "available" && <Check className="size-4 text-emerald-500" />}
                 {codeState === "unavailable" && <X className="size-4 text-destructive" />}
@@ -152,18 +138,16 @@ export function EditReferralCodeDialog({ currentCode }: { currentCode: string })
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button type="button" variant="ghost">
-                Cancelar
-              </Button>
-            </DialogClose>
+          <AdaptiveDialogFooter>
+            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
+              Cancelar
+            </Button>
             <Button type="submit" disabled={codeState !== "available" || isSubmitting}>
               {isSubmitting ? "Salvando..." : "Salvar novo código"}
             </Button>
-          </DialogFooter>
+          </AdaptiveDialogFooter>
         </form>
-      </DialogContent>
-    </Dialog>
+      </AdaptiveDialog>
+    </>
   )
 }

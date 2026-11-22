@@ -736,6 +736,8 @@ export function AuraCenterContent({
               <Link
                 key={key}
                 href={href}
+                // O clique decide se navega (pede login): não pode ir no aperto.
+                data-no-fast-link
                 onClick={(event) => {
                   if (!isLoggedIn) {
                     event.preventDefault()

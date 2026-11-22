@@ -1,6 +1,7 @@
 "use client"
 
 import { Suspense, useEffect, useState, useCallback } from "react"
+import { pixQrSrc } from "@/lib/pix-qr"
 import { useSearchParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import { CheckCircle, Clock, Copy, Loader2, ShoppingBag, Check, Receipt } from "lucide-react"
@@ -374,10 +375,10 @@ function PixCheckoutContent() {
         <PixCountdown expiresAt={order.pixExpiresAt} onExpired={handleExpired} />
       )}
 
-      {order.qrCodeBase64 && (
+      {pixQrSrc(order.qrCodeBase64) && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={order.qrCodeBase64}
+          src={pixQrSrc(order.qrCodeBase64)!}
           alt="QR Code PIX"
           className="size-56 rounded-xl border border-border bg-white p-2"
         />

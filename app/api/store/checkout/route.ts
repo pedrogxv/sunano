@@ -20,7 +20,11 @@ import {
   storeCardPaymentsEnabled,
   storePixGateway,
 } from "@/lib/server/payments/gateway"
-import { MercadoPagoError } from "@/lib/server/integrations/mercadopago"
+import {
+  cancelMercadoPagoOrder,
+  createMercadoPagoPixOrder,
+  MercadoPagoError,
+} from "@/lib/server/integrations/mercadopago"
 import { payMercadoPagoCardOrder } from "@/lib/server/repositories/mercadopago-orders-repository"
 import { mercadoPagoCardSchema } from "@/lib/server/validation/mercadopago-card"
 import { mercadoPagoDeclineMessage } from "@/lib/card-decline-messages"
@@ -1570,7 +1574,7 @@ export async function POST(request: NextRequest) {
     // aprovado com a Function morrendo antes do insert seria dinheiro
     // cobrado sem pedido. Recusado, a linha é apagada — ninguém foi avisado
     // dela e nenhuma tabela aponta para ela ainda.
-    if (chargeGateway === "mercadopago") {
+    if (chargeGateway === "mercadopago" && paymentMethod === "credit_card") {
       const card = parsedBody.data.card!
       const settings = await getStoreSettings()
       // Mesmo helper do carrinho e da tela: o valor cobrado tem que bater
@@ -1697,6 +1701,145 @@ export async function POST(request: NextRequest) {
         // pagamento aprovado sem pedido.
         return keepPending()
       }
+    }
+
+    // -----------------------------------------------------------------
+    // Mercado Pago (PIX, `STORE_PIX_GATEWAY=mercadopago`)
+    // -----------------------------------------------------------------
+    // Mesma ordem do cartão: o pedido é gravado ANTES da order existir no
+    // Mercado Pago, porque o webhook acha o pedido pelo `external_reference`.
+    // Em sandbox com `MERCADOPAGO_SANDBOX_PIX_AUTO_APPROVE` a order de PIX é
+    // aprovada sozinha segundos depois de criada (pagador "APRO"), e o
+    // webhook chegaria antes de um insert feito depois.
+    //
+    // A order nasce amarrada ao pedido (`mercadopago_payment_id`): é ela que o
+    // estorno, o cancelamento e a conferência do polling usam, e um pagamento
+    // de OUTRA order para este pedido é devolvido (`applyMercadoPagoOrder`).
+    if (chargeGateway === "mercadopago") {
+      // O Mercado Pago exige o e-mail do pagador para emitir o PIX.
+      if (!customerEmail) {
+        await revertDecrements(db, decrementedLines, reservationGroup)
+        return NextResponse.json(
+          { error: "Sua conta não tem e-mail cadastrado. Adicione um e-mail no perfil para pagar com PIX." },
+          { status: 400 }
+        )
+      }
+      const payerEmail = customerEmail
+      const orderId = randomUUID()
+      const pixExpiresAt = new Date(Date.now() + expirationMinutes * 60_000).toISOString()
+
+      const { data: order, error: insertError } = await db
+        .from("store_orders")
+        .insert({
+          id: orderId,
+          ...shippingColumns,
+          ...complementColumns,
+          ...payerColumns,
+          payment_gateway: "mercadopago",
+          items: orderItems,
+          total_cents: totalCents,
+          status: "pending",
+          payment_method: "pix",
+          customer_email: customerEmail,
+          customer_name: payerName,
+          pix_expires_at: pixExpiresAt,
+          is_sandbox: isActiveGatewaySandbox(),
+          user_id: user.id,
+          metadata: { user_id: user.id },
+          affiliate_id: affiliateForOrder?.affiliateId ?? null,
+          affiliate_code: affiliateForOrder?.affiliateCode ?? null,
+        })
+        .select("id")
+        .single()
+
+      if (insertError || !order) {
+        await revertDecrements(db, decrementedLines, reservationGroup)
+        const { body, status } = dbErrorResponse(insertError, "Não foi possível registrar o pedido.")
+        return NextResponse.json(body, { status })
+      }
+
+      await confirmReservation()
+
+      // Sem QR não há como pagar: o pedido some e o estoque volta. Mesmo
+      // DELETE condicional do cartão — se a linha já mudou (pago pelo webhook
+      // numa corrida improvável), ela é de outro fluxo agora.
+      const discardOrder = async () => {
+        const { data: deleted, error: deleteError } = await db
+          .from("store_orders")
+          .delete()
+          .eq("id", order.id)
+          .eq("status", "pending")
+          .select("id")
+        if (deleteError || !deleted?.length) {
+          console.error("[checkout] pedido PIX do Mercado Pago não pôde ser descartado:", order.id, deleteError)
+          return
+        }
+        await revertDecrements(db, decrementedLines)
+      }
+
+      const nameParts = payerName.trim().split(/\s+/).filter(Boolean)
+      let pix
+      try {
+        pix = await createMercadoPagoPixOrder({
+          orderId: order.id,
+          amountCents: totalCents,
+          description: `Pedido #${orderNumber(order.id)} · ${itemsSummary}`,
+          payer: {
+            email: payerEmail,
+            firstName: nameParts[0] ?? null,
+            lastName: nameParts.length > 1 ? nameParts.slice(1).join(" ") : null,
+            document: payerDocument,
+          },
+          // Nome + variante ("Mouse X (Branco · Mini)"): é o que aparece no
+          // detalhe da venda e no comprovante do Mercado Pago.
+          items: orderItems.map((item, index) => {
+            const variant = [item.variant_label, ...item.variant_options.map((o) => o.label)].filter(Boolean).join(" · ")
+            return {
+              id: item.variant_id ?? item.id ?? String(index),
+              title: variant ? `${item.name} (${variant})` : item.name,
+              quantity: item.quantity,
+              unitPriceCents: item.price_cents,
+            }
+          }),
+          expiresInMinutes: expirationMinutes,
+          idempotencyKey: `store-pix-${order.id}`,
+        })
+      } catch (err) {
+        console.error("[checkout] Mercado Pago createMercadoPagoPixOrder falhou:", err)
+        await discardOrder()
+        return NextResponse.json(
+          { error: "Não foi possível gerar o PIX agora. Tente novamente em instantes." },
+          { status: 502 }
+        )
+      }
+
+      // Condicional a `pending`: se o webhook já quitou o pedido (sandbox),
+      // ele mesmo gravou a order, e o QR não é mais necessário.
+      const { error: updateError } = await db
+        .from("store_orders")
+        .update({
+          mercadopago_payment_id: pix.order.id,
+          pix_copy_paste: pix.copyPaste,
+          pix_qr_code_base64: pix.qrCodeDataUri,
+        })
+        .eq("id", order.id)
+        .eq("status", "pending")
+
+      if (updateError) {
+        console.error("[checkout] Mercado Pago: falha ao gravar o PIX no pedido:", updateError)
+        // QR pagável sem pedido que o reconheça: fecha a order antes de sumir com o pedido.
+        await cancelMercadoPagoOrder(pix.order.id).catch((err) =>
+          console.error("[checkout] Mercado Pago: falha ao cancelar order sem pedido:", err)
+        )
+        await discardOrder()
+        const { body, status } = dbErrorResponse(updateError, "Não foi possível registrar o pedido.")
+        return NextResponse.json(body, { status })
+      }
+
+      await notifyOrderStatusChange({ userId: user.id, orderId: order.id, status: "pending" })
+      notifyDiscordOrderEventInBackground({ orderId: order.id, status: "pending", actor: "checkout" })
+
+      return NextResponse.json({ orderId: order.id, qrCodeBase64: pix.qrCodeDataUri, copyPaste: pix.copyPaste })
     }
 
     // -----------------------------------------------------------------

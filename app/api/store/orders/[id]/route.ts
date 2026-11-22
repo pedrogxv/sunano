@@ -7,14 +7,16 @@ import { orderHasService } from "@/lib/server/repositories/support-repository"
 import { deployChargesInSandbox } from "@/lib/server/payments/gateway"
 import { checkRateLimit } from "@/lib/server/rate-limit"
 import { markStripeOrdersPaid } from "@/lib/server/repositories/stripe-orders-repository"
+import { syncMercadoPagoOrder } from "@/lib/server/repositories/mercadopago-orders-repository"
 import { stripeReceiptUrlOf } from "@/lib/stripe-receipt"
 import { readServiceFormAnswers, serviceFormLines } from "@/lib/store-service-form"
 import { orderNumber } from "@/lib/order-number"
 
 /**
  * Usada pela página de checkout PIX para fazer polling do status do
- * pagamento enquanto aguarda o webhook (Asaas/Stripe) confirmar. Pedido do
- * Stripe também é conferido na origem a cada consulta (ver abaixo).
+ * pagamento enquanto aguarda o webhook (Asaas/Stripe/Mercado Pago) confirmar.
+ * Pedido do Stripe e PIX do Mercado Pago também são conferidos na origem a
+ * cada consulta (ver abaixo).
  *
  * Posse do pedido é provada SÓ pela sessão: o pedido tem que ser do usuário
  * logado (`metadata.user_id`), e qualquer outro caso responde 404 — sem
@@ -36,7 +38,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const { data: order, error } = await db
     .from("store_orders")
     .select(
-      "id, status, total_cents, pix_copy_paste, pix_qr_code_base64, metadata, items, created_at, payment_method, asaas_payment_id, asaas_receipt_url, stripe_payment_intent_id, installment_count, pix_price_cents, card_surcharge_percent, pix_expires_at, requires_shipping_address, service_form_answers, complement_for_order_id"
+      "id, status, total_cents, pix_copy_paste, pix_qr_code_base64, metadata, items, created_at, payment_method, asaas_payment_id, asaas_receipt_url, stripe_payment_intent_id, payment_gateway, mercadopago_payment_id, installment_count, pix_price_cents, card_surcharge_percent, pix_expires_at, requires_shipping_address, service_form_answers, complement_for_order_id"
     )
     .eq("id", id)
     // Pedido de sandbox não existe para o cliente — nem por link direto
@@ -93,6 +95,35 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         if (fresh?.status) order.status = fresh.status
       } catch (err) {
         console.error(`[orders/${order.id}] conferência no Stripe falhou:`, err)
+      }
+    }
+  }
+
+  // Mesma rede de segurança para o PIX do Mercado Pago: o webhook dele só
+  // chega se estiver cadastrado no painel (na Orders API a URL não vai na
+  // requisição), e em localhost não chega nunca. `syncMercadoPagoOrder` é o
+  // caminho do webhook (relê a order, só age em `processed`, UPDATE
+  // condicional). Mesmo limite por pedido do Stripe.
+  if (
+    order.status === "pending" &&
+    order.payment_gateway === "mercadopago" &&
+    order.payment_method === "pix" &&
+    order.mercadopago_payment_id
+  ) {
+    const syncLimit = await checkRateLimit({
+      action: "store_order_mercadopago_sync",
+      identifier: order.id,
+      maxAttempts: 1,
+      windowSeconds: 5,
+      onError: "closed",
+    })
+    if (syncLimit.allowed) {
+      try {
+        await syncMercadoPagoOrder(order.mercadopago_payment_id)
+        const { data: fresh } = await db.from("store_orders").select("status").eq("id", order.id).single()
+        if (fresh?.status) order.status = fresh.status
+      } catch (err) {
+        console.error(`[orders/${order.id}] conferência no Mercado Pago falhou:`, err)
       }
     }
   }

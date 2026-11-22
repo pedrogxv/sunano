@@ -6,14 +6,7 @@ import { Bell, CheckCircle2, LifeBuoy, Loader2, MessageCircle, PackageSearch, Se
 
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { AdaptiveDialog, AdaptiveDialogFooter } from "@/components/ui/adaptive-dialog"
 import { orderNumber } from "@/lib/order-number"
 import type { ServiceFormLine } from "@/lib/store-service-form"
 import { ServiceOrderForm } from "@/components/store/ServiceOrderForm"
@@ -116,23 +109,25 @@ export function OrderPaidNextStepsDialog({
   const askForm = hasService && serviceFormLines.length > 0 && !serviceFormAnswered
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Pedido #{number} confirmado</DialogTitle>
-          <DialogDescription>
-            {complementFor
-              ? `O complemento entrou no pedido #${complementFor.orderNumber}. A equipe segue com ele a partir daqui.`
-              : askForm
-              ? "Pagamento confirmado. Preencha as informações abaixo para a equipe começar o seu serviço."
-              : hasService
-                ? "Pagamento confirmado. Conte para o suporte o que você precisa, direto por aqui."
-                : "Acompanhe suas compras em Meus Pedidos. Veja o que acontece agora:"}
-          </DialogDescription>
-        </DialogHeader>
-
+    <AdaptiveDialog
+      open={open}
+      onOpenChange={handleOpenChange}
+      size="md"
+      tone="emerald"
+      icon={<CheckCircle2 />}
+      title={`Pedido #${number} confirmado`}
+      description={
+        complementFor
+          ? `O complemento entrou no pedido #${complementFor.orderNumber}. A equipe segue com ele a partir daqui.`
+          : askForm
+            ? "Pagamento confirmado. Preencha as informações abaixo para a equipe começar o seu serviço."
+            : hasService
+              ? "Pagamento confirmado. Conte para o suporte o que você precisa, direto por aqui."
+              : "Acompanhe suas compras em Meus Pedidos. Veja o que acontece agora:"
+      }
+    >
         {complementFor ? (
-          <DialogFooter className="gap-2 sm:gap-2">
+          <AdaptiveDialogFooter>
             {complementFor.ticketId && (
               <Button asChild variant="ghost" className="gap-2" onClick={() => markSeen(orderId)}>
                 <RouteLink href={`/conta/suporte/${complementFor.ticketId}`}>
@@ -147,7 +142,7 @@ export function OrderPaidNextStepsDialog({
                 Ir para Meus Pedidos
               </RouteLink>
             </Button>
-          </DialogFooter>
+          </AdaptiveDialogFooter>
         ) : askForm ? (
           formSent ? (
             <ServiceFormSent ticketId={serviceTicketId} onLeave={() => markSeen(orderId)} />
@@ -187,7 +182,7 @@ export function OrderPaidNextStepsDialog({
               ))}
             </ol>
 
-            <DialogFooter className="gap-2 sm:gap-2">
+            <AdaptiveDialogFooter>
               <Button variant="ghost" onClick={() => handleOpenChange(false)}>
                 Entendi
               </Button>
@@ -197,11 +192,10 @@ export function OrderPaidNextStepsDialog({
                   Ir para Meus Pedidos
                 </RouteLink>
               </Button>
-            </DialogFooter>
+            </AdaptiveDialogFooter>
           </>
         )}
-      </DialogContent>
-    </Dialog>
+    </AdaptiveDialog>
   )
 }
 
@@ -219,7 +213,7 @@ function ServiceFormSent({ ticketId, onLeave }: { ticketId: string | null; onLea
           </p>
         </div>
       </div>
-      <DialogFooter className="gap-2 sm:gap-2">
+      <AdaptiveDialogFooter>
         <Button asChild variant="ghost" className="gap-2" onClick={onLeave}>
           <RouteLink href="/conta/pedidos">
             <PackageSearch className="size-4" />
@@ -232,7 +226,7 @@ function ServiceFormSent({ ticketId, onLeave }: { ticketId: string | null; onLea
             Abrir conversa
           </RouteLink>
         </Button>
-      </DialogFooter>
+      </AdaptiveDialogFooter>
     </>
   )
 }
@@ -359,7 +353,7 @@ function ServiceSupportComposer({
         </p>
       )}
 
-      <DialogFooter className="gap-2 sm:gap-2">
+      <AdaptiveDialogFooter>
         <Button asChild variant="ghost" className="gap-2" onClick={onLeave}>
           <RouteLink href={conversationHref}>
             <LifeBuoy className="size-4" />
@@ -372,7 +366,7 @@ function ServiceSupportComposer({
             Enviar para o suporte
           </Button>
         )}
-      </DialogFooter>
+      </AdaptiveDialogFooter>
     </>
   )
 }

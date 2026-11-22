@@ -5,14 +5,8 @@ import { Camera, Loader2, Star, X } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { AdaptiveDialog, AdaptiveDialogFooter } from "@/components/ui/adaptive-dialog"
+import { storageImgProps } from "@/lib/storage-thumb"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { AuraAmount } from "@/components/ui/AuraIcon"
@@ -48,13 +42,30 @@ export function StoreReviewForm({
   onClose: () => void
   onSubmitted: (auraRewarded: number) => void
 }) {
+  // Segura o último produto para o conteúdo não sumir durante a animação de saída.
+  const [lastTarget, setLastTarget] = useState(target)
+  if (target && target !== lastTarget) setLastTarget(target)
+  const shown = target ?? lastTarget
+
   return (
-    <Dialog open={target !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
-        {/* `key`: trocar de produto zera o rascunho. */}
-        {target && <ReviewFormBody key={target.slug} target={target} onClose={onClose} onSubmitted={onSubmitted} />}
-      </DialogContent>
-    </Dialog>
+    <AdaptiveDialog
+      open={target !== null}
+      onOpenChange={(open) => !open && onClose()}
+      tone="amber"
+      icon={
+        shown?.image ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img {...storageImgProps(shown.image, 36)} alt="" className="size-full rounded-xl bg-muted object-contain p-0.5" />
+        ) : (
+          <Star />
+        )
+      }
+      title="Avaliar produto"
+      description={shown ? <span className="line-clamp-2">{shown.name}</span> : undefined}
+    >
+      {/* `key`: trocar de produto zera o rascunho. */}
+      {shown && <ReviewFormBody key={shown.slug} target={shown} onClose={onClose} onSubmitted={onSubmitted} />}
+    </AdaptiveDialog>
   )
 }
 
@@ -127,16 +138,6 @@ function ReviewFormBody({
 
   return (
     <>
-      <DialogHeader>
-        <DialogTitle>Avaliar produto</DialogTitle>
-        <DialogDescription className="flex items-center gap-2.5">
-          {target.image && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={target.image} alt="" className="size-9 shrink-0 rounded-md bg-muted object-contain p-0.5" />
-          )}
-          <span className="line-clamp-2">{target.name}</span>
-        </DialogDescription>
-      </DialogHeader>
 
       <div className="flex flex-col gap-4">
         <div className="flex flex-col items-center gap-1.5">
@@ -172,7 +173,7 @@ function ReviewFormBody({
             {images.map((url, i) => (
               <div key={url} className="relative size-20 overflow-hidden rounded-lg border border-border">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={url} alt="" className="size-full object-cover" />
+                <img {...storageImgProps(url, 80)} alt="" className="size-full object-cover" />
                 <button
                   type="button"
                   aria-label="Remover foto"
@@ -222,15 +223,15 @@ function ReviewFormBody({
         </div>
       </div>
 
-      <DialogFooter>
-        <Button variant="outline" onClick={onClose} disabled={submitting}>
+      <AdaptiveDialogFooter>
+        <Button variant="ghost" onClick={onClose} disabled={submitting}>
           Cancelar
         </Button>
         <Button onClick={submit} disabled={submitting || uploading} className="gap-1.5">
           {submitting && <Loader2 className="size-3.5 animate-spin" />}
           Enviar avaliação
         </Button>
-      </DialogFooter>
+      </AdaptiveDialogFooter>
     </>
   )
 }

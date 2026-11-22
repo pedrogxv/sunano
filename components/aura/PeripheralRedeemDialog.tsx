@@ -1,18 +1,11 @@
 "use client"
 
 import { useState } from "react"
-import { Crown, Loader2, Package, Sparkles, Truck } from "lucide-react"
-import { AuraAmount } from "@/components/ui/AuraIcon"
+import { Crown, Loader2, Package, Truck } from "lucide-react"
+import { AuraAmount, AuraIcon } from "@/components/ui/AuraIcon"
 
 import { auraPriceForVip } from "@/lib/aura-pricing"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { AdaptiveDialog, AdaptiveDialogFooter } from "@/components/ui/adaptive-dialog"
 import { Button } from "@/components/ui/button"
 import {
   EMPTY_SHIPPING_FORM,
@@ -97,84 +90,85 @@ export function PeripheralRedeemDialog({
   const remaining = balance - price.finalPrice
 
   return (
-    <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Package className="size-4 text-amber-400" />
-            Resgatar {itemName}
-          </DialogTitle>
-          <DialogDescription>
-            Produto físico pago com Aura. Ele vira um pedido igual aos da loja; você
-            acompanha o envio em <span className="font-medium text-foreground">Meus Pedidos</span>.
-          </DialogDescription>
-        </DialogHeader>
-
-        {/* Resumo do custo — mesma linguagem do PurchaseConfirmDialog. */}
-        <div className="space-y-px overflow-hidden rounded-lg border border-amber-500/30 bg-amber-500/[0.06] text-xs font-medium">
-          <div className="flex items-center gap-1.5 border-b border-amber-500/20 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-amber-400">
-            <Sparkles className="size-3" />
-            Pagamento em Aura
-          </div>
-          {price.discounted && (
-            <>
-              <div className="flex items-center justify-between px-3 py-2">
-                <span className="text-muted-foreground">Preço do item</span>
-                <span className="font-display font-bold tabular-nums text-muted-foreground line-through">
-                  <AuraAmount value={price.listPrice} />
-                </span>
-              </div>
-              <div
-                className="flex items-center justify-between px-3 py-2"
-                style={{ color: "var(--vip-accent)" }}
-              >
-                <span className="flex items-center gap-1.5 font-semibold">
-                  <Crown className="size-3.5" strokeWidth={2} />
-                  Desconto VIP ({price.discountPercent}%)
-                </span>
-                <span className="font-display font-bold tabular-nums">
-                  <AuraAmount value={price.savings} prefix="−" />
-                </span>
-              </div>
-            </>
-          )}
-          <div className="flex items-center justify-between px-3 py-2">
-            <span className="text-muted-foreground">Custo do resgate</span>
-            <span className="font-display font-bold tabular-nums text-amber-400">
-              <AuraAmount value={price.finalPrice} />
-            </span>
-          </div>
-          <div className="flex items-center justify-between border-t border-amber-500/20 px-3 py-2">
-            <span className="text-muted-foreground">Saldo após o resgate</span>
-            <span className="font-display font-bold tabular-nums text-foreground">
-              <AuraAmount value={remaining} />
-            </span>
-          </div>
+    <AdaptiveDialog
+      open
+      onOpenChange={onOpenChange}
+      size="md"
+      tone="amber"
+      icon={<Package />}
+      title={`Resgatar ${itemName}`}
+      description={
+        <>
+          Produto físico pago com Aura. Ele vira um pedido igual aos da loja; você acompanha o envio em{" "}
+          <span className="font-medium text-foreground">Meus Pedidos</span>.
+        </>
+      }
+    >
+      {/* Resumo do custo — mesma linguagem do PurchaseConfirmDialog. */}
+      <div className="space-y-px overflow-hidden rounded-lg border border-amber-500/30 bg-amber-500/[0.06] text-xs font-medium">
+        <div className="flex items-center gap-1.5 border-b border-amber-500/20 px-3 py-2 text-[11px] font-bold tracking-wider text-amber-400 uppercase">
+          <AuraIcon size="sm" tone="inherit" />
+          Pagamento em Aura
         </div>
+        {price.discounted && (
+          <>
+            <div className="flex items-center justify-between px-3 py-2">
+              <span className="text-muted-foreground">Preço do item</span>
+              <span className="font-display font-bold text-muted-foreground tabular-nums line-through">
+                <AuraAmount value={price.listPrice} />
+              </span>
+            </div>
+            <div className="flex items-center justify-between px-3 py-2" style={{ color: "var(--vip-accent)" }}>
+              <span className="flex items-center gap-1.5 font-semibold">
+                <Crown className="size-3.5" strokeWidth={2} />
+                Desconto VIP ({price.discountPercent}%)
+              </span>
+              <span className="font-display font-bold tabular-nums">
+                <AuraAmount value={price.savings} prefix="−" />
+              </span>
+            </div>
+          </>
+        )}
+        <div className="flex items-center justify-between px-3 py-2">
+          <span className="text-muted-foreground">Custo do resgate</span>
+          <span className="font-display font-bold text-amber-400 tabular-nums">
+            <AuraAmount value={price.finalPrice} />
+          </span>
+        </div>
+        <div className="flex items-center justify-between border-t border-amber-500/20 px-3 py-2">
+          <span className="text-muted-foreground">Saldo após o resgate</span>
+          <span className="font-display font-bold text-foreground tabular-nums">
+            <AuraAmount value={remaining} />
+          </span>
+        </div>
+      </div>
 
+      <div className="space-y-1">
         <div className="flex items-center gap-2 pt-1 text-[13px] font-semibold text-foreground">
           <Truck className="size-4 text-emerald-400" />
           Endereço de entrega
         </div>
-        <p className="-mt-1 text-[11px] text-muted-foreground">
-          O produto só é despachado depois deste endereço. Não dá para completar depois: o
-          resgate já é o pedido.
+        <p className="text-[11px] text-muted-foreground">
+          O produto só é despachado depois deste endereço. Não dá para completar depois: o resgate já é o pedido.
         </p>
+      </div>
 
-        <ShippingAddressFields form={form} onChange={setForm} disabled={loading} />
+      <ShippingAddressFields form={form} onChange={setForm} disabled={loading} />
 
-        <DialogFooter>
-          <Button
-            type="button"
-            onClick={() => onConfirm(form)}
-            disabled={loading || !isShippingFormComplete(form) || remaining < 0}
-            className="w-full gap-2 bg-orange-500 text-[#1a1200] hover:bg-orange-400 sm:w-auto"
-          >
-            {loading && <Loader2 className="size-4 animate-spin" />}
-            {remaining < 0 ? "Saldo insuficiente" : "Resgatar"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      <AdaptiveDialogFooter>
+        <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={loading}>
+          Cancelar
+        </Button>
+        <Button
+          type="button"
+          onClick={() => onConfirm(form)}
+          disabled={loading || !isShippingFormComplete(form) || remaining < 0}
+          className="gap-2 bg-orange-500 text-[#1a1200] hover:bg-orange-400"
+        >
+          {loading && <Loader2 className="size-4 animate-spin" />}
+          {remaining < 0 ? "Saldo insuficiente" : "Resgatar"}
+        </Button>
+      </AdaptiveDialogFooter>
+    </AdaptiveDialog>
   )
 }

@@ -43,24 +43,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
 import { ProfileLoadError } from "@/components/account/ProfileLoadError"
 import { useOwnProfile } from "@/lib/hooks/use-own-profile"
 import {
@@ -80,6 +62,8 @@ import { isServiceFormEditable, serviceFormLines } from "@/lib/store-service-for
 import { ServiceFormAnswerValue } from "@/components/store/ServiceFormAnswerValue"
 import { OrderComplementNotice } from "@/components/store/OrderComplementNotice"
 import { OrderTimeline } from "@/components/store/OrderTimeline"
+import { AdaptiveDialog, ConfirmDialog, type AdaptiveDialogTone } from "@/components/ui/adaptive-dialog"
+import { pixQrSrc } from "@/lib/pix-qr"
 import { OrderChatDialog } from "@/components/store/OrderChatDialog"
 import { OrderGuideButton } from "@/components/store/OrderGuide"
 import { PendingStoreReviews, usePendingStoreReviews } from "@/components/store/PendingStoreReviews"
@@ -284,55 +268,53 @@ function CancelOrderButton({
   onCancelled: () => void
   className?: string
 }) {
-  const [cancelling, setCancelling] = useState(false)
+  const [open, setOpen] = useState(false)
 
+  // Lança no erro: o `ConfirmDialog` fica aberto para tentar de novo.
   async function handleCancel() {
-    setCancelling(true)
     try {
       const res = await fetch(`/api/store/orders/${order.id}/cancel`, { method: "POST" })
       const data = (await res.json().catch(() => ({}))) as { error?: string }
       if (!res.ok) throw new Error(data.error ?? "Erro ao cancelar pedido")
-      toast.success("Pedido cancelado", { description: `#${orderNumber(order.id)}` })
-      onCancelled()
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao cancelar pedido"
       toast.error("Erro ao cancelar pedido", { description: message })
-    } finally {
-      setCancelling(false)
+      throw err
     }
+    toast.success("Pedido cancelado", { description: `#${orderNumber(order.id)}` })
+    onCancelled()
   }
 
+  // Portal ou não, eventos do React sobem pela árvore de componentes: sem
+  // isto, um clique dentro da confirmação chegaria ao card e abriria o detalhe.
   return (
-    <AlertDialog>
-      <AlertDialogTrigger asChild>
-        <button
-          type="button"
-          onClick={(e) => e.stopPropagation()}
-          className={cn(
-            "inline-flex items-center gap-1.5 rounded-lg border border-red-500/40 bg-red-500/10 px-2.5 py-1 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20",
-            className
-          )}
-        >
-          <XCircle className="size-3.5" />
-          Cancelar pedido
-        </button>
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Cancelar este pedido?</AlertDialogTitle>
-          <AlertDialogDescription>
-            O pedido #{orderNumber(order.id)} será cancelado e a cobrança pendente será encerrada. Essa
-            ação não pode ser desfeita; se ainda quiser comprar, será preciso fazer um novo pedido.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={cancelling}>Voltar</AlertDialogCancel>
-          <AlertDialogAction onClick={handleCancel} disabled={cancelling}>
-            {cancelling ? "Cancelando..." : "Confirmar cancelamento"}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <span className="contents" onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          setOpen(true)
+        }}
+        className={cn(
+          "inline-flex items-center gap-1.5 rounded-lg border border-red-500/40 bg-red-500/10 px-2.5 py-1 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20",
+          className
+        )}
+      >
+        <XCircle className="size-3.5" />
+        Cancelar pedido
+      </button>
+      <ConfirmDialog
+        open={open}
+        onOpenChange={setOpen}
+        tone="red"
+        icon={<XCircle />}
+        title="Cancelar este pedido?"
+        description={`O pedido #${orderNumber(order.id)} será cancelado e a cobrança pendente será encerrada. Essa ação não pode ser desfeita; se ainda quiser comprar, será preciso fazer um novo pedido.`}
+        confirmLabel="Confirmar cancelamento"
+        destructive
+        onConfirm={handleCancel}
+      />
+    </span>
   )
 }
 
@@ -350,55 +332,51 @@ function ConfirmDeliveryButton({
   onConfirmed: () => void
   className?: string
 }) {
-  const [confirming, setConfirming] = useState(false)
+  const [open, setOpen] = useState(false)
 
   async function handleConfirm() {
-    setConfirming(true)
     try {
       const res = await fetch(`/api/store/orders/${order.id}/confirm-delivery`, { method: "POST" })
       const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string }
       if (!res.ok) throw new Error(data.message ?? data.error ?? "Erro ao confirmar o recebimento")
-      toast.success("Recebimento confirmado", { description: `#${orderNumber(order.id)}` })
-      onConfirmed()
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao confirmar o recebimento"
       toast.error("Não foi possível confirmar", { description: message })
-    } finally {
-      setConfirming(false)
+      throw err
     }
+    toast.success("Recebimento confirmado", { description: `#${orderNumber(order.id)}` })
+    onConfirmed()
   }
 
+  // Portal ou não, eventos do React sobem pela árvore de componentes: sem
+  // isto, um clique dentro da confirmação chegaria ao card e abriria o detalhe.
   return (
-    <AlertDialog>
-      <AlertDialogTrigger asChild>
-        <button
-          type="button"
-          onClick={(e) => e.stopPropagation()}
-          className={cn(
-            "inline-flex items-center gap-1.5 rounded-lg border border-teal-500/40 bg-teal-500/10 px-2.5 py-1 text-xs font-medium text-teal-300 transition-colors hover:bg-teal-500/20",
-            className
-          )}
-        >
-          <PackageCheck className="size-3.5" />
-          Já recebi meu produto
-        </button>
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Confirmar que recebeu o pedido?</AlertDialogTitle>
-          <AlertDialogDescription>
-            O pedido #{orderNumber(order.id)} será marcado como entregue. Se o pacote chegou com algum
-            problema, fale com o suporte antes de confirmar.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={confirming}>Voltar</AlertDialogCancel>
-          <AlertDialogAction onClick={handleConfirm} disabled={confirming}>
-            {confirming ? "Confirmando..." : "Sim, recebi"}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <span className="contents" onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          setOpen(true)
+        }}
+        className={cn(
+          "inline-flex items-center gap-1.5 rounded-lg border border-teal-500/40 bg-teal-500/10 px-2.5 py-1 text-xs font-medium text-teal-300 transition-colors hover:bg-teal-500/20",
+          className
+        )}
+      >
+        <PackageCheck className="size-3.5" />
+        Já recebi meu produto
+      </button>
+      <ConfirmDialog
+        open={open}
+        onOpenChange={setOpen}
+        tone="teal"
+        icon={<PackageCheck />}
+        title="Confirmar que recebeu o pedido?"
+        description={`O pedido #${orderNumber(order.id)} será marcado como entregue. Se o pacote chegou com algum problema, fale com o suporte antes de confirmar.`}
+        confirmLabel="Sim, recebi"
+        onConfirm={handleConfirm}
+      />
+    </span>
   )
 }
 
@@ -917,8 +895,20 @@ function ServiceFormAnswersSection({ order, onEdit }: { order: UserOrder; onEdit
   )
 }
 
+/** Cor do detalhe do pedido (brilho do topo), na família de `STATUS_STYLE`. */
+const STATUS_TONE: Record<UserOrder["status"], AdaptiveDialogTone> = {
+  pending: "amber",
+  paid: "emerald",
+  awaiting_shipping_info: "amber",
+  shipped: "violet",
+  delivered: "teal",
+  cancelled: "neutral",
+  refunded: "sky",
+  expired: "orange",
+}
+
 function OrderDetailsDialog({
-  order,
+  order: openOrder,
   complementProductSlug,
   onOpenChange,
   onCancelled,
@@ -934,6 +924,11 @@ function OrderDetailsDialog({
   onEditShipping: (order: UserOrder) => void
   onEditServiceForm: (order: UserOrder) => void
 }) {
+  // O pai zera o pedido ao fechar; segurar o último aqui mantém o conteúdo
+  // na tela durante a animação de saída, em vez de o painel encolher vazio.
+  const [lastOrder, setLastOrder] = useState(openOrder)
+  if (openOrder && openOrder !== lastOrder) setLastOrder(openOrder)
+  const order = openOrder ?? lastOrder
   const auraOrder = order ? isAuraOrder(order) : false
   // Comprovante vale para o pedido pago em qualquer etapa, não só em `paid`:
   // enviado ou esperando endereço, o pagamento continua sendo o mesmo.
@@ -953,22 +948,33 @@ function OrderDetailsDialog({
     order?.status === "pending" && !auraOrder && order.payment_method === "credit_card"
 
   return (
-    <Dialog open={order !== null} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+    <AdaptiveDialog
+      open={openOrder !== null}
+      onOpenChange={onOpenChange}
+      tone={order ? STATUS_TONE[order.status] : "neutral"}
+      eyebrow={
+        order ? (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <span
+              className={cn(
+                "inline-flex max-w-full items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold",
+                STATUS_STYLE[order.status]
+              )}
+            >
+              <span className="truncate">
+                {orderStatusLabel(order.status, order.requires_shipping_address, Boolean(order.warehouse_arrived_at))}
+              </span>
+            </span>
+            <OrderPriceLabel order={order} className="ml-auto shrink-0" />
+          </div>
+        ) : null
+      }
+      title={order ? `Pedido #${orderNumber(order.id)}` : "Pedido"}
+      description={order ? formatDateTime(order.created_at) : undefined}
+    >
         {order && (
           <>
-            <DialogHeader>
-              <DialogTitle>Pedido #{orderNumber(order.id)}</DialogTitle>
-              <DialogDescription>{formatDateTime(order.created_at)}</DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-3 rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5">
-              <div className="flex items-center justify-between">
-                <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold", STATUS_STYLE[order.status])}>
-                  {orderStatusLabel(order.status, order.requires_shipping_address, Boolean(order.warehouse_arrived_at))}
-                </span>
-                <OrderPriceLabel order={order} />
-              </div>
+            <div className="min-w-0 space-y-3 rounded-xl border border-border/60 bg-muted/20 p-3 sm:p-4">
               {auraOrder && (
                 <p className="flex items-center gap-1.5 text-[11px] font-medium text-amber-400/90">
                   <Sparkles className="size-3" />
@@ -1216,12 +1222,12 @@ function OrderDetailsDialog({
                 )}
                 {showPix && (
                   <div className="space-y-2">
-                    {order.pix_qr_code_base64 && (
+                    {pixQrSrc(order.pix_qr_code_base64) && (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        src={`data:image/png;base64,${order.pix_qr_code_base64}`}
+                        src={pixQrSrc(order.pix_qr_code_base64)!}
                         alt="QR Code PIX"
-                        className="mx-auto size-40 rounded-lg border border-border/60"
+                        className="mx-auto size-40 rounded-lg border border-border/60 bg-white p-1.5"
                       />
                     )}
                     {order.pix_copy_paste && (
@@ -1250,8 +1256,7 @@ function OrderDetailsDialog({
             )}
           </>
         )}
-      </DialogContent>
-    </Dialog>
+    </AdaptiveDialog>
   )
 }
 

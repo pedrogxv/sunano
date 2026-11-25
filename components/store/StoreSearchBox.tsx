@@ -13,6 +13,13 @@ import { storageImgProps } from "@/lib/storage-thumb"
 
 interface StoreSearchBoxProps {
   className?: string
+  /**
+   * Posição/largura do painel de resultados. O padrão ocupa a largura do
+   * campo; quem tem um campo estreito alarga o painel (ver StoreCategoryNav):
+   * com a largura do campo, o título virava "ATK RS6 ..." e cinco produtos da
+   * mesma marca ficavam indistinguíveis.
+   */
+  panelClassName?: string
   inputClassName?: string
   iconClassName?: string
   placeholder?: string
@@ -29,7 +36,7 @@ interface StoreSearchBoxProps {
  * sensor, o resultado diz isso: sem a dica, "3950" devolvendo "ATK X1 Ultimate"
  * parece erro de busca.
  */
-export function StoreSearchBox({ className, inputClassName, iconClassName, placeholder = "Buscar produto, marca ou sensor" }: StoreSearchBoxProps) {
+export function StoreSearchBox({ className, inputClassName, iconClassName, panelClassName = "inset-x-0", placeholder = "Buscar produto, marca ou sensor" }: StoreSearchBoxProps) {
   const router = useRouter()
   const listboxId = useId()
   const [query, setQuery] = useState("")
@@ -124,6 +131,10 @@ export function StoreSearchBox({ className, inputClassName, iconClassName, place
 
   return (
     <div ref={containerRef} className={cn("relative", className)}>
+      {/* O campo tem o PRÓPRIO contexto de posição: assim o ícone e o
+          spinner ficam presos nele mesmo quando a raiz vira `static` para o
+          painel se ancorar na ilha (celular, ver StoreCategoryNav). */}
+      <div className="relative">
       <Search className={cn("pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-[#6e6e6e]", iconClassName)} />
       <input
         ref={inputRef}
@@ -145,9 +156,19 @@ export function StoreSearchBox({ className, inputClassName, iconClassName, place
       {isLoading && showDropdown && (
         <Loader2 className="absolute right-3 top-1/2 size-3.5 -translate-y-1/2 animate-spin text-[#6e6e6e]" />
       )}
+      </div>
 
       {showDropdown && (
-        <div className="absolute inset-x-0 top-[calc(100%+6px)] z-20 overflow-hidden rounded-[13px] border border-[#262626] bg-[#141414] shadow-[0_20px_50px_-15px_rgba(0,0,0,0.85)]">
+        <div
+          className={cn(
+            // Fundo SÓLIDO, sem backdrop-filter: o painel mora dentro do vidro
+            // da ilha, que já tem um. Filtro dentro de filtro faz o Chrome
+            // amostrar o fundo errado — o painel saía translúcido no desktop
+            // (o hero vazava por trás do texto) e escurecia a tela no celular.
+            "absolute top-[calc(100%+8px)] z-20 overflow-hidden rounded-2xl border border-white/10 bg-[#111113] shadow-[inset_0_1px_0_rgb(255_255_255/0.08),0_24px_56px_-18px_rgba(0,0,0,0.9)] animate-in fade-in slide-in-from-top-1 duration-150 motion-reduce:animate-none",
+            panelClassName
+          )}
+        >
           {items.length === 0 && !isLoading && (
             <p className="px-4 py-3.5 text-[12.5px] text-[#7a7a7a]">
               Nenhum produto encontrado para &ldquo;{trimmed}&rdquo;.
@@ -166,24 +187,28 @@ export function StoreSearchBox({ className, inputClassName, iconClassName, place
                       onMouseEnter={() => setHighlighted(idx)}
                       onClick={() => setIsOpen(false)}
                       className={cn(
-                        "flex items-center gap-3 px-3.5 py-2 transition-colors",
+                        "flex items-center gap-3 px-3.5 py-2.5 transition-colors",
                         idx === highlighted ? "bg-white/[0.06]" : "hover:bg-white/[0.04]"
                       )}
                     >
                       {product.images?.[0] ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
-                          {...storageImgProps(product.images[0], 36)}
+                          {...storageImgProps(product.images[0], 48)}
                           alt=""
-                          className="size-9 shrink-0 rounded-[8px] bg-[#1c1c1c] object-contain p-1"
+                          className="size-12 shrink-0 rounded-[10px] bg-[#1c1c1c] object-contain p-1"
                         />
                       ) : (
-                        <span className="flex size-9 shrink-0 items-center justify-center rounded-[8px] bg-[#1c1c1c]">
-                          <Icon className="size-[18px] opacity-60" style={{ color: tint }} strokeWidth={1.4} />
+                        <span className="flex size-12 shrink-0 items-center justify-center rounded-[10px] bg-[#1c1c1c]">
+                          <Icon className="size-[22px] opacity-60" style={{ color: tint }} strokeWidth={1.4} />
                         </span>
                       )}
-                      <span className="flex min-w-0 flex-1 flex-col">
-                        <span className="truncate text-[12.5px] font-semibold text-white">{product.name}</span>
+                      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        {/* Duas linhas, não uma: o que separa um produto do
+                            outro (modelo, versão, cor) costuma vir DEPOIS da
+                            marca, justo a parte que o `truncate` cortava. O
+                            `title` mostra o nome inteiro se passar de duas. */}
+                        <span title={product.name} className="line-clamp-2 text-[13px] font-semibold leading-snug text-white">{product.name}</span>
                         {(product.brand || product.search_sensor) && (
                           <span className="truncate text-[11px] text-[#7a7a7a]">
                             {product.brand}
@@ -194,7 +219,7 @@ export function StoreSearchBox({ className, inputClassName, iconClassName, place
                           </span>
                         )}
                       </span>
-                      <span className="shrink-0 text-[12.5px] font-bold text-emerald-400">
+                      <span className="shrink-0 self-center text-[13px] font-bold tabular-nums text-emerald-400">
                         {product.is_payment_complement ? "Valor do pedido" : formatBRL(price)}
                       </span>
                     </Link>

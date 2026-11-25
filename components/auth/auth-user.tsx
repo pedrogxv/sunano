@@ -23,6 +23,7 @@ import { useUserOrders, pendingPaymentHref } from "@/lib/hooks/use-user-orders"
 import { formatBRL } from "@/lib/format"
 import { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
+import { TOPBAR_ICON_BUTTON } from "@/components/layout/topbar-styles"
 import { isVipSubscriptionEnabled } from "@/lib/vip-signup"
 import { vipCtaLabel, vipCtaShortLabel } from "@/lib/vip-status"
 
@@ -121,7 +122,7 @@ export function AuthUser({ isCollapsed = false, variant = "admin", layout = "sid
 
   if (!ready) {
     if (layout === "topbar") {
-      return <Skeleton className="size-8 shrink-0 rounded-lg" />
+      return <Skeleton className="size-11 shrink-0 rounded-full md:size-9" />
     }
     return (
       <div
@@ -144,7 +145,7 @@ export function AuthUser({ isCollapsed = false, variant = "admin", layout = "sid
   if (!user) {
     if (layout === "topbar") {
       const className =
-        "animate-fade-in-up flex size-11 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border bg-card/70 text-sm font-medium text-foreground transition-all hover:bg-muted/40 sm:h-8 sm:w-auto sm:px-3"
+        "animate-fade-in-up flex size-11 shrink-0 items-center justify-center gap-1.5 rounded-full border border-white/10 bg-white/[0.06] text-[13px] font-semibold text-foreground transition-colors hover:bg-white/[0.1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25 sm:w-auto sm:px-3.5 md:h-9"
       const content = (
         <>
           <LogIn className="size-[15px] text-primary" />
@@ -188,7 +189,7 @@ export function AuthUser({ isCollapsed = false, variant = "admin", layout = "sid
           <button
             type="button"
             aria-label={user.name}
-            className="animate-fade-in-up relative flex size-11 shrink-0 items-center justify-center rounded-lg transition-all hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 md:size-8"
+            className={cn("animate-fade-in-up", TOPBAR_ICON_BUTTON)}
           >
             {/* Mesmo componente (e mesma moldura) do avatar do perfil, do
                 fórum e dos rankings — ver `components/ui/ProfileAvatar.tsx`.

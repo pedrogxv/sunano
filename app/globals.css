@@ -52,10 +52,12 @@
   /* Backdrop behind product photos (PeripheralCard image area) */
   --card-image-bg: #1a1a1a;
 
-  /* Altura total da pilha sticky do topo (TopBar + ChangelogBanner quando visível).
-     TopBar sozinha = 4rem (min-h-16). ChangelogBanner ajusta este valor via JS
-     (ResizeObserver) quando está montado, pois sua altura varia com o conteúdo. */
-  --sticky-header-h: 4rem;
+  /* Quanto do topo a barra flutuante ocupa ao rolar: respiro de cima (8px) +
+     a barra (3.5rem, `h-14`) + respiro de baixo (8px) = 4.5rem. Constante:
+     o aviso de changelog saiu da pilha sticky (vive no topo do conteúdo), então
+     nada mais soma altura variável aqui. Quem gruda embaixo da barra usa
+     `top-[calc(var(--sticky-header-h)+…)]`. */
+  --sticky-header-h: 4.5rem;
 }
 
 @theme inline {
@@ -289,6 +291,160 @@ html[data-changelog-dismissed] .changelog-banner {
   .sidebar-drawer-closed *::after {
     animation-play-state: paused !important;
   }
+}
+
+/* Barra do topo DESACOPLADA (TopBar e o menu da Loja): uma ilha de vidro
+   flutuando 8px abaixo da borda, gêmea da sidebar. Diferente da sidebar, o
+   conteúdo PASSA por baixo dela ao rolar, então o vidro é mais denso (0.8) que
+   o da sidebar: o que está atrás vira só um borrão de cor, nunca texto
+   legível competindo com o título. O blur é menor no celular (GPU mais fraca,
+   e a barra é recomposta a cada frame de rolagem). */
+.topbar-glass {
+  position: relative;
+  isolation: isolate;
+  /* Mesma cor que a `.sidebar-glass` tem pousada no fundo da página
+     (24·0.62 ≈ 15): lado a lado, as duas ilhas são o MESMO material. A
+     opacidade maior só pesa quando há conteúdo passando por baixo. */
+  background-color: rgb(18 18 20 / 0.83);
+  background-image:
+    radial-gradient(140% 160% at 0% 0%, rgb(255 255 255 / 0.09), transparent 65%),
+    linear-gradient(180deg, rgb(255 255 255 / 0.045), rgb(255 255 255 / 0.01) 55%, rgb(255 255 255 / 0.03));
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.14),
+    inset 1px 0 0 rgb(255 255 255 / 0.05),
+    inset 0 -1px 0 rgb(0 0 0 / 0.35),
+    0 12px 40px -8px rgb(0 0 0 / 0.6);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  backdrop-filter: blur(14px) saturate(160%);
+}
+
+@media (width >= 48rem) {
+  .topbar-glass {
+    -webkit-backdrop-filter: blur(24px) saturate(170%);
+    backdrop-filter: blur(24px) saturate(170%);
+  }
+}
+
+/* Sem backdrop-filter (ou quem pediu menos transparência no sistema): vidro
+   opaco. Melhor uma barra sólida que texto da página vazando sem desfoque. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .topbar-glass {
+    background-color: rgb(18 18 20 / 0.97);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .topbar-glass {
+    background-color: rgb(18 18 20);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/* Faixa acima da barra: o conteúdo some ao entrar nos 8px de respiro, em vez
+   de aparecer passando por cima da ilha. Pintada no wrapper sticky, sem
+   elemento extra. */
+.topbar-dock {
+  background-image: linear-gradient(
+    to bottom,
+    var(--background) 0,
+    var(--background) 0.5rem,
+    transparent 0.5rem
+  );
+}
+
+/* Sombra que "levanta" a ilha e linha de progresso de leitura: as duas com
+   scroll-driven animation (zero JS, zero listener de scroll) e só em
+   `opacity`/`transform`, que o navegador anima no compositor. No topo da
+   página a barra repousa rente; nos primeiros 96px de rolagem ela ganha a
+   sombra funda de quem está por cima do conteúdo. Navegador sem suporte fica
+   com a sombra de repouso e sem a linha (progressive enhancement). */
+.topbar-glass::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow:
+    0 18px 44px -14px rgb(0 0 0 / 0.85),
+    0 0 0 1px rgb(255 255 255 / 0.04);
+  opacity: 0;
+}
+
+.topbar-progress {
+  display: none;
+}
+
+@supports (animation-timeline: scroll()) {
+  .topbar-glass::after {
+    animation: topbar-lift linear both;
+    animation-timeline: scroll(root block);
+    animation-range: 0 96px;
+  }
+
+  .topbar-progress {
+    display: block;
+    position: absolute;
+    inset-inline: 14px;
+    bottom: 0;
+    height: 2px;
+    border-radius: 9999px;
+    pointer-events: none;
+    background: linear-gradient(90deg, oklch(0.75 0.15 230 / 0), oklch(0.75 0.15 230 / 0.9) 40%, oklch(0.78 0.16 165 / 0.9));
+    transform-origin: left center;
+    transform: scaleX(0);
+    animation: topbar-progress linear both;
+    animation-timeline: scroll(root block);
+  }
+}
+
+@keyframes topbar-lift {
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes topbar-progress {
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .topbar-progress {
+    display: none;
+  }
+}
+
+/* Página da Loja que não abre a própria superfície (Coming soon, 404 dentro
+   de /loja): o <main> vira o cartão sozinho, em vez de o conteúdo ficar solto
+   no fundo da página. Quem usa StoreSurface/ContentSurface não é afetado. */
+.store-main:not(:has(.content-surface)) {
+  background-color: var(--card);
+  border-radius: 1rem 1rem 0 0;
+}
+
+@media (width >= 48rem) {
+  .store-main:not(:has(.content-surface)) {
+    margin-top: 0.5rem;
+    border-radius: 1rem;
+  }
+}
+
+/* Item de navegação dentro da ilha (menu da Loja): cápsula, não sublinhado
+   colado na borda de baixo. O ponto colorido embaixo do rótulo marca o grupo
+   ativo/aberto na cor da categoria (`--nav-tint`). */
+.topbar-pill-dot {
+  position: absolute;
+  bottom: 3px;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 9999px;
+  background: var(--nav-tint, #fff);
+  box-shadow: 0 0 8px var(--nav-tint, #fff);
+  translate: -50% 0;
 }
 
 /* Vidro da sidebar pública (PublicSidebar). O material é do PRÓPRIO painel,

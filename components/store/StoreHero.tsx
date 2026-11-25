@@ -42,6 +42,7 @@ import { computeEffectivePrice } from "@/lib/store-pricing"
 import { cn } from "@/lib/utils"
 import type { StoreProductCard } from "@/lib/server/repositories/store-repository"
 import { storageImgProps, storageWidthSrcSet } from "@/lib/storage-thumb"
+import { STORE_BANNER_CARD, STORE_CARD_WIDTH } from "@/components/store/store-layout"
 
 /**
  * Hero da Home da Loja: o banner principal, administrável em /admin/store/hero.
@@ -89,7 +90,7 @@ function usePrefersReducedMotion() {
 function StaticStoreHero() {
   return (
     <div
-      className="aspect-[6047/1890] w-full overflow-hidden bg-[#0b0f14] bg-contain bg-center bg-no-repeat"
+      className={cn(STORE_BANNER_CARD, "aspect-[6047/1890] w-full bg-contain bg-center bg-no-repeat")}
       style={{ backgroundImage: "url(/images/mascot/Loja.png)" }}
     />
   )
@@ -508,7 +509,7 @@ function HeroSlide({
       // texto pode passar do 3:4 de um celular estreito, e aí o slide cresce
       // em vez de cortar o título. Quem recorta o zoom da arte é a <section>.
       className={cn(
-        "relative col-start-1 row-start-1 aspect-[3/4] max-h-[620px] w-full md:aspect-[16/5] md:max-h-none md:min-h-[380px]",
+        "relative col-start-1 row-start-1 aspect-[3/4] max-h-[620px] w-full md:aspect-[16/5] md:max-h-none md:min-h-[360px]",
         isCurrent ? "opacity-100" : "pointer-events-none",
         !isCurrent && (isLeaving ? "opacity-100 motion-reduce:opacity-0" : "opacity-0"),
         animation
@@ -522,7 +523,7 @@ function HeroSlide({
 
       <div
         className={cn(
-          "relative flex h-full flex-col justify-end gap-3 px-5 pt-5 md:justify-center md:gap-4 md:px-12 lg:px-16",
+          "relative flex h-full flex-col justify-end gap-3 px-5 pt-5 md:justify-center md:gap-4 md:px-10 lg:px-14",
           total > 1 ? "pb-12 md:pb-10" : "pb-6 md:pb-10"
         )}
       >
@@ -658,7 +659,10 @@ function HeroCarousel({ slides }: { slides: StoreHeroView[] }) {
       onPointerCancel={() => {
         dragStartRef.current = null
       }}
-      className="group/hero relative touch-pan-y overflow-hidden border-b border-[#1c1c1c] bg-[#0b0f14]"
+      // Cartão arredondado na coluna da Loja (store-layout.ts), não faixa de
+      // borda a borda. `isolate` em STORE_BANNER_CARD: sem ele o Safari
+      // deixa o slide em animação (transform) vazar o canto arredondado.
+      className={cn(STORE_BANNER_CARD, "group/hero touch-pan-y")}
     >
       {/* Todos os slides na mesma célula do grid: o que entra e o que sai
           deslizam lado a lado, e a <section> (overflow-hidden) recorta. */}
@@ -702,8 +706,10 @@ function HeroCarousel({ slides }: { slides: StoreHeroView[] }) {
             <ChevronRight className="size-5" />
           </button>
 
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex items-center justify-center pb-4">
-            <div className="pointer-events-auto flex items-center gap-2">
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex items-center justify-center pb-3.5 md:pb-4">
+            {/* Bolinhas numa pílula de vidro: legíveis sobre arte clara (a
+                foto do produto em fundo branco engolia as bolinhas soltas). */}
+            <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-white/10 bg-black/35 px-2.5 py-2 backdrop-blur-md">
               {slides.map((slide, index) => {
                 const isCurrent = index === currentIndex
                 return (
@@ -744,7 +750,7 @@ function HeroCarousel({ slides }: { slides: StoreHeroView[] }) {
               type="button"
               onClick={() => setIsStopped((value) => !value)}
               aria-label={isStopped ? "Retomar rotação dos slides" : "Pausar rotação dos slides"}
-              className="pointer-events-auto absolute right-3 rounded-full bg-black/40 p-1.5 text-white backdrop-blur-sm transition-colors hover:bg-black/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 md:right-5"
+              className="pointer-events-auto absolute right-3.5 rounded-full border border-white/10 bg-black/35 p-2 text-white backdrop-blur-md transition-colors hover:bg-black/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 md:right-5"
             >
               {isStopped ? <Play className="size-3.5" /> : <Pause className="size-3.5" />}
             </button>
@@ -804,38 +810,45 @@ function SealItem({ seal }: { seal: StoreHeroSeal }) {
   const content = (
     <>
       <span
-        className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-white/10 md:size-9"
-        style={{ background: `color-mix(in oklab, ${tint} 16%, #0e0e0e)` }}
+        className="flex size-7 shrink-0 items-center justify-center rounded-lg"
+        style={{ background: `color-mix(in oklab, ${tint} 18%, #0e0e0e)` }}
       >
-        <Icon className="size-4 md:size-[18px]" style={{ color: tint }} strokeWidth={2} />
+        <Icon className="size-[15px]" style={{ color: tint }} strokeWidth={2.1} />
       </span>
       <span className="flex min-w-0 flex-col">
-        <span className="flex items-center gap-1 text-[12px] font-bold leading-tight text-white md:text-[13px]">
+        <span className="flex items-center gap-1 whitespace-nowrap text-[12.5px] font-bold leading-tight text-white">
           {seal.title}
           {seal.link && (
-            // No celular o título quebra em duas linhas e a seta solta ficava
-            // longe do texto; lá o selo inteiro já é a área de toque.
             <ArrowRight
-              className="hidden size-3 shrink-0 text-white/40 transition-all group-hover/seal:translate-x-0.5 group-hover/seal:text-white md:block"
+              className="size-3 shrink-0 text-white/35 transition-all group-hover/seal:translate-x-0.5 group-hover/seal:text-white"
               strokeWidth={2.4}
             />
           )}
         </span>
+        {/* Uma linha só, e só onde cabe: em duas/três linhas a descrição
+            fazia a faixa ficar mais alta que a própria informação pedia. O
+            texto inteiro fica no `title`. */}
         {seal.description && (
-          <span className="mt-0.5 hidden text-[11.5px] leading-snug text-[#8f8f8f] lg:block">{seal.description}</span>
+          <span title={seal.description} className="hidden truncate text-[11px] leading-snug text-[#8a8a8a] xl:block">
+            {seal.description}
+          </span>
         )}
       </span>
     </>
   )
-  const className = "group/seal flex items-center gap-2.5 md:gap-3"
+  // Chip: no celular a fileira rola de lado (shrink-0); do md em diante a
+  // grade divide a largura e o chip estica até a célula.
+  const className =
+    "group/seal flex h-full shrink-0 items-center gap-2.5 rounded-xl border border-white/[0.07] bg-white/[0.025] px-3 py-2 transition-colors md:shrink"
+  const linkClassName = cn(className, "hover:border-white/15 hover:bg-white/[0.05]")
 
   if (!seal.link) return <div className={className}>{content}</div>
   return isInternalBannerLink(seal.link) ? (
-    <RouteLink href={seal.link} className={className}>
+    <RouteLink href={seal.link} className={linkClassName}>
       {content}
     </RouteLink>
   ) : (
-    <a href={seal.link} target="_blank" rel="noopener noreferrer" className={className}>
+    <a href={seal.link} target="_blank" rel="noopener noreferrer" className={linkClassName}>
       {content}
     </a>
   )
@@ -847,11 +860,11 @@ function RatingSummary({ rating }: { rating: NonNullable<StoreHeroTrust["rating"
   return (
     <RouteLink
       href="/loja/avaliacoes"
-      className="group/rating flex shrink-0 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-2 transition-colors hover:border-white/25 hover:bg-white/[0.07]"
+      className="group/rating flex shrink-0 items-center justify-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.025] px-3.5 py-2.5 transition-colors hover:border-white/15 hover:bg-white/[0.05]"
     >
       <Star className="size-4 fill-amber-400 text-amber-400" strokeWidth={0} />
       <span className="font-display text-[15px] font-bold text-white">{average}</span>
-      <span className="text-[11.5px] font-semibold text-[#9a9a9a] group-hover/rating:text-white">
+      <span className="whitespace-nowrap text-[11.5px] font-semibold text-[#9a9a9a] group-hover/rating:text-white">
         {rating.count} {rating.count === 1 ? "avaliação" : "avaliações"} de compradores
       </span>
     </RouteLink>
@@ -866,25 +879,31 @@ function RatingSummary({ rating }: { rating: NonNullable<StoreHeroTrust["rating"
 export function HeroSealsBar({ trust }: { trust: StoreHeroTrust }) {
   if (trust.seals.length === 0 && !trust.rating) return null
 
+  // Selos em chips compactos logo abaixo do banner, na mesma coluna dele.
+  // Eram uma faixa de borda a borda com título + descrição de duas linhas,
+  // mais alta que a informação justificava e fora do alinhamento da página.
   return (
-    <section aria-label="Por que comprar na Loja Sunano" className="border-b border-[#1c1c1c] bg-[#0b0f14]">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 px-4 py-3.5 lg:flex-row lg:items-center lg:gap-6 lg:px-8 lg:py-4">
-        {trust.seals.length > 0 && (
-          <ul
-            className={cn(
-              "grid flex-1 grid-cols-2 gap-x-3 gap-y-3 md:gap-x-5",
-              trust.seals.length === 3 ? "md:grid-cols-3" : trust.seals.length >= 4 ? "md:grid-cols-4" : ""
-            )}
-          >
-            {trust.seals.map((seal) => (
-              <li key={`${seal.icon}-${seal.title}`} className="min-w-0">
-                <SealItem seal={seal} />
-              </li>
-            ))}
-          </ul>
-        )}
-        {trust.rating && <RatingSummary rating={trust.rating} />}
-      </div>
+    <section aria-label="Por que comprar na Loja Sunano" className="flex flex-col gap-2 lg:flex-row lg:items-stretch">
+      {trust.seals.length > 0 && (
+        <ul
+          className={cn(
+            // Celular: fileira que rola de lado, com a borda direita
+            // esmaecendo para avisar que tem mais (mesmo padrão das pílulas
+            // de categoria do menu).
+            "-mx-4 flex min-w-0 flex-1 gap-2 overflow-x-auto px-4 [mask-image:linear-gradient(to_right,#000_calc(100%_-_32px),transparent)] [scrollbar-width:none] md:mx-0 md:grid md:overflow-visible md:px-0 md:[mask-image:none]",
+            trust.seals.length === 2 && "md:grid-cols-2",
+            trust.seals.length === 3 && "md:grid-cols-3",
+            trust.seals.length >= 4 && "md:grid-cols-4"
+          )}
+        >
+          {trust.seals.map((seal) => (
+            <li key={`${seal.icon}-${seal.title}`} className="min-w-0 shrink-0 md:shrink">
+              <SealItem seal={seal} />
+            </li>
+          ))}
+        </ul>
+      )}
+      {trust.rating && <RatingSummary rating={trust.rating} />}
     </section>
   )
 }
@@ -892,9 +911,9 @@ export function HeroSealsBar({ trust }: { trust: StoreHeroTrust }) {
 export function StoreHero({ slides, trust }: { slides: StoreHeroView[]; trust?: StoreHeroTrust }) {
   const liveSlides = useLiveSlides(slides)
   return (
-    <>
+    <div className={cn(STORE_CARD_WIDTH, "mt-3 flex flex-col gap-2.5 sm:mt-5 sm:gap-3")}>
       {liveSlides.length === 0 ? <StaticStoreHero /> : <HeroCarousel slides={liveSlides} />}
       {trust && <HeroSealsBar trust={trust} />}
-    </>
+    </div>
   )
 }

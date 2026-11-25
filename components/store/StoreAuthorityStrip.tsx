@@ -44,61 +44,48 @@ const AUTHORITY_ITEMS: AuthorityItem[] = [
  * pagamento e entrega agora são ditos pela barra comercial, logo acima.
  */
 export function StoreAuthorityStrip() {
+  // Chips compactos, o mesmo desenho dos selos do hero da Home
+  // (`HeroSealsBar`): eram três cartões de ~130px de altura com explicação em
+  // duas linhas, que empurravam o catálogo — o que a pessoa veio ver na
+  // landing de marca — para baixo da dobra. A explicação fica numa linha
+  // (inteira no `title`) e o chip inteiro é o link, quando tem.
   return (
     <section aria-label="Por que comprar na Loja Sunano">
-      {/* Celular: três colunas compactas, ícone + título, sem descrição, para não empurrar a vitrine. */}
-      <ul className="grid grid-cols-3 gap-2 rounded-2xl border border-[#262626] bg-card px-2 py-3 sm:hidden">
-        {AUTHORITY_ITEMS.map(({ icon: Icon, title, tint, href }) => {
+      <ul className="-mx-4 flex gap-2 overflow-x-auto px-4 [mask-image:linear-gradient(to_right,#000_calc(100%_-_32px),transparent)] [scrollbar-width:none] md:mx-0 md:grid md:grid-cols-3 md:overflow-visible md:px-0 md:[mask-image:none]">
+        {AUTHORITY_ITEMS.map(({ icon: Icon, title, description, tint, href, linkLabel }) => {
           const content = (
             <>
-              <Icon className="size-[18px]" style={{ color: tint }} strokeWidth={1.9} />
-              <span className="text-[10.5px] font-bold leading-[1.25] text-[#d4d4d4]">{title}</span>
+              <span
+                className="flex size-7 shrink-0 items-center justify-center rounded-lg"
+                style={{ background: `color-mix(in oklab, ${tint} 18%, #0e0e0e)` }}
+              >
+                <Icon className="size-[15px]" style={{ color: tint }} strokeWidth={2.1} />
+              </span>
+              <span className="flex min-w-0 flex-col">
+                <span className="flex items-center gap-1 whitespace-nowrap text-[12.5px] font-bold leading-tight text-white">
+                  {title}
+                  {href && <ArrowRight className="size-3 shrink-0 text-white/35 transition-all group-hover/seal:translate-x-0.5 group-hover/seal:text-white" strokeWidth={2.4} />}
+                </span>
+                <span title={description} className="hidden truncate text-[11px] leading-snug text-[#8a8a8a] lg:block">
+                  {description}
+                </span>
+              </span>
             </>
           )
+          const className =
+            "group/seal flex h-full items-center gap-2.5 rounded-xl border border-white/[0.07] bg-white/[0.025] px-3 py-2 transition-colors"
           return (
-            <li key={title}>
+            <li key={title} className="min-w-0 shrink-0 md:shrink">
               {href ? (
-                <Link href={href} className="flex flex-col items-center gap-1.5 text-center">
+                <Link href={href} aria-label={`${title}: ${linkLabel ?? description}`} className={`${className} hover:border-white/15 hover:bg-white/[0.05]`}>
                   {content}
                 </Link>
               ) : (
-                <div className="flex flex-col items-center gap-1.5 text-center">{content}</div>
+                <div className={className}>{content}</div>
               )}
             </li>
           )
         })}
-      </ul>
-
-      {/* Tablet/desktop: três cartões lado a lado com a explicação. */}
-      <ul className="hidden grid-cols-3 gap-3 sm:grid lg:gap-4">
-        {AUTHORITY_ITEMS.map(({ icon: Icon, title, description, tint, href, linkLabel }) => (
-          <li
-            key={title}
-            className="flex items-start gap-3.5 rounded-2xl border border-[#262626] bg-card p-4 lg:p-5"
-            style={{ background: `radial-gradient(120% 140% at 0% 0%, color-mix(in oklab, ${tint} 7%, transparent), transparent 60%), var(--card)` }}
-          >
-            <span
-              className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-white/10"
-              style={{ background: `color-mix(in oklab, ${tint} 16%, #0e0e0e)` }}
-            >
-              <Icon className="size-[22px]" style={{ color: tint }} strokeWidth={1.8} />
-            </span>
-            <div className="flex min-w-0 flex-col gap-1">
-              <h3 className="font-sans text-[14.5px] font-bold tracking-normal text-white">{title}</h3>
-              <p className="text-[12.5px] leading-[1.5] text-[#9a9a9a]">{description}</p>
-              {href && linkLabel && (
-                <Link
-                  href={href}
-                  className="mt-0.5 inline-flex w-fit items-center gap-1 text-[12px] font-bold transition-opacity hover:opacity-80"
-                  style={{ color: tint }}
-                >
-                  {linkLabel}
-                  <ArrowRight className="size-3.5" strokeWidth={2.4} />
-                </Link>
-              )}
-            </div>
-          </li>
-        ))}
       </ul>
     </section>
   )

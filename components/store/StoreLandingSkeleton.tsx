@@ -1,5 +1,8 @@
 import { Skeleton } from "@/components/ui/skeleton"
+import { cn } from "@/lib/utils"
 import { ProductCardSkeleton } from "@/components/store/ProductCard"
+import { ContentSurface, TopBarDock } from "@/components/layout/TopBarDock"
+import { STORE_BANNER_CARD, STORE_CARD_WIDTH, STORE_CONTAINER } from "@/components/store/store-layout"
 
 /**
  * Carregando das landings de categoria e marca (`loading.tsx`). Sem ele o Next
@@ -8,13 +11,20 @@ import { ProductCardSkeleton } from "@/components/store/ProductCard"
  * tivesse aberto sem filtro, e a grade só trocava depois.
  *
  * Mesma silhueta de `StoreBannerHero` + catálogo de `StoreContent`, para a
- * troca não pular.
+ * troca não pular. A ilha do menu entra como esqueleto: sem ela, a barra do
+ * topo sumia durante o carregamento e o conteúdo subia 72px.
  */
 export function StoreLandingSkeleton() {
   return (
-    <div>
-      <div className="border-b border-[#1c1c1c] bg-[#0b0f14] py-10 sm:py-14">
-        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 lg:px-8">
+    <>
+      <TopBarDock glassClassName="gap-3 px-3">
+        <Skeleton className="size-8 shrink-0 rounded-lg" />
+        <Skeleton className="h-9 w-full max-w-[320px] rounded-full" />
+        <Skeleton className="ml-auto size-9 shrink-0 rounded-full" />
+      </TopBarDock>
+      <ContentSurface>
+      <div className={cn(STORE_BANNER_CARD, STORE_CARD_WIDTH, "mt-3 py-7 sm:mt-5 sm:py-10")}>
+        <div className="flex flex-col gap-3 px-5 sm:px-8 lg:px-10">
           <Skeleton className="h-4 w-28" />
           <div className="flex items-center gap-3.5">
             <Skeleton className="size-14 shrink-0 rounded-2xl" />
@@ -27,7 +37,7 @@ export function StoreLandingSkeleton() {
         </div>
       </div>
 
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 pt-5 pb-10 sm:gap-7 sm:pt-6 sm:pb-[72px] lg:px-8">
+      <div className={cn(STORE_CONTAINER, "flex flex-col gap-5 pt-5 pb-10 sm:gap-7 sm:pt-6 sm:pb-[72px]")}>
         <div className="flex gap-2 overflow-hidden">
           {Array.from({ length: 5 }).map((_, idx) => (
             <Skeleton key={idx} className="h-9 w-28 shrink-0 rounded-full" />
@@ -43,6 +53,7 @@ export function StoreLandingSkeleton() {
           ))}
         </div>
       </div>
-    </div>
+      </ContentSurface>
+    </>
   )
 }

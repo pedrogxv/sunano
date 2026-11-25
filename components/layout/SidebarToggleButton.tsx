@@ -4,6 +4,7 @@ import { PanelLeft } from "lucide-react"
 import { usePathname } from "@/lib/hooks/use-pathname"
 import { useSidebar } from "@/components/providers/sidebar-context"
 import { cn } from "@/lib/utils"
+import { TOPBAR_ICON_BUTTON } from "@/components/layout/topbar-styles"
 
 /**
  * Botão que recolhe a sidebar (desktop) ou abre a gaveta (mobile). Mora na
@@ -50,7 +51,7 @@ export function SidebarToggleButton({ className }: { className?: string }) {
       onClick={handleSidebarToggle}
       className={cn(
         // 44px no mobile: é o único acesso à gaveta de navegação por lá.
-        "flex size-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-all hover:bg-muted/40 hover:text-foreground md:size-8",
+        TOPBAR_ICON_BUTTON,
         className
       )}
       aria-label={isCollapsed ? "Expandir sidebar" : "Recolher sidebar"}

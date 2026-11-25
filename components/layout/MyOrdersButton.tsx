@@ -6,6 +6,7 @@ import { PackageSearch } from "lucide-react"
 import { useAuthUser } from "@/components/providers/auth-context"
 import { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
+import { TOPBAR_BUTTON_ACTIVE, TOPBAR_LABEL_BUTTON } from "@/components/layout/topbar-styles"
 
 /**
  * Atalho para /conta/pedidos na TopBar. O mesmo link já existe no menu do
@@ -35,12 +36,14 @@ export function MyOrdersButton() {
       aria-label={label}
       title={label}
       className={cn(
-        "animate-fade-in-up relative flex size-11 shrink-0 items-center justify-center gap-2 rounded-lg border border-border bg-card/70 text-sm font-medium text-muted-foreground transition-all hover:bg-muted/40 hover:text-foreground sm:h-8 sm:w-auto sm:px-3",
-        active && "bg-muted/40 text-foreground"
+        "animate-fade-in-up",
+        TOPBAR_LABEL_BUTTON,
+        "md:px-2.5 lg:px-3",
+        active && TOPBAR_BUTTON_ACTIVE
       )}
     >
-      <PackageSearch className="size-[15px]" />
-      <span className="hidden text-xs lg:inline">{t.auth.myOrders}</span>
+      <PackageSearch className="size-[17px] md:size-[15px]" />
+      <span className="hidden lg:inline">{t.auth.myOrders}</span>
       {/* Texto curto em vez de número solto: "9+" no canto não dizia o que
           era. No desktop vira pílula ao lado do rótulo; no mobile o botão é
           só ícone e não cabe texto, então fica o ponto. A contagem vai no
@@ -56,7 +59,7 @@ export function MyOrdersButton() {
           </span>
           <span
             aria-hidden
-            className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-amber-500 ring-2 ring-background lg:hidden"
+            className="absolute right-1.5 top-1.5 size-2 rounded-full bg-amber-500 ring-2 ring-[#141416] lg:hidden"
           />
         </>
       )}

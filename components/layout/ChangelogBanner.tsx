@@ -1,7 +1,7 @@
 "use client"
 
 import { RouteLink } from "@/components/ui/route-link"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import { Sparkles, X } from "lucide-react"
 
 import { CHANGELOG_BANNER_STORAGE_KEY as STORAGE_KEY } from "@/lib/changelog-banner"
@@ -28,7 +28,6 @@ export function ChangelogBanner() {
   // antes de pintar pelo script do <head> (`changelogBannerProbeScript`, em
   // app/layout.tsx), e o efeito abaixo só tira do DOM.
   const [dismissed, setDismissed] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!latest) return
@@ -38,36 +37,6 @@ export function ChangelogBanner() {
       setDismissed(false)
     }
   }, [latest])
-
-  // Siblings sticky abaixo do header (sidebars de filtro/fórum) precisam saber
-  // quanto o banner soma à TopBar pra não ficarem escondidos atrás dele. A
-  // altura varia com o conteúdo/viewport, então medimos em vez de fixar um valor.
-  useEffect(() => {
-    const el = ref.current
-    if (!el) {
-      document.documentElement.style.removeProperty("--sticky-header-h")
-      return
-    }
-    const update = () => {
-      // Escondido pelo CSS (já dispensado, antes do efeito tirá-lo do DOM):
-      // altura 0 viraria `--sticky-header-h: 0px`; fica o padrão de globals.css.
-      if (el.getClientRects().length === 0) {
-        document.documentElement.style.removeProperty("--sticky-header-h")
-        return
-      }
-      document.documentElement.style.setProperty(
-        "--sticky-header-h",
-        `${el.getBoundingClientRect().bottom}px`
-      )
-    }
-    update()
-    const observer = new ResizeObserver(update)
-    observer.observe(el)
-    return () => {
-      observer.disconnect()
-      document.documentElement.style.removeProperty("--sticky-header-h")
-    }
-  }, [dismissed, latest])
 
   if (!latest || dismissed) return null
 
@@ -82,9 +51,12 @@ export function ChangelogBanner() {
 
   return (
     <>
+      {/* Fora da pilha sticky: abre o topo da superfície do conteúdo, logo
+          abaixo da ilha da TopBar, e rola com a página. Grudado, somava uma
+          altura variável a `--sticky-header-h` (medida por ResizeObserver a
+          cada mudança) e roubava uma faixa da tela em toda rolagem. */}
       <div
-        ref={ref}
-        className="changelog-banner sticky top-16 z-20 flex items-center gap-3 border-b border-border bg-card px-4 py-2 text-xs sm:text-sm"
+        className="changelog-banner flex items-center gap-3 border-b border-border bg-card px-4 py-2 text-xs sm:text-sm"
       >
         <Sparkles className="size-4 shrink-0 text-primary" />
         <p className="line-clamp-1 min-w-0 flex-1 text-foreground">

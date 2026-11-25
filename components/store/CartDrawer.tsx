@@ -11,6 +11,7 @@ import { formatBRL } from "@/lib/format"
 import { computeCardTotalCents } from "@/lib/store-pricing"
 import { useStoreSettings } from "@/lib/hooks/use-store-settings"
 import { cn } from "@/lib/utils"
+import { TOPBAR_BADGE, TOPBAR_ICON_BUTTON } from "@/components/layout/topbar-styles"
 import { SALE_TYPE_ICON, SALE_TYPE_LABEL } from "@/lib/store-sale-type"
 import { cartLineMaxQuantity } from "@/lib/store-cart-limits"
 import { storageImgProps } from "@/lib/storage-thumb"
@@ -26,11 +27,11 @@ export function CartButton() {
       aria-label="Abrir carrinho"
       // 44px no mobile, como o sino e o botão de entrar ao lado: com h-8 ele
       // ficava visivelmente menor que os vizinhos na mesma fileira.
-      className="relative flex size-11 shrink-0 items-center justify-center gap-2 rounded-lg border border-border bg-card/70 text-sm sm:h-8 sm:w-auto sm:px-2.5 font-medium text-muted-foreground transition-all hover:bg-muted/40 hover:text-foreground"
+      className={TOPBAR_ICON_BUTTON}
     >
-      <ShoppingCart className="size-[15px]" />
+      <ShoppingCart className="size-[17px]" />
       {count > 0 && (
-        <span className="absolute -right-1.5 -top-1.5 flex size-4 items-center justify-center rounded-full bg-emerald-500 text-[9px] font-bold text-white ring-2 ring-card">
+        <span className={cn(TOPBAR_BADGE, "bg-emerald-500")}>
           {count > 9 ? "9+" : count}
         </span>
       )}

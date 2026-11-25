@@ -4,7 +4,8 @@ import { useMemo, useState } from "react"
 import Link from "next/link"
 import { ArrowLeft, Star } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { StoreCategoryNav } from "@/components/store/StoreCategoryNav"
+import { StoreCategoryNav, StoreSurface } from "@/components/store/StoreCategoryNav"
+import { STORE_BANNER_CARD, STORE_CARD_WIDTH, STORE_CONTAINER } from "@/components/store/store-layout"
 import {
   entryFromReview,
   entryFromTestimonial,
@@ -54,16 +55,17 @@ export function StoreReviewsContent({ filterOptions, aggregate, reviews, testimo
   const { avgRating, count, distribution } = aggregate
 
   return (
-    <div>
+    <>
       <StoreCategoryNav data={filterOptions} activeCategory={null} />
+      <StoreSurface>
 
-      <div className="relative overflow-hidden border-b border-[#1c1c1c] bg-[#0b0f14] py-10 sm:py-14">
+      <div className={cn(STORE_BANNER_CARD, STORE_CARD_WIDTH, "mt-3 py-7 sm:mt-5 sm:py-10")}>
         <Star
           aria-hidden="true"
           className="pointer-events-none absolute -bottom-8 -right-6 size-[220px] fill-amber-400/[0.08] text-amber-400/[0.08] sm:size-[280px]"
           strokeWidth={0}
         />
-        <div className="relative mx-auto flex max-w-7xl flex-col gap-6 px-4 lg:px-8">
+        <div className="relative flex flex-col gap-6 px-5 sm:px-8 lg:px-10">
           <div className="flex flex-col gap-3">
             <Link
               href="/loja"
@@ -140,7 +142,7 @@ export function StoreReviewsContent({ filterOptions, aggregate, reviews, testimo
         </div>
       </div>
 
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 pb-10 pt-7 sm:pb-[72px] sm:pt-10 lg:px-8">
+      <div className={cn(STORE_CONTAINER, "flex flex-col gap-5 pb-10 pt-6 sm:pb-[72px] sm:pt-8")}>
         {count > 0 && (
           <div className="flex flex-wrap gap-2" role="group" aria-label="Filtrar por nota">
             <FilterChip active={stars === null} onClick={() => pick(null)}>
@@ -181,7 +183,8 @@ export function StoreReviewsContent({ filterOptions, aggregate, reviews, testimo
           </>
         )}
       </div>
-    </div>
+      </StoreSurface>
+    </>
   )
 }
 

@@ -30,8 +30,9 @@ import { PreorderLotPanel, PreorderStatusChip } from "@/components/store/Preorde
 import { PaymentComplementPanel } from "@/components/store/PaymentComplementPanel"
 import { SaleWindowCountdown } from "@/components/store/SaleWindowCountdown"
 import { useProductSelection } from "@/components/store/use-product-selection"
-import { FormattedText } from "@/components/ui/formatted-text"
-import { StoreCategoryNav } from "@/components/store/StoreCategoryNav"
+import { ProductDescription } from "@/components/store/ProductDescription"
+import { StoreCategoryNav, StoreSurface } from "@/components/store/StoreCategoryNav"
+import { STORE_BANNER_CARD, STORE_CARD_WIDTH, STORE_CONTAINER } from "@/components/store/store-layout"
 import { ProductBreadcrumb } from "@/components/store/ProductBreadcrumb"
 import { AffiliateShareButton } from "@/components/affiliates/AffiliateShareButton"
 import { ShareMenu } from "@/components/forum/ShareMenu"
@@ -212,7 +213,8 @@ export function ProductDetailContent({ filterOptions, rating, recommendations, .
   return (
     <>
       <StoreCategoryNav data={filterOptions} activeCategory={product.category} />
-      <div className="mx-auto max-w-7xl px-4 pb-28 pt-5 md:px-6 lg:pb-16">
+      <StoreSurface>
+      <div className={cn(STORE_CONTAINER, "pb-28 pt-5 lg:pb-16")}>
         <ProductBreadcrumb productName={product.name} category={product.category} brand={product.brand} />
 
         <div
@@ -581,9 +583,7 @@ export function ProductDetailContent({ filterOptions, rating, recommendations, .
               {product.description && (
                 <section id="descricao" className={cn("space-y-4", PRODUCT_SECTION_SCROLL_MARGIN)}>
                   <h2 className="font-display text-2xl font-bold text-foreground">Descrição</h2>
-                  <div className="whitespace-pre-line text-[16px] leading-relaxed text-foreground/85">
-                    <FormattedText text={product.description} />
-                  </div>
+                  <ProductDescription text={product.description} />
                 </section>
               )}
 
@@ -642,6 +642,7 @@ export function ProductDetailContent({ filterOptions, rating, recommendations, .
           onBuy={handleBuyNow}
         />
       )}
+      </StoreSurface>
     </>
   )
 }

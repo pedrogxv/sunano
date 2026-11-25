@@ -31,6 +31,7 @@ import {
   type NotificationFilter,
 } from "@/components/notifications/notification-row"
 import { cn } from "@/lib/utils"
+import { TOPBAR_BADGE, TOPBAR_BUTTON_ACTIVE, TOPBAR_ICON_BUTTON } from "@/components/layout/topbar-styles"
 
 /** Acima disso o badge vira "9+" — números maiores estouram o círculo. */
 const BADGE_CAP = 9
@@ -138,11 +139,11 @@ export function NotificationBell() {
           aria-label={
             unread > 0 ? `${t.notifications.ariaLabel} (${badge})` : t.notifications.ariaLabel
           }
-          className="animate-fade-in-up relative flex size-11 shrink-0 items-center justify-center rounded-lg border border-border bg-card/70 text-sm font-medium text-foreground transition-all hover:bg-muted/40 sm:h-8 sm:w-auto sm:px-3"
+          className={cn("animate-fade-in-up", TOPBAR_ICON_BUTTON, open && TOPBAR_BUTTON_ACTIVE)}
         >
-          <Bell className="size-[15px] text-primary" />
+          <Bell className="size-[17px]" />
           {unread > 0 && (
-            <span className="absolute -right-1 -top-1 flex min-w-[18px] items-center justify-center rounded-full bg-violet-500 px-1 text-[10px] font-bold leading-[18px] text-white shadow-sm">
+            <span className={cn(TOPBAR_BADGE, "bg-violet-500")}>
               {badge}
             </span>
           )}

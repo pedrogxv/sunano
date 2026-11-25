@@ -6,6 +6,7 @@ import { SidebarToggleButton } from "@/components/layout/SidebarToggleButton"
 import { usePageHeaderState } from "@/components/providers/page-header-context"
 import { CartButton } from "@/components/store/CartDrawer"
 import { MyOrdersButton } from "@/components/layout/MyOrdersButton"
+import { TopBarDock } from "@/components/layout/TopBarDock"
 import { useT } from "@/lib/use-t"
 
 type PageDefaults = { title: string; description?: string }
@@ -106,48 +107,47 @@ export function TopBar() {
   const pageDescription = override.description ?? defaults.description
 
   return (
-    <div className="sticky top-0 z-20 min-h-16 border-b border-border bg-card">
-      <div className="min-h-16 flex items-center justify-between gap-4 px-4 py-2">
-        {/* Left — Toggle + Page Title + Description */}
-        <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
-          <SidebarToggleButton />
-          <div className="h-8 w-px shrink-0 bg-border" />
-          <div className="min-w-0 flex flex-col justify-center leading-tight">
-            <span className="truncate text-sm font-semibold tracking-tight text-foreground">{pageTitle}</span>
-            {pageDescription && (
-              <span className="truncate text-xs text-muted-foreground">{pageDescription}</span>
-            )}
-          </div>
-        </div>
-
-        {/* Right — carrinho, notificações e conta. O saldo de Aura mora no
-            painel do rodapé da sidebar (AuraMissionsBadge). */}
-        <div className="flex shrink-0 items-center gap-1 sm:gap-1.5 md:gap-2">
-          {/* Carrinho — só aparece se houver itens pendentes, pra não poluir
-              o header. Some no checkout. */}
-          {!isAdmin && !isCheckout && <CartButton />}
-
-          {/* Meus pedidos — atalho ao lado do sino. No celular fica só no
-              menu do avatar: com o sino e a conta, um terceiro botão de 44px
-              espremia o título da página. */}
-          {!isAdmin && (
-            <div className="hidden sm:contents">
-              <MyOrdersButton />
-            </div>
+    // Ilha de vidro solta do conteúdo (TopBarDock): gêmea da sidebar.
+    <TopBarDock glassClassName="justify-between gap-3 pl-1.5 pr-2 sm:gap-4 md:pl-2.5 md:pr-3">
+      {/* Left — Toggle + Page Title + Description */}
+      <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+        <SidebarToggleButton />
+        <div className="h-7 w-px shrink-0 bg-white/10" />
+        <div className="min-w-0 flex flex-col justify-center leading-tight">
+          <span className="truncate text-sm font-semibold tracking-tight text-foreground">{pageTitle}</span>
+          {pageDescription && (
+            <span className="truncate text-xs text-muted-foreground">{pageDescription}</span>
           )}
-
-          {/* Notificações — vale também no admin. */}
-          <NotificationBell />
-
-          {/* Conta — sempre no canto, no site e no painel. O `variant` só
-              troca os atalhos do menu (no admin, Configurações do painel). */}
-          <div className="hidden h-6 w-px shrink-0 bg-border sm:block" />
-          <AuthUser
-            layout="topbar"
-            variant={isAdmin ? "admin" : "public"}
-          />
         </div>
       </div>
-    </div>
+
+      {/* Right — carrinho, notificações e conta. O saldo de Aura mora no
+          painel do rodapé da sidebar (AuraMissionsBadge). */}
+      <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
+        {/* Carrinho — só aparece se houver itens pendentes, pra não poluir
+            o header. Some no checkout. */}
+        {!isAdmin && !isCheckout && <CartButton />}
+
+        {/* Meus pedidos — atalho ao lado do sino. No celular fica só no
+            menu do avatar: com o sino e a conta, um terceiro botão de 44px
+            espremia o título da página. */}
+        {!isAdmin && (
+          <div className="hidden sm:contents">
+            <MyOrdersButton />
+          </div>
+        )}
+
+        {/* Notificações — vale também no admin. */}
+        <NotificationBell />
+
+        {/* Conta — sempre no canto, no site e no painel. O `variant` só
+            troca os atalhos do menu (no admin, Configurações do painel). */}
+        <div className="mx-0.5 hidden h-6 w-px shrink-0 bg-white/10 sm:block" />
+        <AuthUser
+          layout="topbar"
+          variant={isAdmin ? "admin" : "public"}
+        />
+      </div>
+    </TopBarDock>
   )
 }

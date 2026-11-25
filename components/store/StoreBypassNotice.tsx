@@ -19,7 +19,7 @@ export function StoreBypassNotice() {
   return (
     <div
       role="status"
-      className="flex items-center justify-center gap-2 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-center text-xs text-amber-200"
+      className="mx-2 mt-2 flex items-center justify-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-center text-xs text-amber-200 md:mx-0"
     >
       <ShieldAlert className="size-4 shrink-0 text-amber-400" aria-hidden />
       <span>

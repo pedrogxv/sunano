@@ -14,6 +14,8 @@ import { StoreSearchBox } from "@/components/store/StoreSearchBox"
 import { StoreCommerceBarSlot } from "@/components/store/StoreCommerceBar"
 import { RouteLink } from "@/components/ui/route-link"
 import { SidebarToggleButton } from "@/components/layout/SidebarToggleButton"
+import { ContentSurface, TopBarDock } from "@/components/layout/TopBarDock"
+import { TOPBAR_BADGE, TOPBAR_ICON_BUTTON } from "@/components/layout/topbar-styles"
 import { AuthUser, NotificationBell } from "@/components/layout/topbar-account"
 import { useAuthUser } from "@/components/providers/auth-context"
 import type { StoreFilterOptions } from "@/lib/server/repositories/store-repository"
@@ -61,6 +63,11 @@ const PREVIEW_MAX_CANDIDATES = 3
 /** Linhas por coluna do mega menu: mais que isso vira lista, não atalho. */
 const MENU_COLUMN_MAX = 8
 
+/** Item do menu dentro da ilha: cápsula (o sublinhado colado na borda de baixo não cabe num painel arredondado). */
+const NAV_PILL = "flex h-9 shrink-0 items-center gap-[5px] rounded-full px-3 text-[13.5px] transition-colors"
+const NAV_PILL_ACTIVE = "bg-white/[0.09] font-bold text-white"
+const NAV_PILL_IDLE = "font-semibold text-[#b4b4b4] hover:bg-white/[0.06] hover:text-white"
+
 /** Título de coluna do mega menu. */
 function MenuHeading({ children }: { children: React.ReactNode }) {
   return <span className="text-[10.5px] font-extrabold uppercase tracking-[0.14em] text-[#7a7a7a]">{children}</span>
@@ -102,15 +109,15 @@ function NavAction({
   active?: boolean
 }) {
   const className = cn(
-    "flex h-[54px] shrink-0 items-center gap-2 border-b-2 px-2 text-[13px] transition-colors",
-    active ? "border-white font-bold text-white" : "border-transparent font-semibold text-[#b4b4b4] hover:text-white"
+    "flex h-9 shrink-0 items-center gap-2 rounded-full px-2.5 text-[13px] transition-colors",
+    active ? "bg-white/[0.09] font-bold text-white" : "font-semibold text-[#b4b4b4] hover:bg-white/[0.06] hover:text-white"
   )
   const content = (
     <>
       <span className="relative flex">
         <Icon className="size-[15px]" strokeWidth={2.1} />
         {badge > 0 && (
-          <span className="absolute -right-2.5 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-500 px-1 text-[9px] font-bold leading-none text-white ring-2 ring-card">
+          <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-500 px-1 text-[9px] font-bold leading-none text-white ring-2 ring-[#141416]">
             {badge > 99 ? "99+" : badge}
           </span>
         )}
@@ -219,176 +226,17 @@ export function StoreCategoryNav({ data, activeCategory }: StoreCategoryNavProps
     return () => clearInterval(id)
   }, [hovered, previewPaused, previewCandidates.length])
 
-  if (categories.length === 0) return null
-
-  return (
+  // Mega menu: vive no `overlay` da TopBarDock (dentro do sticky, fora do vidro).
+  const megaMenu = (
     <>
-    {/* `@container`: o menu decide o layout pela PRÓPRIA largura, não pela
-        da tela: a sidebar do site (aberta ou recolhida) muda quanto sobra.
-        Este menu É o header da Loja (a TopBar do site não aparece em /loja,
-        ver LayoutShell), por isso carrega a sidebar, o sino e a conta. Preso
-        ao rolar só no xl: abaixo disso o menu pode estar no layout de duas
-        linhas (busca + pílulas), alto demais para ficar fixo. */}
-    <div className="@container relative bg-card xl:sticky xl:top-0 xl:z-20" onMouseLeave={() => hoverGroup(null)}>
-      {/* Desktop: 3 blocos: Busca | Home + categorias (centralizados) |
-          Carrinho, Pedidos. A busca mora à esquerda para o bloco de
-          categorias ficar no meio com espaço dos dois lados. Suporte não
-          entra: o `SupportFab` flutuante já está em toda a Loja. */}
-      <nav className="hidden grid-cols-[1fr_auto_1fr] items-center gap-x-6 border-b border-[#262626] bg-card px-4 @min-[920px]:grid @min-[1100px]:px-8">
-        <div className="flex min-w-0 items-center gap-3" onMouseEnter={() => hoverGroup(null)}>
-          <SidebarToggleButton />
-          <StoreSearchBox
-            className="w-full max-w-[320px]"
-            inputClassName="h-[34px] w-full rounded-[10px] border border-[#2a2a2a] bg-[#141414] pl-[34px] pr-3 text-[12.5px] text-white outline-none placeholder:text-[#6e6e6e] focus:border-foreground/25"
-          />
-        </div>
-
-        <div className="flex items-center justify-center gap-[22px]">
-          <Link
-            href="/loja"
-            onMouseEnter={() => hoverGroup(null)}
-            className={cn(
-              "flex h-[54px] shrink-0 items-center gap-[5px] border-b-2 text-[13.5px] transition-colors",
-              isHome
-                ? "border-white font-bold text-white"
-                : "border-transparent font-semibold text-[#b4b4b4] hover:text-white"
-            )}
-          >
-            <Home className="size-[13px]" strokeWidth={2.2} />
-            Home
-          </Link>
-          {groupsWithCategories.map((group) => {
-            const groupCategories = grouped.get(group) ?? []
-            const isOpen = hovered === group
-            // Mousepad junta mousepad + glasspad; Áudio abre a página de grupo
-            // (Headset + IEM). Ver `navGroupLanding`.
-            const landing = navGroupLanding(group, groupCategories, primaryCategoryOf(groupCategories) ?? groupCategories[0])
-            const isActive = activeCategory != null && (groupCategories.includes(activeCategory) || activeCategory === landing)
-            const highlighted = isActive || isOpen
-            const tint = groupCategories.length === 1 ? getCategoryIcon(groupCategories[0]).tint : "oklch(0.75 0.15 195)"
-            // Grupo com mais de uma categoria também é link: era um <button>
-            // só de hover, e o clique não fazia nada.
-            return (
-              <Link
-                key={group}
-                href={catalogHref(landing)}
-                onMouseEnter={() => hoverGroup(group)}
-                style={{ borderColor: highlighted ? tint : "transparent" }}
-                className={cn(
-                  "flex h-[54px] shrink-0 items-center gap-[5px] border-b-2 text-[13.5px] transition-colors",
-                  highlighted ? "font-bold text-white" : "font-semibold text-[#b4b4b4] hover:text-white"
-                )}
-              >
-                {GROUP_LABEL[group]}
-              </Link>
-            )
-          })}
-          <Link
-            href="/loja/avaliacoes"
-            onMouseEnter={() => hoverGroup(null)}
-            className={cn(
-              "flex h-[54px] shrink-0 items-center gap-[5px] border-b-2 text-[13.5px] transition-colors",
-              pathname === "/loja/avaliacoes"
-                ? "border-white font-bold text-white"
-                : "border-transparent font-semibold text-[#b4b4b4] hover:text-white"
-            )}
-          >
-            <Star className="size-[13px]" strokeWidth={2.2} />
-            Avaliações
-          </Link>
-        </div>
-
-        {/* O carrinho aparece aqui SEMPRE (com contador), e não só quando tem
-            item como na TopBar: dentro da Loja ele é navegação, não aviso. */}
-        <div className="flex shrink-0 items-center justify-self-end gap-1.5" onMouseEnter={() => hoverGroup(null)}>
-          <NavAction icon={ShoppingCart} label="Carrinho" onClick={() => setCartOpen(true)} badge={cartCount} />
-          <NavAction
-            icon={Package}
-            label="Pedidos"
-            href="/conta/pedidos"
-            badge={ordersPending}
-            active={pathname?.startsWith("/conta/pedidos")}
-          />
-          <div className="mx-1 h-6 w-px shrink-0 bg-[#262626]" />
-          <NotificationBell />
-          <AuthUser layout="topbar" variant="public" />
-        </div>
-      </nav>
-
-      {/* Mobile / menu estreito: sidebar + busca + carrinho/sino/conta numa
-          linha e o mesmo menu fixo em pills. */}
-      <div className="flex items-center gap-1.5 border-b border-[#1c1c1c] bg-card px-4 py-3 @min-[920px]:hidden">
-        <SidebarToggleButton className="-ml-2" />
-        <StoreSearchBox
-          className="min-w-0 flex-1"
-          inputClassName="h-11 w-full rounded-xl border border-[#2a2a2a] bg-[#141414] pl-[38px] pr-3.5 text-[13px] text-white outline-none placeholder:text-[#6e6e6e] focus:border-foreground/25"
-          iconClassName="left-3.5 size-[15px]"
-        />
-        <button
-          type="button"
-          onClick={() => setCartOpen(true)}
-          aria-label={cartCount > 0 ? `Carrinho (${cartCount})` : "Carrinho"}
-          className="relative flex size-11 shrink-0 items-center justify-center rounded-lg text-[#b4b4b4] transition-colors hover:text-white"
-        >
-          <ShoppingCart className="size-[18px]" strokeWidth={2.1} />
-          {cartCount > 0 && (
-            <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-500 px-1 text-[9px] font-bold leading-none text-white ring-2 ring-card">
-              {cartCount > 99 ? "99+" : cartCount}
-            </span>
-          )}
-        </button>
-        <NotificationBell />
-        <AuthUser layout="topbar" variant="public" />
-      </div>
-      <div className="flex gap-2 overflow-x-auto border-b border-[#1c1c1c] bg-card px-4 pb-3.5 pt-3 [scrollbar-width:none] @min-[920px]:hidden">
-        <Link
-          href="/loja"
-          className={cn(
-            "inline-flex h-[34px] shrink-0 items-center rounded-full px-[15px] text-[12.5px] transition-colors",
-            isHome
-              ? "bg-white font-bold text-black"
-              : "border border-[#2a2a2a] bg-[#141414] font-semibold text-[#cfcfcf]"
-          )}
-        >
-          Home
-        </Link>
-        {groupsWithCategories.map((group) => {
-          const groupCategories = grouped.get(group) ?? []
-          const landing = navGroupLanding(group, groupCategories, primaryCategoryOf(groupCategories) ?? groupCategories[0])
-          const isActive = activeCategory != null && (groupCategories.includes(activeCategory) || activeCategory === landing)
-          return (
-            <Link
-              key={group}
-              href={catalogHref(landing)}
-              className={cn(
-                "inline-flex h-[34px] shrink-0 items-center rounded-full px-[15px] text-[12.5px] transition-colors",
-                isActive
-                  ? "bg-white font-bold text-black"
-                  : "border border-[#2a2a2a] bg-[#141414] font-semibold text-[#cfcfcf]"
-              )}
-            >
-              {GROUP_LABEL[group]}
-            </Link>
-          )
-        })}
-        <Link
-          href="/conta/pedidos"
-          className="inline-flex h-[34px] shrink-0 items-center gap-1.5 rounded-full border border-[#2a2a2a] bg-[#141414] px-[15px] text-[12.5px] font-semibold text-[#cfcfcf] transition-colors"
-        >
-          <Package className="size-3.5" strokeWidth={2.2} />
-          Pedidos
-        </Link>
-        <Link
-          href="/loja/avaliacoes"
-          className="inline-flex h-[34px] shrink-0 items-center rounded-full border border-[#2a2a2a] bg-[#141414] px-[15px] text-[12.5px] font-semibold text-[#cfcfcf] transition-colors"
-        >
-          Avaliações
-        </Link>
-      </div>
-
       {openGroup && (
-        <div className="absolute inset-x-0 top-full z-10 hidden border-b border-[#262626] bg-card shadow-[0_28px_60px_-20px_rgba(0,0,0,0.9)] @min-[920px]:block">
-          <div className="mx-auto flex max-w-7xl gap-8 px-4 pb-7 pt-6 lg:px-8">
+        // Painel solto embaixo da ilha, não uma faixa colada nela: abre no
+        // `top-full` do dock, cujo respiro de baixo (8px) já é a distância —
+        // e, por ser padding do próprio dock, o mouse atravessa o vão sem
+        // disparar o `onMouseLeave` que fecharia o menu. Quase opaco: aqui há
+        // texto pequeno por cima do conteúdo da página.
+        <div className="absolute inset-x-0 top-full z-10 hidden @min-[920px]:block">
+          <div className="mx-auto flex max-w-7xl gap-8 rounded-2xl border border-white/10 bg-[#111113]/[0.96] px-6 pb-7 pt-6 shadow-[inset_0_1px_0_rgb(255_255_255/0.08),0_32px_64px_-24px_rgba(0,0,0,0.95)] backdrop-blur-xl animate-in fade-in slide-in-from-top-1 duration-200 motion-reduce:animate-none lg:px-8">
             <div
               className={cn(
                 "grid min-w-0 flex-1 gap-7",
@@ -587,12 +435,201 @@ export function StoreCategoryNav({ data, activeCategory }: StoreCategoryNavProps
           </div>
         </div>
       )}
-    </div>
-
-    {/* Barra comercial: benefícios ou campanha, logo abaixo do menu, em toda
-        página da Loja. Fora do bloco acima de propósito: o mega-menu abre
-        colado no menu (`top-full`), não embaixo da barra. */}
-    <StoreCommerceBarSlot />
     </>
+  )
+
+  if (categories.length === 0) return null
+
+  return (
+    <>
+    {/* `@container`: o menu decide o layout pela PRÓPRIA largura, não pela
+        da tela: a sidebar do site (aberta ou recolhida) muda quanto sobra.
+        Este menu É o header da Loja (a TopBar do site não aparece em /loja,
+        ver LayoutShell), por isso carrega a sidebar, o sino e a conta. Preso
+        ao rolar em toda largura: virou uma ilha de UMA linha (TopBarDock) e as
+        pílulas do celular moram fora dela, embaixo. */}
+    <TopBarDock
+      className="@container"
+      glassClassName="px-2 @min-[1100px]:px-3"
+      onMouseLeave={() => hoverGroup(null)}
+      overlay={megaMenu}
+    >
+      {/* Desktop: 3 blocos: Busca | Home + categorias (centralizados) |
+          Carrinho, Pedidos. A busca mora à esquerda para o bloco de
+          categorias ficar no meio com espaço dos dois lados. Suporte não
+          entra: o `SupportFab` flutuante já está em toda a Loja. */}
+      <nav className="hidden w-full grid-cols-[1fr_auto_1fr] items-center gap-x-4 @min-[920px]:grid">
+        <div className="flex min-w-0 items-center gap-3" onMouseEnter={() => hoverGroup(null)}>
+          <SidebarToggleButton />
+          <StoreSearchBox
+            className="w-full max-w-[320px]"
+            panelClassName="left-0 w-[max(100%,30rem)]"
+            inputClassName="h-9 w-full rounded-full border border-white/10 bg-white/[0.05] pl-[34px] pr-3 text-[12.5px] text-white outline-none transition-colors placeholder:text-[#7a7a7a] hover:bg-white/[0.07] focus:border-white/25 focus:bg-black/30"
+          />
+        </div>
+
+        <div className="flex items-center justify-center gap-0.5 @min-[1100px]:gap-1">
+          <Link
+            href="/loja"
+            onMouseEnter={() => hoverGroup(null)}
+            className={cn(NAV_PILL, isHome ? NAV_PILL_ACTIVE : NAV_PILL_IDLE)}
+          >
+            <Home className="size-[13px]" strokeWidth={2.2} />
+            Home
+          </Link>
+          {groupsWithCategories.map((group) => {
+            const groupCategories = grouped.get(group) ?? []
+            const isOpen = hovered === group
+            // Mousepad junta mousepad + glasspad; Áudio abre a página de grupo
+            // (Headset + IEM). Ver `navGroupLanding`.
+            const landing = navGroupLanding(group, groupCategories, primaryCategoryOf(groupCategories) ?? groupCategories[0])
+            const isActive = activeCategory != null && (groupCategories.includes(activeCategory) || activeCategory === landing)
+            const highlighted = isActive || isOpen
+            const tint = groupCategories.length === 1 ? getCategoryIcon(groupCategories[0]).tint : "oklch(0.75 0.15 195)"
+            // Grupo com mais de uma categoria também é link: era um <button>
+            // só de hover, e o clique não fazia nada.
+            return (
+              <Link
+                key={group}
+                href={catalogHref(landing)}
+                onMouseEnter={() => hoverGroup(group)}
+                aria-expanded={isOpen}
+                style={{ "--nav-tint": tint } as React.CSSProperties}
+                className={cn(NAV_PILL, "relative", highlighted ? NAV_PILL_ACTIVE : NAV_PILL_IDLE)}
+              >
+                {GROUP_LABEL[group]}
+                {highlighted && <span aria-hidden className="topbar-pill-dot" />}
+              </Link>
+            )
+          })}
+          <Link
+            href="/loja/avaliacoes"
+            onMouseEnter={() => hoverGroup(null)}
+            className={cn(NAV_PILL, pathname === "/loja/avaliacoes" ? NAV_PILL_ACTIVE : NAV_PILL_IDLE)}
+          >
+            <Star className="size-[13px]" strokeWidth={2.2} />
+            Avaliações
+          </Link>
+        </div>
+
+        {/* O carrinho aparece aqui SEMPRE (com contador), e não só quando tem
+            item como na TopBar: dentro da Loja ele é navegação, não aviso. */}
+        <div className="flex shrink-0 items-center justify-self-end gap-1.5" onMouseEnter={() => hoverGroup(null)}>
+          <NavAction icon={ShoppingCart} label="Carrinho" onClick={() => setCartOpen(true)} badge={cartCount} />
+          <NavAction
+            icon={Package}
+            label="Pedidos"
+            href="/conta/pedidos"
+            badge={ordersPending}
+            active={pathname?.startsWith("/conta/pedidos")}
+          />
+          <div className="mx-1 h-6 w-px shrink-0 bg-white/10" />
+          <NotificationBell />
+          <AuthUser layout="topbar" variant="public" />
+        </div>
+      </nav>
+
+      {/* Mobile / menu estreito: sidebar + busca + carrinho/sino/conta numa
+          linha e o mesmo menu fixo em pills. */}
+      <div className="flex w-full items-center gap-1.5 @min-[920px]:hidden">
+        <SidebarToggleButton />
+        {/* `static`: o painel de resultados se ancora na ILHA (o vidro é
+            `relative`), não no campo, e ocupa a barra inteira — o campo do
+            celular tem ~200px, estreito demais para ler um nome de produto. */}
+        <StoreSearchBox
+          className="static min-w-0 flex-1"
+          panelClassName="inset-x-0"
+          inputClassName="h-10 w-full rounded-full border border-white/10 bg-white/[0.05] pl-[38px] pr-3.5 text-[13px] text-white outline-none placeholder:text-[#7a7a7a] focus:border-white/25 focus:bg-black/30"
+          iconClassName="left-3.5 size-[15px]"
+        />
+        <button
+          type="button"
+          onClick={() => setCartOpen(true)}
+          aria-label={cartCount > 0 ? `Carrinho (${cartCount})` : "Carrinho"}
+          className={TOPBAR_ICON_BUTTON}
+        >
+          <ShoppingCart className="size-[18px]" strokeWidth={2.1} />
+          {cartCount > 0 && (
+            <span className={cn(TOPBAR_BADGE, "bg-emerald-500")}>
+              {cartCount > 99 ? "99+" : cartCount}
+            </span>
+          )}
+        </button>
+        <NotificationBell />
+        <AuthUser layout="topbar" variant="public" />
+      </div>
+    </TopBarDock>
+
+    {/* Celular / menu estreito: as categorias em pílulas soltas no fundo da
+        página, entre a ilha e o conteúdo — fora do sticky, para a barra que
+        gruda ao rolar ter uma linha só. Esconde pela largura da COLUNA, a
+        mesma régua do menu de cima. */}
+    <div className="@container">
+    {/* A borda direita esmaece (mask, sem elemento por cima) para dizer que
+        a fileira rola; o `after` é o respiro final, para a última pílula
+        parar fora da parte apagada quando a rolagem chega ao fim. */}
+    <div className="flex gap-2 overflow-x-auto px-2 pb-2 [mask-image:linear-gradient(to_right,#000_calc(100%_-_40px),transparent)] [scrollbar-width:none] after:block after:w-6 after:shrink-0 after:content-[''] md:px-0 @min-[920px]:hidden">
+        <Link
+          href="/loja"
+          className={cn(
+            "inline-flex h-[34px] shrink-0 items-center rounded-full px-[15px] text-[12.5px] transition-colors",
+            isHome
+              ? "bg-white font-bold text-black"
+              : "border border-white/10 bg-white/[0.04] font-semibold text-[#cfcfcf]"
+          )}
+        >
+          Home
+        </Link>
+        {groupsWithCategories.map((group) => {
+          const groupCategories = grouped.get(group) ?? []
+          const landing = navGroupLanding(group, groupCategories, primaryCategoryOf(groupCategories) ?? groupCategories[0])
+          const isActive = activeCategory != null && (groupCategories.includes(activeCategory) || activeCategory === landing)
+          return (
+            <Link
+              key={group}
+              href={catalogHref(landing)}
+              className={cn(
+                "inline-flex h-[34px] shrink-0 items-center rounded-full px-[15px] text-[12.5px] transition-colors",
+                isActive
+                  ? "bg-white font-bold text-black"
+                  : "border border-white/10 bg-white/[0.04] font-semibold text-[#cfcfcf]"
+              )}
+            >
+              {GROUP_LABEL[group]}
+            </Link>
+          )
+        })}
+        <Link
+          href="/conta/pedidos"
+          className="inline-flex h-[34px] shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-[15px] text-[12.5px] font-semibold text-[#cfcfcf] transition-colors"
+        >
+          <Package className="size-3.5" strokeWidth={2.2} />
+          Pedidos
+        </Link>
+        <Link
+          href="/loja/avaliacoes"
+          className="inline-flex h-[34px] shrink-0 items-center rounded-full border border-white/10 bg-white/[0.04] px-[15px] text-[12.5px] font-semibold text-[#cfcfcf] transition-colors"
+        >
+          Avaliações
+        </Link>
+      </div>
+
+    </div>
+    </>
+  )
+}
+
+/**
+ * A superfície do conteúdo da Loja: o LayoutShell não a desenha em /loja
+ * porque a barra (StoreCategoryNav) precisa ficar FORA dela, solta como a
+ * sidebar. Toda página da Loja abre o conteúdo com isto, logo depois do menu.
+ * A barra comercial (benefícios/campanha) abre a superfície.
+ */
+export function StoreSurface({ children }: { children: React.ReactNode }) {
+  return (
+    <ContentSurface>
+      <StoreCommerceBarSlot />
+      {children}
+    </ContentSurface>
   )
 }

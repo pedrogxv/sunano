@@ -9,7 +9,7 @@ import { LaunchPreorderSection } from "@/components/store/LaunchPreorderSection"
 import { STORE_CARD_RAIL_CLASS, STORE_CARD_RAIL_HEADER_CLASS } from "@/components/store/card-rail"
 import { ProductCard, ProductCardSkeleton } from "@/components/store/ProductCard"
 import { CategoryTiles } from "@/components/store/CategoryTiles"
-import { StoreCategoryNav } from "@/components/store/StoreCategoryNav"
+import { StoreCategoryNav, StoreSurface } from "@/components/store/StoreCategoryNav"
 import {
   ActiveFilterChips,
   buildActiveChips,
@@ -39,6 +39,7 @@ import type { StoreHeroTrust, StoreHeroView } from "@/lib/store-hero"
 import type { StoreProductCard, StoreFilterOptions } from "@/lib/server/repositories/store-repository"
 import type { StoreSectionBanner } from "@/lib/server/repositories/store-banners-repository"
 import SectionBannerCarousel, { type SectionCarouselBanner } from "@/components/store/SectionBannerCarousel"
+import { STORE_BANNER_CARD, STORE_CARD_WIDTH, STORE_CONTAINER } from "@/components/store/store-layout"
 
 /** Contexto de "loja filtrada" (landing de categoria ou marca) — troca o hero
  *  padrão por um banner e pré-seleciona o filtro correspondente. */
@@ -119,7 +120,8 @@ function StoreBannerHero({
 
   return (
     <div
-      className="relative overflow-hidden border-b border-[#1c1c1c] bg-[#0b0f14] py-10 sm:py-14"
+      // Cartão na coluna da Loja, igual ao hero da Home (store-layout.ts).
+      className={cn(STORE_BANNER_CARD, STORE_CARD_WIDTH, "mt-3 py-7 sm:mt-5 sm:py-10")}
       style={{ background: `radial-gradient(120% 140% at 85% 0%, color-mix(in oklab, ${tint} 16%, #0b0f14), #0b0f14)` }}
     >
       <Icon
@@ -128,7 +130,7 @@ function StoreBannerHero({
         style={{ color: tint }}
         strokeWidth={0.9}
       />
-      <div className="relative mx-auto flex max-w-7xl flex-col gap-3 px-4 lg:px-8">
+      <div className="relative flex flex-col gap-3 px-5 sm:px-8 lg:px-10">
         <Link
           href="/loja"
           className="inline-flex w-fit items-center gap-1.5 text-[13px] font-semibold text-[#9a9a9a] transition-colors hover:text-white"
@@ -624,17 +626,18 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
   )
 
   return (
-    <div>
+    <>
       {/* Faixa de aviso + categorias — vive na página, não é chrome global
           (sidebar cuida da navegação do site). Hover mostra marcas + 1 produto
           de exemplo, tudo a partir do que já está carregado no cliente. */}
       <StoreCategoryNav data={filterOptions} activeCategory={activeCategory} />
+      <StoreSurface>
 
       {banner?.type === "category" && categoryBanners.length > 0 ? (
         /* Banner da categoria (/admin/store/banners) no lugar do cabeçalho
            padrão. O h1 fica para leitor de tela e busca: o título do banner
            é arte, não diz em que página a pessoa está. */
-        <div className="mx-auto w-full max-w-7xl px-4 pt-5 sm:pt-6 lg:px-8">
+        <div className={cn(STORE_CONTAINER, "pt-3 sm:pt-5")}>
           <h1 className="sr-only">{getCategoryLabel(banner.value)}</h1>
           <SectionBannerCarousel banners={toCarouselBanners(categoryBanners)} />
         </div>
@@ -657,7 +660,8 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
       )}
 
       <div className={cn(
-        "mx-auto flex w-full max-w-7xl flex-col px-4 pb-10 sm:pb-[72px] lg:px-8",
+        STORE_CONTAINER,
+        "flex flex-col pb-10 sm:pb-[72px]",
         banner?.type === "category" ? "gap-5 pt-5 sm:gap-7 sm:pt-6" : "gap-9 pt-5 sm:gap-14 sm:pt-6"
       )}>
         {/* Argumentos de autoridade só na landing de marca. Na Home quem diz
@@ -879,6 +883,7 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
         )}
 
       </div>
-    </div>
+      </StoreSurface>
+    </>
   )
 }

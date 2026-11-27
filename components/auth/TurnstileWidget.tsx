@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useId, useRef, useState } from "react"
+import { useCallback, useEffect, useId, useRef, useState } from "react"
 import Script from "next/script"
 
 /**
@@ -105,5 +105,34 @@ export function TurnstileWidget({ onTokenChange, error }: TurnstileWidgetProps) 
         </p>
       )}
     </div>
+  )
+}
+
+/**
+ * Estado do captcha de um form: token, se ele ainda BLOQUEIA o envio e a
+ * troca por um widget novo. Antes cada form repetia
+ * `Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY) && !captchaToken` e
+ * metade esquecia de remontar o widget depois de enviar.
+ */
+export function useTurnstile() {
+  const [token, setToken] = useState<string | null>(null)
+  const [widgetKey, setWidgetKey] = useState(0)
+  /** O token é de uso único e já foi lido para o FormData: o widget remonta para a próxima tentativa. */
+  const rotate = useCallback(() => {
+    setToken(null)
+    setWidgetKey((key) => key + 1)
+  }, [])
+  return { token, setToken, widgetKey, rotate, blocked: Boolean(SITE_KEY) && !token }
+}
+
+export type TurnstileState = ReturnType<typeof useTurnstile>
+
+/** Widget + campo oculto `cf_turnstile_response` que as actions de conta leem. */
+export function TurnstileField({ captcha, error }: { captcha: TurnstileState; error?: boolean }) {
+  return (
+    <>
+      <TurnstileWidget key={captcha.widgetKey} onTokenChange={captcha.setToken} error={error} />
+      <input type="hidden" name="cf_turnstile_response" value={captcha.token ?? ""} />
+    </>
   )
 }

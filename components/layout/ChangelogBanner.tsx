@@ -50,34 +50,32 @@ export function ChangelogBanner() {
   }
 
   return (
-    <>
-      {/* Fora da pilha sticky: abre o topo da superfície do conteúdo, logo
-          abaixo da ilha da TopBar, e rola com a página. Grudado, somava uma
-          altura variável a `--sticky-header-h` (medida por ResizeObserver a
-          cada mudança) e roubava uma faixa da tela em toda rolagem. */}
-      <div
-        className="changelog-banner flex items-center gap-3 border-b border-border bg-card px-4 py-2 text-xs sm:text-sm"
+    /* Aba que SAI da ilha do topo: encosta na borda de baixo do vidro, com o
+       mesmo material e borda, sem a de cima e com cantos só embaixo — lê como
+       parte da barra, não como uma faixa a mais no conteúdo. Vive no
+       `overlay` do TopBarDock, então gruda junto. Altura FIXA (`h-8`): a
+       `--sticky-header-h` soma 2rem enquanto ela existe (globals.css), sem
+       medir nada em JS. */
+    <div className="changelog-banner mx-3 flex h-8 items-center gap-2 rounded-b-xl border border-t-0 border-white/10 bg-[rgb(18_18_20/0.92)] bg-gradient-to-b from-black/40 to-white/[0.03] pl-3 pr-1 text-xs backdrop-blur-xl md:mx-4">
+      <Sparkles className="size-3.5 shrink-0 text-[#b4b4b4]" />
+      <p className="line-clamp-1 min-w-0 flex-1 text-[#b4b4b4]">
+        <span className="font-semibold text-white">{t.changelogBanner.newLabel.replace("{version}", latest.version)}</span>{" "}
+        {latest.title}
+      </p>
+      <RouteLink
+        href="/changelog"
+        className="shrink-0 rounded-full px-2 py-0.5 font-medium text-white transition-colors hover:bg-white/[0.06]"
       >
-        <Sparkles className="size-4 shrink-0 text-primary" />
-        <p className="line-clamp-1 min-w-0 flex-1 text-foreground">
-          <span className="font-semibold">{t.changelogBanner.newLabel.replace("{version}", latest.version)}</span>{" "}
-          <span className="text-muted-foreground">{latest.title}</span>
-        </p>
-        <RouteLink
-          href="/changelog"
-          className="shrink-0 font-medium text-primary underline underline-offset-2 hover:text-primary/80"
-        >
-          {t.changelogBanner.viewHistory}
-        </RouteLink>
-        <button
-          type="button"
-          onClick={dismiss}
-          aria-label={t.changelogBanner.close}
-          className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
-        >
-          <X className="size-3.5" />
-        </button>
-      </div>
-    </>
+        {t.changelogBanner.viewHistory}
+      </RouteLink>
+      <button
+        type="button"
+        onClick={dismiss}
+        aria-label={t.changelogBanner.close}
+        className="flex size-6 shrink-0 items-center justify-center rounded-full text-[#b4b4b4] transition-colors hover:bg-white/[0.06] hover:text-white"
+      >
+        <X className="size-3.5" />
+      </button>
+    </div>
   )
 }

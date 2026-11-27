@@ -5,7 +5,6 @@ import { useState } from "react"
 import { usePathname } from "@/lib/hooks/use-pathname"
 import { TopBar } from "@/components/layout/TopBar"
 import { ContentSurface } from "@/components/layout/TopBarDock"
-import { ChangelogBanner } from "@/components/layout/ChangelogBanner"
 import { PublicSidebar } from "@/components/layout/PublicSidebar"
 import { CartDrawer } from "@/components/store/CartDrawer"
 import { SupportFab } from "@/components/layout/SupportFab"
@@ -91,7 +90,6 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
           {!isStore && <TopBar />}
           {isAdmin ? (
             <ContentSurface>
-              <ChangelogBanner />
               {isSelfPaddedAdminPage ? (
                 <main className="overflow-auto">{children}</main>
               ) : (
@@ -107,7 +105,6 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
             <main className="store-main flex min-w-0 flex-1 flex-col overflow-x-clip">{children}</main>
           ) : (
             <ContentSurface>
-              <ChangelogBanner />
               {/* overflow-x-clip e não hidden: ver o comentário do ramo da Loja. */}
               <main className="min-w-0 overflow-x-clip">{children}</main>
             </ContentSurface>

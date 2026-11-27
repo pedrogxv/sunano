@@ -1,30 +1,38 @@
 "use client"
 
 import { useState } from "react"
-import type { ReactNode } from "react"
-import { motion } from "framer-motion"
+import { Loader2 } from "lucide-react"
 
+import { AuthAlert } from "@/components/auth/auth-form-ui"
+import { DiscordIcon, GoogleIcon } from "@/components/auth/provider-icons"
 import { supabaseAuth } from "@/lib/client/supabase-auth"
+import { cn } from "@/lib/utils"
 
 type OAuthProvider = "google" | "discord"
 
-interface OAuthButtonProps {
-  /** Provedor OAuth habilitado no Supabase. */
-  provider: OAuthProvider
-  /** Texto do botão. Ex.: "Continuar com Google" ou "Cadastrar com Discord". */
-  label: string
-  /** Rota para onde redirecionar após autenticar. Default: "/forum". */
-  next?: string
-  /** Ícone do provedor. */
-  icon: ReactNode
-}
+/** Provedores na ordem em que aparecem. Provedor novo entra aqui, e só aqui. */
+const PROVIDERS: { id: OAuthProvider; name: string; icon: React.ReactNode }[] = [
+  { id: "google", name: "Google", icon: <GoogleIcon className="size-[18px] shrink-0" /> },
+  { id: "discord", name: "Discord", icon: <DiscordIcon className="size-[18px] shrink-0" /> },
+]
 
-export function OAuthButton({ provider, label, next = "/forum", icon }: OAuthButtonProps) {
-  const [loading, setLoading] = useState(false)
+const INTENT_VERB = { login: "Continuar com", register: "Cadastrar com" } as const
+
+/**
+ * Login social, os dois provedores lado a lado. Lado a lado (e não um embaixo
+ * do outro) porque é o caminho mais curto para entrar: no celular, empilhados,
+ * eles e o divisor empurravam o formulário de email para fora da gaveta.
+ * O nome do provedor é o rótulo visível; o verbo completo ("Continuar com
+ * Google") vai para o leitor de tela.
+ *
+ * Um erro só para o grupo: com um por botão, o aviso quebrava a grade.
+ */
+export function OAuthButtons({ intent, next = "/forum" }: { intent: keyof typeof INTENT_VERB; next?: string }) {
+  const [loading, setLoading] = useState<OAuthProvider | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  async function handleClick() {
-    setLoading(true)
+  async function signIn(provider: OAuthProvider) {
+    setLoading(provider)
     setError(null)
 
     const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`
@@ -37,10 +45,7 @@ export function OAuthButton({ provider, label, next = "/forum", icon }: OAuthBut
 
     const { error: oauthError } = await supabaseAuth.auth.signInWithOAuth({
       provider,
-      options: {
-        redirectTo,
-        queryParams,
-      },
+      options: { redirectTo, queryParams },
     })
 
     // Em caso de sucesso o navegador é redirecionado para o provedor, então o
@@ -48,32 +53,32 @@ export function OAuthButton({ provider, label, next = "/forum", icon }: OAuthBut
     // redirect não autorizada no Supabase, rede, etc.).
     if (oauthError) {
       setError("Não foi possível conectar. Tente novamente.")
-      setLoading(false)
-      // Log útil no console para diagnosticar configuração do Supabase/provedor.
-      console.error(`[OAuthButton:${provider}] signInWithOAuth falhou:`, oauthError.message)
+      setLoading(null)
+      console.error(`[OAuthButtons:${provider}] signInWithOAuth falhou:`, oauthError.message)
     }
   }
 
   return (
-    <div className="space-y-2">
-      <motion.button
-        type="button"
-        onClick={handleClick}
-        disabled={loading}
-        whileHover={{ scale: 1.015, y: -1 }}
-        whileTap={{ scale: 0.985, y: 0 }}
-        transition={{ duration: 0.15, ease: "easeOut" }}
-        className="flex w-full items-center justify-center gap-3 rounded-lg border border-border bg-muted/20 px-4 py-2.5 text-sm font-medium text-foreground shadow-sm transition-colors hover:border-foreground/20 hover:bg-muted/40 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
-      >
-        {icon}
-        {loading ? "Conectando…" : label}
-      </motion.button>
-
-      {error && (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {error}
-        </div>
-      )}
+    <div className="space-y-2.5">
+      <div className="grid grid-cols-2 gap-2.5">
+        {PROVIDERS.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => signIn(p.id)}
+            disabled={loading !== null}
+            aria-label={`${INTENT_VERB[intent]} ${p.name}`}
+            className={cn(
+              "flex h-11 items-center justify-center gap-2.5 rounded-xl border border-border bg-muted/20 px-3 text-sm font-semibold text-foreground transition-[background-color,border-color,transform] hover:border-foreground/20 hover:bg-muted/40 active:scale-[0.97] disabled:cursor-not-allowed",
+              loading !== null && loading !== p.id && "opacity-50"
+            )}
+          >
+            {loading === p.id ? <Loader2 className="size-[18px] animate-spin" /> : p.icon}
+            {p.name}
+          </button>
+        ))}
+      </div>
+      {error && <AuthAlert>{error}</AuthAlert>}
     </div>
   )
 }

@@ -53,11 +53,18 @@
   --card-image-bg: #1a1a1a;
 
   /* Quanto do topo a barra flutuante ocupa ao rolar: respiro de cima (8px) +
-     a barra (3.5rem, `h-14`) + respiro de baixo (8px) = 4.5rem. Constante:
-     o aviso de changelog saiu da pilha sticky (vive no topo do conteúdo), então
-     nada mais soma altura variável aqui. Quem gruda embaixo da barra usa
+     a barra (3.5rem, `h-14`) + respiro de baixo (8px) = 4.5rem. O aviso de
+     changelog (altura fixa) soma 2rem enquanto aparece — ver regra abaixo.
+     Quem gruda embaixo da barra usa
      `top-[calc(var(--sticky-header-h)+…)]`. */
   --sticky-header-h: 4.5rem;
+}
+
+/* Com o aviso de novidade pendurado na ilha (ChangelogBanner, `h-8`), a pilha
+   sticky cresce 2rem. Dispensado, o elemento sai do DOM (ou o script do <head>
+   o esconde antes de pintar) e a altura volta sozinha. */
+:root:not([data-changelog-dismissed]):has(.topbar-dock .changelog-banner) {
+  --sticky-header-h: 6.5rem;
 }
 
 @theme inline {

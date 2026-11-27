@@ -7,6 +7,7 @@ import { usePageHeaderState } from "@/components/providers/page-header-context"
 import { CartButton } from "@/components/store/CartDrawer"
 import { MyOrdersButton } from "@/components/layout/MyOrdersButton"
 import { TopBarDock } from "@/components/layout/TopBarDock"
+import { ChangelogBanner } from "@/components/layout/ChangelogBanner"
 import { useT } from "@/lib/use-t"
 
 type PageDefaults = { title: string; description?: string }
@@ -108,7 +109,12 @@ export function TopBar() {
 
   return (
     // Ilha de vidro solta do conteúdo (TopBarDock): gêmea da sidebar.
-    <TopBarDock glassClassName="justify-between gap-3 pl-1.5 pr-2 sm:gap-4 md:pl-2.5 md:pr-3">
+    // O aviso de novidade é a aba que sai de baixo da ilha: mora no `overlay`
+    // do dock para grudar junto com ela.
+    <TopBarDock
+      glassClassName="justify-between gap-3 pl-1.5 pr-2 sm:gap-4 md:pl-2.5 md:pr-3"
+      overlay={<ChangelogBanner />}
+    >
       {/* Left — Toggle + Page Title + Description */}
       <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
         <SidebarToggleButton />

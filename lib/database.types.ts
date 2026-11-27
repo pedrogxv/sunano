@@ -2904,6 +2904,51 @@ export type Database = {
         }
         Update: Partial<Database["public"]["Tables"]["store_commerce_bar"]["Insert"]>
       }
+      /** Campanhas sazonais da Loja (20270110000000). Sem grant para cliente. */
+      store_campaigns: {
+        Relationships: []
+        Row: {
+          id: string
+          /** Chave de `STORE_CAMPAIGN_THEMES` em lib/store-campaigns.ts. */
+          theme: string
+          title: string
+          subtitle: string | null
+          starts_at: string
+          ends_at: string
+          is_enabled: boolean
+          created_at: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          id?: string
+          theme: string
+          title: string
+          subtitle?: string | null
+          starts_at: string
+          ends_at: string
+          is_enabled?: boolean
+          created_at?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: Partial<Database["public"]["Tables"]["store_campaigns"]["Insert"]>
+      }
+      /** Produtos de cada campanha, na ordem (20270110000000). Sem grant para cliente. */
+      store_campaign_products: {
+        Relationships: []
+        Row: {
+          campaign_id: string
+          product_id: string
+          position: number
+        }
+        Insert: {
+          campaign_id: string
+          product_id: string
+          position: number
+        }
+        Update: Partial<Database["public"]["Tables"]["store_campaign_products"]["Insert"]>
+      }
       /** Favoritos da Loja (20261204000000). Sem grant para cliente. */
       store_product_favorites: {
         Relationships: []
@@ -3172,6 +3217,20 @@ export type Database = {
       preorder_reserved_quantity: {
         Args: { p_product_id: string }
         Returns: number
+      }
+      save_store_campaign: {
+        Args: {
+          p_id: string | null
+          p_theme: string
+          p_title: string
+          p_subtitle: string | null
+          p_starts_at: string
+          p_ends_at: string
+          p_is_enabled: boolean
+          p_product_ids: string[]
+          p_admin_id: string
+        }
+        Returns: string
       }
       preorder_reserved_quantities: {
         Args: { p_product_ids: string[] }

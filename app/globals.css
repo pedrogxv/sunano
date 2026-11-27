@@ -2789,6 +2789,344 @@ button:not(:disabled):hover .aura-icon-holder {
   }
 }
 
+/* ════════════════════════════════════════════
+   Campanhas sazonais da Loja (lib/store-campaigns.ts, components/store/campaign).
+
+   Cada tema é UM bloco de variáveis `--cmp-*` em `[data-campaign-theme]`, e
+   todas as peças (painel, título, contador, cards, efeito) leem delas. Tema
+   novo = um bloco novo aqui + a entrada no registro do TS; nenhuma peça
+   ganha `if` de tema.
+
+   --cmp-hi/main/deep  rampa do metal (borda, título, números)
+   --cmp-bg            recheio do painel e dos cards
+   --cmp-label         destaques de texto e ícones
+   --cmp-muted         rótulos secundários ("Termina em", "dias")
+   --cmp-tile          borda dos blocos do contador
+   --cmp-glow          brilho em volta
+   --cmp-p1..p4        partículas do efeito (fogos, neve, confete)
+   --cmp-flash*        clarão do estouro dos fogos
+   ════════════════════════════════════════════ */
+[data-campaign-theme="black_friday"] {
+  --cmp-hi: oklch(0.95 0.08 95);
+  --cmp-main: oklch(0.82 0.15 82);
+  --cmp-deep: oklch(0.6 0.12 72);
+  --cmp-bg: #000;
+  --cmp-label: #e8c766;
+  --cmp-muted: #8a7a4a;
+  --cmp-tile: rgba(212, 175, 55, 0.5);
+  --cmp-glow: oklch(0.82 0.15 85 / 0.55);
+  --cmp-p1: #f5d76e;
+  --cmp-p2: #fff4cc;
+  --cmp-p3: #e3a72f;
+  --cmp-flash: rgba(255, 248, 220, 0.95);
+  --cmp-flash-mid: rgba(245, 215, 110, 0.45);
+}
+
+[data-campaign-theme="christmas"] {
+  --cmp-hi: oklch(0.94 0.07 90);
+  --cmp-main: oklch(0.64 0.21 27);
+  --cmp-deep: oklch(0.52 0.13 150);
+  --cmp-bg: #0b0607;
+  --cmp-label: #f2c46d;
+  --cmp-muted: #9a6a5a;
+  --cmp-tile: rgba(239, 68, 68, 0.5);
+  --cmp-glow: oklch(0.64 0.21 27 / 0.5);
+  --cmp-p1: #ffffff;
+  --cmp-p2: #fde2e2;
+  --cmp-p3: #f5d76e;
+  --cmp-flash: rgba(255, 240, 240, 0.95);
+  --cmp-flash-mid: rgba(239, 68, 68, 0.4);
+}
+
+[data-campaign-theme="easter"] {
+  --cmp-hi: oklch(0.96 0.04 340);
+  --cmp-main: oklch(0.8 0.12 305);
+  --cmp-deep: oklch(0.87 0.12 95);
+  --cmp-bg: #0f0b16;
+  --cmp-label: #f9a8d4;
+  --cmp-muted: #8f7aa8;
+  --cmp-tile: rgba(196, 181, 253, 0.5);
+  --cmp-glow: oklch(0.8 0.12 305 / 0.5);
+  --cmp-p1: #c4b5fd;
+  --cmp-p2: #f9a8d4;
+  --cmp-p3: #fde68a;
+  --cmp-p4: #a7f3d0;
+  --cmp-flash: rgba(253, 242, 248, 0.95);
+  --cmp-flash-mid: rgba(196, 181, 253, 0.45);
+}
+
+/* Reflexo que atravessa a borda de tempos em tempos (painel e cards). */
+@keyframes campaign-sheen {
+  0%, 55% { background-position: 200% 0, 0 0; }
+  100% { background-position: -100% 0, 0 0; }
+}
+
+/* Borda metálica: o painel/card é o "fio" de 1.5px em volta do recheio. */
+.campaign-panel,
+.campaign-card::before {
+  background:
+    linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.9) 50%, transparent 60%) 200% 0 / 250% 100% no-repeat,
+    linear-gradient(160deg, var(--cmp-hi), var(--cmp-main) 30%, var(--cmp-deep) 55%, var(--cmp-main) 80%, var(--cmp-hi));
+  animation: campaign-sheen 5s ease-in-out infinite;
+}
+
+.campaign-panel {
+  box-shadow: 0 0 40px -14px var(--cmp-glow);
+}
+
+.campaign-panel-inner {
+  background:
+    radial-gradient(80% 120% at 50% 0%, color-mix(in srgb, var(--cmp-main) 16%, transparent), transparent 60%),
+    var(--cmp-bg);
+}
+
+/* Card de produto da campanha (ProductCard `skin="campaign"`). Mesma técnica
+   de camadas do `.preorder-gold-card`, mas a borda NÃO gira: o giro é a
+   assinatura da pré-venda, e o card de pré-venda pode estar no mesmo trilho. */
+.campaign-card {
+  isolation: isolate;
+  border-color: transparent !important;
+  background: var(--cmp-bg) !important;
+  box-shadow: 0 0 26px -12px var(--cmp-glow);
+}
+
+.group:hover .campaign-card {
+  box-shadow: 0 22px 50px -22px var(--cmp-glow), 0 0 30px -8px var(--cmp-glow);
+}
+
+.campaign-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.campaign-card::after {
+  content: "";
+  position: absolute;
+  inset: 1.5px;
+  z-index: -1;
+  border-radius: calc(18px - 1.5px);
+  background:
+    radial-gradient(110% 45% at 50% 0%, color-mix(in srgb, var(--cmp-main) 13%, transparent), transparent 70%),
+    var(--cmp-bg);
+  pointer-events: none;
+}
+
+.campaign-text {
+  background: linear-gradient(100deg, var(--cmp-hi), var(--cmp-main) 45%, var(--cmp-deep) 70%, var(--cmp-hi));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Título: a cor do tema "corre" pelo texto. */
+@keyframes campaign-shimmer {
+  to { background-position: -200% 0; }
+}
+
+.campaign-shimmer {
+  background: linear-gradient(100deg, var(--cmp-main) 0%, var(--cmp-hi) 18%, var(--cmp-main) 32%, var(--cmp-deep) 50%, var(--cmp-main) 68%, var(--cmp-hi) 84%, var(--cmp-main) 100%) 0 0 / 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter: drop-shadow(0 2px 14px var(--cmp-glow));
+  animation: campaign-shimmer 4s linear infinite;
+}
+
+.cmp-tile {
+  border-color: var(--cmp-tile);
+  background: color-mix(in srgb, var(--cmp-bg) 80%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--cmp-hi) 20%, transparent), 0 0 18px -8px var(--cmp-glow);
+}
+
+/* Ícones do cabeçalho balançando como quem comemora. */
+@keyframes campaign-wiggle {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  20% { transform: rotate(-14deg) scale(1.12); }
+  40% { transform: rotate(10deg) scale(1.05); }
+  60% { transform: rotate(0deg) scale(1); }
+}
+
+.campaign-wiggle {
+  transform-origin: 30% 80%;
+  animation: campaign-wiggle 2.4s ease-in-out infinite;
+}
+
+/* ── Fogos (efeito `fireworks`) ──
+   Cada fogo é um ponto de 0×0 no painel. No mesmo ciclo (--dur, --d):
+   0–27% o rojão sobe, ~30% estoura (clarão + faíscas para fora), e as
+   faíscas caem um pouco (`.cmp-burst-fall`) enquanto apagam. Só transform
+   e opacity: roda no compositor, sem repintar a página. */
+.cmp-firework {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+.cmp-firework > span,
+.cmp-spark {
+  position: absolute;
+  left: 0;
+  top: 0;
+  opacity: 0;
+  animation-duration: var(--dur);
+  animation-delay: var(--d);
+  animation-iteration-count: infinite;
+}
+
+@keyframes cmp-rocket {
+  0% { transform: translate(-50%, 90px); opacity: 0; }
+  4% { opacity: 1; }
+  27% { transform: translate(-50%, 0); opacity: 1; }
+  30%, 100% { transform: translate(-50%, 0); opacity: 0; }
+}
+
+.cmp-rocket {
+  width: 2px;
+  height: 16px;
+  border-radius: 2px;
+  background: linear-gradient(to top, transparent, var(--cmp-p1));
+  animation-name: cmp-rocket;
+  animation-timing-function: cubic-bezier(0.3, 0.6, 0.4, 1);
+}
+
+@keyframes cmp-flash {
+  0%, 28% { transform: translate(-50%, -50%) scale(0.2); opacity: 0; }
+  31% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  42%, 100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
+}
+
+.cmp-flash {
+  width: var(--fs, 60px);
+  height: var(--fs, 60px);
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--cmp-flash) 0%, var(--cmp-flash-mid) 18%, transparent 55%);
+  mix-blend-mode: screen;
+  animation-name: cmp-flash;
+  animation-timing-function: ease-out;
+}
+
+@keyframes cmp-burst-fall {
+  0%, 30% { transform: translateY(0); }
+  80%, 100% { transform: translateY(26px); }
+}
+
+.cmp-firework > .cmp-burst-fall {
+  opacity: 1;
+  animation-name: cmp-burst-fall;
+  animation-timing-function: ease-in;
+}
+
+@keyframes cmp-spark {
+  0%, 29% { transform: rotate(var(--a)) translateX(0) scaleX(0.2); opacity: 0; }
+  31% { transform: rotate(var(--a)) translateX(4px) scaleX(1); opacity: 1; }
+  60% { opacity: 0.95; }
+  78%, 100% { transform: rotate(var(--a)) translateX(var(--r)) scaleX(0.35); opacity: 0; }
+}
+
+.cmp-spark {
+  width: 22px;
+  height: 3px;
+  margin-top: -1.5px;
+  border-radius: 3px;
+  transform-origin: 0 50%;
+  background: linear-gradient(90deg, transparent, var(--c) 70%, #fff);
+  box-shadow: 0 0 8px 0 var(--c);
+  animation-name: cmp-spark;
+  animation-timing-function: cubic-bezier(0.15, 0.7, 0.3, 1);
+}
+
+.cmp-spark-inner {
+  width: 14px;
+  height: 2px;
+  margin-top: -1px;
+}
+
+@keyframes cmp-star {
+  0%, 100% { transform: scale(0.4); opacity: 0.15; }
+  50% { transform: scale(1); opacity: 0.9; }
+}
+
+.cmp-star {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--cmp-p2);
+  box-shadow: 0 0 6px 1px var(--cmp-p1);
+  animation: cmp-star 2.6s ease-in-out infinite;
+}
+
+/* ── Neve e confete (efeitos `snow` e `confetti`) ──
+   A coluna tem a altura do painel e começa inteira ACIMA dele: o `%` do
+   transform é da própria coluna, então descer 100% leva a partícula do
+   topo ao pé do painel em qualquer tela. Atraso negativo: já chega caindo. */
+@keyframes cmp-fall {
+  from { transform: translateY(0); }
+  to { transform: translateY(108%); }
+}
+
+.cmp-fall-col {
+  position: absolute;
+  top: -100%;
+  height: 100%;
+  animation: cmp-fall var(--dur) linear var(--d) infinite;
+}
+
+.cmp-fall-col > span {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+}
+
+@keyframes cmp-sway {
+  0%, 100% { translate: calc(var(--sway) * -1) 0; }
+  50% { translate: var(--sway) 0; }
+}
+
+.cmp-flake {
+  width: var(--s);
+  height: var(--s);
+  border-radius: 50%;
+  background: var(--cmp-p1);
+  box-shadow: 0 0 6px var(--cmp-p2);
+  opacity: 0.85;
+  animation: cmp-sway 3s ease-in-out infinite;
+}
+
+@keyframes cmp-flip {
+  to { transform: rotateX(360deg) rotateZ(240deg); }
+}
+
+.cmp-confetti {
+  width: var(--s);
+  height: calc(var(--s) * 1.8);
+  border-radius: 1px;
+  background: var(--c);
+  opacity: 0.9;
+  animation:
+    cmp-sway 2.6s ease-in-out infinite,
+    cmp-flip var(--spin) linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .campaign-panel,
+  .campaign-card::before,
+  .campaign-shimmer,
+  .campaign-wiggle,
+  .cmp-star {
+    animation: none;
+  }
+
+  /* Sem movimento: nada estoura nem cai, só os brilhinhos ficam acesos. */
+  .cmp-firework,
+  .cmp-fall-col {
+    display: none;
+  }
+}
+
 /* Voto e reações das Patch Notes (components/changelog/ChangelogFeedback.tsx).
    `pop`: o ícone salta com um leve rebote ao ser marcado. `float`: uma cópia
    do emoji sobe e some, o "+1" visual da reação. Os dois são só transform e

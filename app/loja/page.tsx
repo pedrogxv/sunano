@@ -9,6 +9,7 @@ import {
   listLaunchAndPreorderProducts,
 } from "@/lib/server/repositories/store-repository"
 import { getStoreHeroTrust, listLiveHeroSlides } from "@/lib/server/repositories/store-hero-repository"
+import { getLiveStoreCampaign } from "@/lib/server/repositories/store-campaigns-repository"
 import { StoreContent } from "@/components/store/StoreContent"
 import { ItemListJsonLd } from "@/components/seo/JsonLd"
 import { ComingSoon } from "@/components/store/ComingSoon"
@@ -66,6 +67,7 @@ export default async function LojaPage() {
     bestSellingItems,
     heroSlides,
     heroTrust,
+    campaign,
   ] = await Promise.all([
     listStoreProductsPaginated({
       type: "store",
@@ -101,6 +103,7 @@ export default async function LojaPage() {
     listBestSellingProducts(),
     listLiveHeroSlides(),
     getStoreHeroTrust(),
+    getLiveStoreCampaign(),
   ])
 
   if (total === 0 && filterOptions.countByType.store === 0) {
@@ -135,6 +138,7 @@ export default async function LojaPage() {
         siteItems={siteItems}
         serviceItems={serviceItems}
         bestSellingItems={bestSellingItems}
+        campaign={campaign}
         pageSize={PAGE_SIZE}
       />
     </Suspense>

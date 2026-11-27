@@ -24,6 +24,7 @@ import { StoreCatalogMobileFilters, StoreCatalogSidebar, StoreFiltersButton, Sto
 import { MarketInfoDialog } from "@/components/store/MarketInfoDialog"
 import { StoreAuthorityStrip } from "@/components/store/StoreAuthorityStrip"
 import { StoreHero } from "@/components/store/StoreHero"
+import { StoreCampaignSection } from "@/components/store/campaign/StoreCampaignSection"
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value"
 import { useCardRailBleed } from "@/lib/hooks/use-card-rail-bleed"
 import { getCategoryIcon, getCategoryLabel } from "@/lib/store-category-icons"
@@ -37,6 +38,7 @@ import {
 } from "@/lib/store-catalog"
 import type { StoreHeroTrust, StoreHeroView } from "@/lib/store-hero"
 import type { StoreProductCard, StoreFilterOptions } from "@/lib/server/repositories/store-repository"
+import type { StoreLiveCampaign } from "@/lib/server/repositories/store-campaigns-repository"
 import type { StoreSectionBanner } from "@/lib/server/repositories/store-banners-repository"
 import SectionBannerCarousel, { type SectionCarouselBanner } from "@/components/store/SectionBannerCarousel"
 import { STORE_BANNER_CARD, STORE_CARD_WIDTH, STORE_CONTAINER } from "@/components/store/store-layout"
@@ -68,6 +70,8 @@ interface StoreContentProps {
   serviceItems?: StoreProductCard[]
   /** Mais vendidos nos últimos 90 dias (get_top_selling_products) — primeira seção da Home. */
   bestSellingItems?: StoreProductCard[]
+  /** Campanha sazonal no ar (Black Friday, Natal...). Seção própria no topo da Home. */
+  campaign?: StoreLiveCampaign | null
   /** Banners do topo da landing de categoria (/admin/store/banners). Vazio = cabeçalho padrão. */
   categoryBanners?: StoreSectionBanner[]
   pageSize: number
@@ -231,7 +235,7 @@ function ProductCarouselSection({
   )
 }
 
-export function StoreContent({ initialItems, initialTotal, initialFilterOptions, initialFeatured, preOrderItems = [], launchItems = [], heroSlides = [], heroTrust, comboItems = [], siteItems = [], serviceItems = [], bestSellingItems = [], categoryBanners = [], pageSize, banner, initialCategory = null }: StoreContentProps) {
+export function StoreContent({ initialItems, initialTotal, initialFilterOptions, initialFeatured, preOrderItems = [], launchItems = [], heroSlides = [], heroTrust, comboItems = [], siteItems = [], serviceItems = [], bestSellingItems = [], campaign = null, categoryBanners = [], pageSize, banner, initialCategory = null }: StoreContentProps) {
   const searchParams = useSearchParams()
 
   // A landing manda no recorte: em /loja/categoria/mouse o cliente está dentro
@@ -668,6 +672,10 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
             isso são os selos colados no Hero (mesma mensagem, administrável);
             na de categoria o banner já deixa a área densa com as tags. */}
         {banner?.type === "brand" && <StoreAuthorityStrip />}
+
+        {/* Campanha sazonal — só na Home, antes de tudo: é o que a Loja
+            mais quer que se veja enquanto estiver no ar. */}
+        {!banner && campaign && <StoreCampaignSection campaign={campaign} />}
 
         {/* Destaques — só na Home. Landing de marca/categoria vai direto pros
             filtros + catálogo, sem essa seção antes do que o usuário veio ver. */}

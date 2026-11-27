@@ -30,6 +30,7 @@ const ADMIN_PAGE_DEFAULTS: Record<string, PageDefaults> = {
   "/admin/store/hero":  { title: "Hero da Loja", description: "Banner principal do topo de /loja." },
   "/admin/store/avaliacoes": { title: "Avaliações da Loja", description: "Depoimentos de clientes que compraram fora do site." },
   "/admin/store/commerce-bar": { title: "Barra comercial", description: "Benefícios e campanha abaixo do menu da Loja." },
+  "/admin/store/campanhas": { title: "Campanhas", description: "Black Friday, Natal, Páscoa: seção com contador e produtos escolhidos no topo da Loja." },
   "/admin/vips":        { title: "VIPs", description: "Assinaturas VIP: estado na Asaas, cobranças e concessão manual." },
   "/admin/forum":       { title: "Fórum (moderação)", description: "Modere posts, comentários e regras da comunidade." },
   "/admin/suporte":     { title: "Ticket", description: "Veja e responda aos chamados abertos pelos clientes." },

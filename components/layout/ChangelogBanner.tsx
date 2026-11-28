@@ -55,8 +55,9 @@ export function ChangelogBanner() {
        parte da barra, não como uma faixa a mais no conteúdo. Vive no
        `overlay` do TopBarDock, então gruda junto. Altura FIXA (`h-8`): a
        `--sticky-header-h` soma 2rem enquanto ela existe (globals.css), sem
-       medir nada em JS. */
-    <div className="changelog-banner mx-3 flex h-8 items-center gap-2 rounded-b-xl border border-t-0 border-white/10 bg-[rgb(18_18_20/0.92)] bg-gradient-to-b from-black/40 to-white/[0.03] pl-3 pr-1 text-xs backdrop-blur-xl md:mx-4">
+       medir nada em JS. No desktop começa depois do canto côncavo da fusão
+       com a sidebar (24px), não em cima dele. */
+    <div className="changelog-banner mx-3 flex h-8 items-center gap-2 rounded-b-xl border border-t-0 border-white/10 bg-[rgb(18_18_20/0.92)] bg-gradient-to-b from-black/40 to-white/[0.03] pl-3 pr-1 text-xs backdrop-blur-xl md:ml-8 md:mr-4">
       <Sparkles className="size-3.5 shrink-0 text-[#b4b4b4]" />
       <p className="line-clamp-1 min-w-0 flex-1 text-[#b4b4b4]">
         <span className="font-semibold text-white">{t.changelogBanner.newLabel.replace("{version}", latest.version)}</span>{" "}

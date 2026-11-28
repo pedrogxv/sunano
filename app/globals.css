@@ -348,6 +348,110 @@ html[data-changelog-dismissed] .changelog-banner {
   }
 }
 
+/* FUSÃO da barra com a sidebar (desktop). As duas viram uma peça só em "L":
+   a barra nasce da borda direita da sidebar (TopBarDock: `-ml-[9px]`, sem
+   borda nem cantos à esquerda) e o canto de dentro é côncavo — a "borda
+   negativa" (`.topbar-fillet`). Para a emenda sumir de verdade:
+
+   - Mesmo material no ponto de encontro. A cor base já bate (sidebar
+     24·0.62 ≈ barra 18·0.83 ≈ 15 sobre o preto); o que denunciava a emenda
+     era o brilho radial da barra, que nasce no canto ESQUERDO dela — ou
+     seja, colado na sidebar, onde o brilho da sidebar já se apagou. Na peça
+     fundida a luz vem de um canto só (o de cima da sidebar), então a barra
+     fica com o véu plano do topo da sidebar.
+   - A borda de 1px da sidebar continua ATRÁS da barra (ela cobre essa
+     coluna). Como o vidro é 83% opaco, a linha vazaria a 17%: a primeira
+     camada de fundo é uma coluna de 1px SÓLIDA na cor composta da peça
+     (`--chrome-seam`), que a apaga.
+   - A sombra da barra não pode cair em cima da sidebar: ela vai para os
+     pseudo-elementos, recortados rente à borda esquerda (`clip-path`).
+   - A sidebar perde o canto de cima à direita, mas só quando HÁ uma barra
+     na página (`:has`); sem ela, o painel segue arredondado. */
+:root {
+  --chrome-seam: rgb(26 26 27);
+}
+
+.topbar-fillet {
+  display: none;
+}
+
+@media (width >= 48rem) {
+  .topbar-glass {
+    background-image:
+      linear-gradient(to right, var(--chrome-seam) 1px, transparent 1px),
+      linear-gradient(rgb(255 255 255 / 0.045), rgb(255 255 255 / 0.045));
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.14),
+      inset 0 -1px 0 rgb(0 0 0 / 0.35);
+  }
+
+  .topbar-glass::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    pointer-events: none;
+    box-shadow: 0 12px 40px -8px rgb(0 0 0 / 0.6);
+    clip-path: inset(-6rem -6rem -6rem 0);
+  }
+
+  .topbar-glass::after {
+    clip-path: inset(-6rem -6rem -6rem 0);
+  }
+
+  .app-shell:has(.topbar-dock) .sidebar-slot > aside {
+    border-top-right-radius: 0;
+  }
+
+  /* A pílula de rolagem da sidebar corre rente à borda direita, que no topo
+     é a emenda com a barra: começando ali, ela riscava a junção de cima a
+     baixo. A calha só começa abaixo da barra (56px) e do canto côncavo (24px). */
+  .app-shell:has(.topbar-dock) .sidebar-slot .sidebar-scroll::-webkit-scrollbar-track {
+    margin-top: 5rem;
+  }
+
+  /* O canto côncavo: um quadrado de 25px pendurado embaixo da barra, rente à
+     sidebar, com o círculo recortado do canto de baixo à direita. Raio 24 =
+     cartão do conteúdo (16) + vão (8): concêntrico com o canto do cartão,
+     então o vão em volta da curva tem a mesma largura que nas retas. O 1px a
+     mais (25 e não 24) cobre a borda da sidebar e a de baixo da barra, e o
+     anel de 24→25px é a borda que dobra a esquina ligando as duas. */
+  .topbar-fillet {
+    display: block;
+    position: absolute;
+    left: 0;
+    top: calc(0.5rem + 3.5rem - 1px);
+    width: 25px;
+    height: 25px;
+    pointer-events: none;
+    background:
+      radial-gradient(circle at 100% 100%, transparent 23.6px, rgb(255 255 255 / 0.1) 24px 25px, transparent 25.4px),
+      linear-gradient(to right, var(--chrome-seam) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--chrome-seam) 1px, transparent 1px),
+      linear-gradient(rgb(255 255 255 / 0.045), rgb(255 255 255 / 0.045)),
+      rgb(18 18 20 / 0.83);
+    -webkit-mask-image: radial-gradient(circle at 100% 100%, transparent 23.6px, #000 24px);
+    mask-image: radial-gradient(circle at 100% 100%, transparent 23.6px, #000 24px);
+    -webkit-backdrop-filter: blur(24px) saturate(170%);
+    backdrop-filter: blur(24px) saturate(170%);
+  }
+
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .topbar-glass,
+    .topbar-fillet {
+      background-color: rgb(15 15 17 / 0.97);
+    }
+  }
+
+  @media (prefers-reduced-transparency: reduce) {
+    .topbar-glass,
+    .topbar-fillet {
+      background-color: rgb(15 15 17);
+    }
+  }
+}
+
 /* Faixa acima da barra: o conteúdo some ao entrar nos 8px de respiro, em vez
    de aparecer passando por cima da ilha. Pintada no wrapper sticky, sem
    elemento extra. */
@@ -429,6 +533,10 @@ html[data-changelog-dismissed] .changelog-banner {
    no fundo da página. Quem usa StoreSurface/ContentSurface não é afetado. */
 .store-main:not(:has(.content-surface)) {
   background-color: var(--card);
+  /* No desktop o <main> da Loja tem 9px de padding à esquerda que só servem
+     de folga para a fusão da barra com a sidebar (LayoutShell): o cartão não
+     se pinta neles. */
+  background-clip: content-box;
   border-radius: 1rem 1rem 0 0;
 }
 
@@ -3387,4 +3495,101 @@ button:not(:disabled):hover .aura-icon-holder {
   border-radius: 1rem;
   background: oklch(0 0 0 / 0.22);
   box-shadow: inset 0 0 0 1px oklch(1 0 0 / 0.06);
+}
+
+/* ════════════════════════════════════════════
+   Card de Black Friday (ProductCard `theme="blackFriday"`, lib/black-friday.ts).
+   Preto com DOIS brilhos dourados girando em sentidos opostos na borda (o
+   da pré-venda tem um só, para os dois não se confundirem) e um reflexo
+   passando pela face de tempos em tempos.
+   ════════════════════════════════════════════ */
+@property --bf-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes bf-border-spin {
+  to { --bf-angle: 360deg; }
+}
+
+@keyframes bf-shine-sweep {
+  0%, 55% { transform: translateX(-160%) skewX(-18deg); }
+  100% { transform: translateX(260%) skewX(-18deg); }
+}
+
+.bf-card {
+  isolation: isolate;
+  box-shadow: 0 0 34px -12px oklch(0.82 0.15 85 / 0.55);
+}
+
+.bf-card:hover {
+  box-shadow: 0 24px 60px -22px oklch(0.82 0.15 85 / 0.7), 0 0 40px -10px oklch(0.85 0.16 88 / 0.6);
+}
+
+.bf-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--bf-angle),
+    oklch(0.97 0.08 95),
+    oklch(0.82 0.16 82) 7%,
+    oklch(0.42 0.08 70 / 0.55) 20%,
+    oklch(0.42 0.08 70 / 0.55) 43%,
+    oklch(0.82 0.16 82) 50%,
+    oklch(0.97 0.08 95) 52%,
+    oklch(0.82 0.16 82) 57%,
+    oklch(0.42 0.08 70 / 0.55) 70%,
+    oklch(0.42 0.08 70 / 0.55) 93%,
+    oklch(0.97 0.08 95)
+  );
+  pointer-events: none;
+  animation: bf-border-spin 3.5s linear infinite;
+}
+
+.bf-card::after {
+  content: "";
+  position: absolute;
+  inset: 1.5px;
+  z-index: -1;
+  border-radius: calc(18px - 1.5px);
+  background:
+    radial-gradient(90% 45% at 50% 28%, oklch(0.82 0.15 85 / 0.14), transparent 70%),
+    repeating-linear-gradient(135deg, oklch(1 0 0 / 0.018) 0 2px, transparent 2px 9px),
+    linear-gradient(180deg, #0c0a05 0%, #040404 55%, #000 100%);
+  pointer-events: none;
+}
+
+.bf-card-shine {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.bf-card-shine::before {
+  content: "";
+  position: absolute;
+  inset: -10% auto -10% 0;
+  width: 38%;
+  background: linear-gradient(90deg, transparent, oklch(0.95 0.1 92 / 0.14), transparent);
+  animation: bf-shine-sweep 4.5s ease-in-out infinite;
+}
+
+.bf-gold-text {
+  background: linear-gradient(180deg, oklch(0.97 0.09 95) 0%, oklch(0.85 0.16 85) 45%, oklch(0.68 0.15 65) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bf-card::before,
+  .bf-card-shine::before {
+    animation: none;
+  }
 }

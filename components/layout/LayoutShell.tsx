@@ -69,24 +69,26 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="app-shell min-h-screen bg-background text-foreground">
       <div className="flex">
         {/* Sidebar — fixed drawer on mobile (self-managed), relative+sticky on desktop.
             Must NOT be hidden on mobile, otherwise the drawer/overlay/toggle never render.
-            Flutua (painel de vidro) com o mesmo respiro de 8px nos QUATRO
-            lados: o da direita é o vão até a barra do topo e o conteúdo. Sem
-            ele a ilha da TopBar encostava na sidebar e as duas pareciam uma
-            peça só, emendada. */}
-        <div className="md:flex md:shrink-0 md:sticky md:top-0 md:h-screen md:p-2">
+            No desktop a sidebar e a barra do topo são UMA peça em "L": a
+            barra nasce da borda direita da sidebar, sem vão, e o canto de
+            dentro é côncavo (`.topbar-fillet`, globals.css). Por isso aqui
+            não há respiro à direita: o vão de 8px até o CONTEÚDO é o
+            `md:pl-2` da coluna, e a barra o atravessa com margem negativa
+            (TopBarDock). */}
+        <div className="sidebar-slot md:flex md:shrink-0 md:sticky md:top-0 md:h-screen md:py-2 md:pl-2">
           {isAdmin ? <AdminSidebar /> : <PublicSidebar />}
         </div>
 
-        {/* Content area — uma coluna com DOIS painéis soltos, como a
-            sidebar: a barra do topo (ilha de vidro sticky, TopBarDock) e,
-            8px abaixo, a superfície do conteúdo. A Loja traz a própria barra
+        {/* Content area — uma coluna com dois painéis: a barra do topo
+            (vidro sticky fundido à sidebar, TopBarDock) e, 8px abaixo e 8px
+            à direita da sidebar, a superfície do conteúdo. A Loja traz a própria barra
             (StoreCategoryNav), que abre a superfície depois de si; por isso
             ali o <main> é só a coluna, sem cartão. */}
-        <div className="flex min-h-screen min-w-0 flex-1 flex-col md:mr-2 md:pb-2">
+        <div className="flex min-h-screen min-w-0 flex-1 flex-col md:mr-2 md:pb-2 md:pl-2">
           {!isStore && <TopBar />}
           {isAdmin ? (
             <ContentSurface>
@@ -101,8 +103,12 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
           ) : isStore ? (
             /* overflow-x-clip (e não hidden): hidden no eixo X força o Y a
                `auto`, vira container de rolagem e quebra todo sticky de
-               dentro — a própria barra da Loja entre eles. */
-            <main className="store-main flex min-w-0 flex-1 flex-col overflow-x-clip">{children}</main>
+               dentro — a própria barra da Loja entre eles. O clip, porém,
+               cortaria a margem negativa com que a barra se funde à sidebar:
+               no desktop o <main> avança os mesmos 9px para a esquerda e os
+               devolve em padding, então o conteúdo fica onde estava e a
+               borda do recorte recua até a sidebar. */
+            <main className="store-main flex min-w-0 flex-1 flex-col overflow-x-clip md:-ml-[9px] md:pl-[9px]">{children}</main>
           ) : (
             <ContentSurface>
               {/* overflow-x-clip e não hidden: ver o comentário do ramo da Loja. */}

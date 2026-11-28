@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ArrowRight, Check, PackageX, ShoppingCart, Truck, Zap } from "lucide-react"
+import { ArrowRight, Check, PackageX, PartyPopper, ShoppingCart, Truck, Zap } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getCategoryIcon, getCategoryLabel } from "@/lib/store-category-icons"
 import { formatBRL } from "@/lib/format"
@@ -22,6 +22,7 @@ import { LaunchCard } from "@/components/store/LaunchCard"
 import { PreorderCard } from "@/components/store/PreorderCard"
 import type { StoreProductCard } from "@/lib/server/repositories/store-repository"
 import { storageImgProps } from "@/lib/storage-thumb"
+import { BLACK_FRIDAY_CARD_CLASS } from "@/lib/black-friday"
 
 const CONDITION_LABEL: Record<"new" | "used" | "opened", string> = {
   new: "Novo",
@@ -37,11 +38,18 @@ type ProductCardProps = StoreProductCard & {
    * tema. As cores vêm do `data-campaign-theme` da seção. Só no card padrão.
    */
   skin?: "campaign"
+  /** Campanha sazonal: troca o fundo do card (lib/black-friday.ts). */
+  theme?: "blackFriday"
 }
 
 /** O selo principal, no canto da foto. Cor, ícone e texto vêm de `STORE_CARD_BADGE`. */
-function CardBadge({ badge, large }: { badge: StoreCardBadge; large?: boolean }) {
-  const { label, icon: Icon, className, iconClassName } = STORE_CARD_BADGE[badge]
+function CardBadge({ badge, large, blackFriday }: { badge: StoreCardBadge; large?: boolean; blackFriday?: boolean }) {
+  const { label, icon: Icon, iconClassName } = STORE_CARD_BADGE[badge]
+  // Na Black Friday o selo mantém o que diz, mas veste preto e dourado:
+  // vermelho/roxo/verde em cima do card dourado brigavam com a campanha.
+  const className = blackFriday
+    ? "border border-amber-400/60 bg-black/85 text-amber-200 [&_svg]:fill-amber-300"
+    : STORE_CARD_BADGE[badge].className
   return (
     <span
       className={cn(
@@ -220,6 +228,9 @@ function StandardProductCard(props: ProductCardProps) {
             dot: "bg-emerald-400",
           }
 
+  const blackFriday = props.theme === "blackFriday" && !showcase
+  const savedCents = hasDiscount ? basePriceCents - effectivePriceCents : 0
+
   const PrimaryIcon = justAdded ? Check : isPreOrder && !requiresChoice ? Zap : ShoppingCart
   const primaryLabel = justAdded ? "Adicionado" : requiresChoice ? "Comprar agora" : isPreOrder ? "Reservar" : "Adicionar"
 
@@ -231,7 +242,9 @@ function StandardProductCard(props: ProductCardProps) {
       <Link href={href} className="flex h-full flex-col">
         <div className={cn(
           "relative z-0 flex h-full flex-col overflow-hidden border bg-card transition-[transform,border-color,box-shadow] duration-200",
-          showcase
+          blackFriday
+            ? cn("rounded-[18px] group-hover:-translate-y-1.5", BLACK_FRIDAY_CARD_CLASS)
+            : showcase
             ? "rounded-[26px] border-[#2c2c2c] bg-gradient-to-b from-[#1a1a1f] to-card group-hover:-translate-y-1.5 group-hover:border-violet-400/40 group-hover:shadow-[0_22px_60px_-24px_rgba(167,139,250,0.5)]"
             : props.skin === "campaign"
               // A pele da campanha manda sobre a do selo ("Mais vendido" pinta o
@@ -245,6 +258,7 @@ function StandardProductCard(props: ProductCardProps) {
           // Esgotado sai de cena inteiro (rótulo, borda, frete), como no card de pré-venda.
           soldOut && "grayscale"
         )}>
+          {blackFriday && <span aria-hidden className="bf-card-shine z-[1]" />}
           {/* Imagem sem placa própria: o fundo é o do card, então a foto (quase
               sempre PNG recortado em fundo branco) não fica dentro de um
               retângulo cinza destacado. O respiro da cor da categoria só
@@ -291,16 +305,38 @@ function StandardProductCard(props: ProductCardProps) {
 
             {/* Um selo só, decidido no servidor (lib/store-card.ts). Esgotado
                 já vem sem selo: a etiqueta abaixo é a única mensagem ali. */}
-            {props.badge && <CardBadge badge={props.badge} large={showcase} />}
+            {props.badge && <CardBadge badge={props.badge} large={showcase} blackFriday={blackFriday} />}
+
+            {/* Faixa diagonal no canto: é o que diz "isto é Black Friday" de longe. */}
+            {blackFriday && !outOfStock && (
+              <>
+                <span aria-hidden className="pointer-events-none absolute -right-9 top-[18px] z-[1] w-[150px] rotate-45 bg-gradient-to-r from-amber-600 via-yellow-300 to-amber-600 py-[3px] text-center font-display text-[9px] font-black uppercase tracking-[0.2em] text-black shadow-[0_4px_14px_-4px_rgba(251,191,36,0.8)] sm:-right-8 sm:top-[22px] sm:text-[10px]">
+                  Black Friday
+                </span>
+                <span aria-hidden className="pointer-events-none absolute inset-0 -z-0">
+                  <span className="absolute left-[14%] top-[34%] size-1.5 rotate-45 bg-amber-300/60" />
+                  <span className="absolute right-[16%] top-[58%] h-2 w-[3px] rotate-[25deg] rounded-sm bg-yellow-200/50" />
+                  <span className="absolute left-[24%] bottom-[20%] size-1 rounded-full bg-amber-400/70" />
+                  <span className="absolute right-[30%] top-[22%] size-1 rounded-full bg-yellow-100/50" />
+                </span>
+              </>
+            )}
 
             {/* Selo de desconto some quando esgotou: debaixo do escurecido ele
                 vira um vermelho sujo e disputa a atenção com a única
                 informação que importa ali. O desconto continua dito pelo
                 preço riscado, logo abaixo. */}
             {hasDiscount && !outOfStock && (
+              blackFriday ? (
+                <span className="absolute bottom-3 left-3 z-[1] flex items-center gap-1 rounded-lg bg-gradient-to-b from-yellow-200 via-amber-400 to-amber-600 px-2 py-1 text-[11px] font-black text-black shadow-[0_6px_18px_-6px_rgba(251,191,36,0.9)] sm:text-[12px]">
+                  <PartyPopper className="size-3" strokeWidth={2.6} />
+                  -{discountPercent}% OFF
+                </span>
+              ) : (
               <span className="absolute bottom-3 left-3 z-[1] rounded-lg bg-red-600 px-2 py-1 text-[11px] font-extrabold text-white">
                 -{discountPercent}%
               </span>
+              )
             )}
 
             {/* Esgotado: a foto sai de cena (dessatura + escurece, logo acima) e a
@@ -334,7 +370,8 @@ function StandardProductCard(props: ProductCardProps) {
             {/* Altura fixa mesmo sem categoria, pra não desalinhar o card com os vizinhos. */}
             <p className={cn(
               "truncate font-bold uppercase text-[#7a7a7a]",
-              showcase ? "text-[10.5px] tracking-[0.16em] text-violet-300/70" : "text-[9.5px] tracking-[0.14em]"
+              showcase ? "text-[10.5px] tracking-[0.16em] text-violet-300/70" : "text-[9.5px] tracking-[0.14em]",
+              blackFriday && "text-amber-300/70"
             )}>
               {eyebrow || "\u00a0"}
             </p>
@@ -372,7 +409,8 @@ function StandardProductCard(props: ProductCardProps) {
               <div className="flex flex-wrap items-baseline gap-x-2">
                 <p className={cn(
                   "font-display font-bold leading-tight text-white",
-                  showcase ? "text-[32px]" : "text-xl"
+                  showcase ? "text-[32px]" : "text-xl",
+                  blackFriday && "bf-gold-text font-black"
                 )}>
                   {formatBRL(effectivePriceCents)}
                   {singlePrice && <span aria-hidden="true">*</span>}
@@ -384,6 +422,11 @@ function StandardProductCard(props: ProductCardProps) {
                   )}>no PIX</span>
                 )}
               </div>
+              {blackFriday && savedCents > 0 && (
+                <p className="text-[10.5px] font-bold text-amber-300 sm:text-[11px]">
+                  Economize {formatBRL(savedCents)}
+                </p>
+              )}
               {/* Serviço tem preço único: sem desconto de PIX, não há "ou X no cartão".
                   Cartão desligado (só PIX): nenhuma linha de cartão. */}
               {cardEnabled && (

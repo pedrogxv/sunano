@@ -87,44 +87,67 @@ export function CartDrawer() {
 
   return (
     <>
-      {/* Backdrop */}
+      {/* Backdrop: escurece e desfoca a página, mas a sidebar e a barra
+          continuam lendo como a mesma moldura por baixo do vidro. */}
       <div
-        className="fixed inset-0 z-[60] animate-in fade-in-0 duration-200 bg-black/60 backdrop-blur-sm"
+        className="fixed inset-0 z-[60] animate-in fade-in-0 duration-200 bg-black/50 backdrop-blur-[6px]"
         onClick={() => setOpen(false)}
       />
 
-      {/* Drawer */}
+      {/* Drawer — a sidebar ESPELHADA: o mesmo painel de vidro
+          (`.sidebar-glass`), flutuando com o mesmo respiro de 8px e o mesmo
+          raio, só que do lado direito. A anatomia também espelha: cabeçalho
+          da altura da barra do topo (h-14), lista com a pílula de rolagem e
+          o véu nas bordas (`.sidebar-scroll`), e embaixo um card tingido —
+          como o da Central de Aura na sidebar, mas no verde da Loja — que
+          segura o total e o botão de finalizar. Separação por fundo e
+          espaço, sem linha interna. No celular é gaveta de altura cheia,
+          colada na borda (rounded só à esquerda), como a sidebar. */}
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Carrinho de compras"
-        className="fixed inset-y-0 right-0 z-[61] flex w-full max-w-sm animate-in slide-in-from-right fade-in-0 duration-300 ease-out flex-col border-l border-border bg-popover shadow-2xl"
+        className={cn(
+          "sidebar-glass fixed inset-y-0 right-0 z-[61] flex h-dvh w-full max-w-sm flex-col overflow-hidden",
+          "rounded-l-2xl border border-r-0 border-white/10",
+          "md:inset-y-2 md:right-2 md:h-auto md:max-w-[400px] md:rounded-2xl md:border-r",
+          "animate-in slide-in-from-right fade-in-0 duration-300 ease-out"
+        )}
       >
+        {/* Brilho esmeralda vindo do canto de baixo: a luz do card do total
+            batendo no vidro. Só decoração, atrás de tudo. */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-64 bg-[radial-gradient(120%_70%_at_50%_100%,rgb(16_185_129/0.12),transparent_70%)]"
+        />
+
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
-          <div className="flex items-center gap-2.5">
-            <ShoppingCart className="size-5 text-muted-foreground" />
-            <h2 className="text-base font-bold text-foreground">Carrinho</h2>
+        <div className="relative flex h-14 shrink-0 items-center justify-between gap-2 pl-4 pr-2">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-400">
+              <ShoppingCart className="nav-bag-icon size-[17px]" />
+            </span>
+            <h2 className="text-[15px] font-bold tracking-tight text-foreground">Carrinho</h2>
             {count > 0 && (
-              <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-xs font-semibold text-emerald-400">
+              <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-emerald-400">
                 {count} {count === 1 ? "item" : "itens"}
               </span>
             )}
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex shrink-0 items-center gap-0.5">
             {items.length > 0 && (
               <button
                 onClick={() => clear()}
-                className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold text-red-400 transition-colors hover:bg-red-500/10 hover:text-red-300"
+                className="flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-[#b4b4b4] transition-colors hover:bg-red-500/10 hover:text-red-400"
               >
                 <Trash2 className="size-3.5" />
-                Limpar carrinho
+                Limpar
               </button>
             )}
             <button
               onClick={() => setOpen(false)}
               aria-label="Fechar carrinho"
-              className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className={TOPBAR_ICON_BUTTON}
             >
               <X className="size-4" />
             </button>
@@ -132,31 +155,41 @@ export function CartDrawer() {
         </div>
 
         {/* Items */}
-        <div className="flex-1 overflow-y-auto px-5 py-4">
+        <div className="sidebar-scroll relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2.5 pt-2 pb-4">
           {items.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
-              <div className="flex size-16 items-center justify-center rounded-2xl bg-muted/40">
-                <ShoppingBag className="size-7 text-muted-foreground" />
+            <div className="flex h-full flex-col items-center justify-center gap-5 px-6 text-center">
+              {/* A sacola da Loja acesa: o mesmo halo pulsante do item
+                  "Loja" da sidebar, que é de onde a pessoa veio. */}
+              <div className="relative flex size-20 items-center justify-center">
+                <span aria-hidden className="absolute inset-0 rounded-full bg-emerald-500/10 blur-xl" />
+                <span className="relative flex size-16 items-center justify-center rounded-2xl bg-white/[0.04] ring-1 ring-inset ring-emerald-500/20">
+                  <ShoppingBag className="nav-bag-icon size-7 text-emerald-400" />
+                </span>
               </div>
               <div className="space-y-1">
                 <p className="text-sm font-semibold text-foreground">Seu carrinho está vazio</p>
                 <p className="text-xs text-muted-foreground">Adicione produtos da loja</p>
               </div>
-              <Button variant="outline" size="sm" onClick={() => setOpen(false)} asChild>
+              <Button
+                size="sm"
+                onClick={() => setOpen(false)}
+                className="h-9 rounded-full bg-emerald-500/15 px-4 font-semibold text-emerald-300 hover:bg-emerald-500/25"
+                asChild
+              >
                 <RouteLink href="/loja">Explorar loja</RouteLink>
               </Button>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-1.5">
               {items.map((item) => {
                 const optionIds = item.variantOptions.map((o) => o.optionId)
                 return (
                 <div
                   key={`${item.productId}:${item.variantId ?? "base"}:${optionIds.join(",")}`}
-                  className="group flex items-center gap-3.5 rounded-xl border border-border bg-muted/30 p-3.5 transition-colors hover:bg-muted/50"
+                  className="group flex items-center gap-3 rounded-xl bg-white/[0.03] p-2.5 transition-colors hover:bg-white/[0.055]"
                 >
                   {/* Image */}
-                  <div className="flex size-[70px] shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted">
+                  <div className="flex size-[68px] shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white/[0.04]">
                     {item.image ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img {...storageImgProps(item.image, 64)} alt={item.name} className="h-full w-full object-contain p-1.5" loading="lazy" decoding="async" />
@@ -167,7 +200,7 @@ export function CartDrawer() {
 
                   {/* Info */}
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[15px] font-semibold text-foreground">{item.name}</p>
+                    <p className="truncate text-sm font-semibold text-foreground">{item.name}</p>
                     {(item.variantLabel || item.variantOptions.length > 0) && (
                       <p className="truncate text-xs text-muted-foreground">
                         {[item.variantLabel, ...item.variantOptions.map((o) => `${o.groupName}: ${o.label}`)]
@@ -204,11 +237,13 @@ export function CartDrawer() {
                     <button
                       onClick={() => requestRemoval(item, false)}
                       aria-label={`Remover ${item.name}`}
-                      className="flex size-8 items-center justify-center rounded-md text-muted-foreground/60 opacity-100 transition-all hover:text-red-400 md:opacity-0 md:group-hover:opacity-100"
+                      className="flex size-8 items-center justify-center rounded-full text-muted-foreground/60 opacity-100 transition-all hover:bg-red-500/10 hover:text-red-400 md:size-7 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
                     >
                       <Trash2 className="size-3.5" />
                     </button>
-                    <div className="flex items-center gap-1.5">
+                    {/* Quantidade: uma cápsula só, como os botões da barra
+                        do topo, em vez de dois quadrados com borda. */}
+                    <div className="flex items-center rounded-full bg-white/[0.05] p-0.5">
                       <button
                         onClick={() =>
                           item.quantity <= 1
@@ -216,11 +251,11 @@ export function CartDrawer() {
                             : decrement(item.productId, item.variantId, optionIds)
                         }
                         aria-label={item.quantity <= 1 ? `Remover ${item.name}` : "Diminuir quantidade"}
-                        className="flex size-9 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground md:size-7"
+                        className="flex size-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-white/[0.08] hover:text-foreground md:size-7"
                       >
                         <Minus className="size-3.5" />
                       </button>
-                      <span className="w-6 text-center text-sm font-bold text-foreground">
+                      <span className="w-6 text-center text-sm font-bold tabular-nums text-foreground">
                         {item.quantity}
                       </span>
                       <button
@@ -228,7 +263,7 @@ export function CartDrawer() {
                         disabled={item.quantity >= cartLineMaxQuantity(item)}
                         aria-label="Aumentar quantidade"
                         className={cn(
-                          "flex size-9 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground md:size-7",
+                          "flex size-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-white/[0.08] hover:text-foreground md:size-7",
                           item.quantity >= cartLineMaxQuantity(item) && "cursor-not-allowed opacity-40"
                         )}
                       >
@@ -245,15 +280,16 @@ export function CartDrawer() {
 
         {/* Footer */}
         {items.length > 0 && (
-          <div className="space-y-3 border-t border-border px-5 py-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Total</span>
-              <span className="text-lg font-black text-foreground">{formatBRL(total)}</span>
+          <div className="relative shrink-0 px-2.5 pb-2.5">
+          <div className="space-y-3 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] p-3.5">
+            <div className="flex items-end justify-between gap-3">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#b4b4b4]">Total</span>
+              <span className="text-2xl font-black leading-none tracking-tight tabular-nums text-foreground">{formatBRL(total)}</span>
             </div>
 
             {/* Carrinho só de serviço tem preço único: não há desconto de PIX a anunciar.
                 Cartão desligado: o PIX é o único meio, sem comparação a fazer. */}
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground">
               {!cardEnabled
                 ? "Pagamento via PIX"
                 : cardTotal > total
@@ -262,7 +298,7 @@ export function CartDrawer() {
             </p>
 
             {hasPreOrderItem && (
-              <p className="rounded-lg bg-amber-500/10 px-2.5 py-2 text-[10px] font-semibold text-amber-400">
+              <p className="rounded-lg bg-amber-500/10 px-2.5 py-2 text-[11px] font-semibold text-amber-400">
                 Seu carrinho tem item(ns) em pré-venda; o envio desses produtos só ocorre quando o estoque chegar.
               </p>
             )}
@@ -272,20 +308,21 @@ export function CartDrawer() {
                 ponto de maior atrito do funil. O botão continua levando ao
                 checkout — quem não tem conta encontra o login já sabendo. */}
             {!authLoading && !user && (
-              <p className="flex items-center gap-1.5 rounded-lg bg-muted/40 px-2.5 py-2 text-[10px] text-muted-foreground">
+              <p className="flex items-center gap-1.5 rounded-lg bg-white/[0.04] px-2.5 py-2 text-[11px] text-muted-foreground">
                 <LogIn className="size-3 shrink-0" />
                 Você vai precisar entrar na sua conta para finalizar.
               </p>
             )}
 
             <Button
-              className="h-14 w-full gap-2 rounded-xl bg-emerald-600 text-base font-extrabold text-white hover:bg-emerald-500"
+              className="h-12 w-full gap-2 rounded-xl bg-emerald-600 text-[15px] font-extrabold text-white shadow-[0_8px_24px_-8px_rgb(16_185_129/0.6)] hover:bg-emerald-500"
               asChild
             >
               <RouteLink href="/checkout" onClick={() => setOpen(false)}>
                 Finalizar Compra
               </RouteLink>
             </Button>
+          </div>
           </div>
         )}
       </div>

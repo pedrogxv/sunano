@@ -1,10 +1,19 @@
 import { cn } from "@/lib/utils"
 
 /**
- * A barra do topo DESACOPLADA: uma ilha de vidro que flutua 8px abaixo da
- * borda, gêmea da sidebar (mesmo respiro, mesmo raio, mesmo material). É a
- * moldura de TODA barra de topo do site — a TopBar e o menu da Loja — para as
- * duas não divergirem em altura, raio ou sombra.
+ * A barra do topo: no celular, uma ilha de vidro solta 8px abaixo da borda;
+ * no desktop, FUNDIDA à sidebar — as duas viram uma peça só em "L", a barra
+ * saindo da borda direita da sidebar e o canto de dentro arredondado para
+ * FORA (`.topbar-fillet`, borda negativa). É a moldura de TODA barra de topo
+ * do site — a TopBar e o menu da Loja — para as duas não divergirem em
+ * altura, raio ou sombra.
+ *
+ * - Fusão (md+): `-ml-[9px]` atravessa o vão de 8px da coluna e cobre a
+ *   borda de 1px da sidebar; a barra perde a borda e os cantos da esquerda,
+ *   e a sidebar perde o canto de cima à direita (globals.css, só quando há
+ *   uma barra na página). O raio do canto côncavo (24px) é o do cartão do
+ *   conteúdo (16px) + o vão (8px): os dois arcos ficam concêntricos e o vão
+ *   tem a mesma largura na curva toda.
  *
  * - O wrapper (`.topbar-dock`) é o sticky. Ele pinta o fundo da página só nos
  *   8px acima da ilha, então o conteúdo que rola some ali em vez de passar por
@@ -32,18 +41,20 @@ export function TopBarDock({
 }) {
   return (
     <div
-      className={cn("topbar-dock sticky top-0 z-20 px-2 py-2 md:px-0", className)}
+      className={cn("topbar-dock sticky top-0 z-20 px-2 py-2 md:-ml-[9px] md:px-0", className)}
       onMouseLeave={onMouseLeave}
     >
       <header
         className={cn(
-          "topbar-glass flex h-14 items-center rounded-2xl border border-white/10",
+          "topbar-glass flex h-14 items-center rounded-2xl border border-white/10 md:rounded-l-none md:border-l-0",
           glassClassName
         )}
       >
         {children}
         <span aria-hidden className="topbar-progress" />
       </header>
+      {/* Canto côncavo onde a barra encontra a sidebar (só desktop). */}
+      <span aria-hidden className="topbar-fillet" />
       {overlay}
     </div>
   )

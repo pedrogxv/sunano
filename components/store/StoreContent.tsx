@@ -1,9 +1,9 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, ArrowRight, Boxes, ChevronLeft, ChevronRight, Flame, Handshake, Loader2, ShieldCheck, Sparkles, Star, Tag, Wrench } from "lucide-react"
+import { ArrowLeft, ArrowRight, Boxes, ChevronLeft, ChevronRight, Flame, Gift, Handshake, Loader2, PartyPopper, ShieldCheck, Sparkles, Star, Tag, Wrench } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { LaunchPreorderSection } from "@/components/store/LaunchPreorderSection"
 import { STORE_CARD_RAIL_CLASS, STORE_CARD_RAIL_HEADER_CLASS } from "@/components/store/card-rail"
@@ -25,6 +25,8 @@ import { MarketInfoDialog } from "@/components/store/MarketInfoDialog"
 import { StoreAuthorityStrip } from "@/components/store/StoreAuthorityStrip"
 import { StoreHero } from "@/components/store/StoreHero"
 import { StoreCampaignSection } from "@/components/store/campaign/StoreCampaignSection"
+import { BlackFridayCountdown } from "@/components/store/BlackFridayCountdown"
+import { isBlackFridayActive } from "@/lib/black-friday"
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value"
 import { useCardRailBleed } from "@/lib/hooks/use-card-rail-bleed"
 import { getCategoryIcon, getCategoryLabel } from "@/lib/store-category-icons"
@@ -529,6 +531,15 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
   // de carrossel não fazem sentido até que sobre item fora da área visível.
   const showFeaturedCarouselControls = featuredItems.length > 5
 
+  // Black Friday (lib/black-friday.ts). Começa ligada no SSR e na hidratação
+  // (mesmo HTML dos dois lados) e confere o relógio de verdade ao montar; o
+  // contador desliga ao zerar, sem precisar recarregar.
+  const [blackFriday, setBlackFriday] = useState(true)
+  useEffect(() => {
+    if (!isBlackFridayActive()) setBlackFriday(false)
+  }, [])
+  const endBlackFriday = useCallback(() => setBlackFriday(false), [])
+
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
   const catalogCounts = lockedCategory ? filterOptions.catalogFacetsByCategory?.[lockedCategory] ?? null : null
 
@@ -681,6 +692,38 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
             filtros + catálogo, sem essa seção antes do que o usuário veio ver. */}
         {!banner && featuredItems.length > 0 && (
           <section className="flex flex-col gap-3.5 sm:gap-[18px]">
+            {blackFriday && (
+              <div className={STORE_CARD_RAIL_HEADER_CLASS}>
+                <div className="relative overflow-hidden rounded-[18px] border border-amber-400/40 bg-[radial-gradient(120%_140%_at_0%_0%,rgba(251,191,36,0.16),transparent_55%),linear-gradient(180deg,#0d0b06,#000)] px-4 py-4 shadow-[0_0_40px_-18px_rgba(251,191,36,0.6)] sm:px-6 sm:py-5">
+                  {/* Confete decorativo: fica atrás do texto, não recebe clique. */}
+                  <div aria-hidden className="pointer-events-none absolute inset-0">
+                    <PartyPopper className="absolute -right-2 -top-3 size-20 rotate-12 text-amber-400/10 sm:right-6 sm:size-24" strokeWidth={1.2} />
+                    <Sparkles className="absolute right-[38%] top-2 size-4 animate-pulse text-amber-300/50" />
+                    <Star className="absolute bottom-2 right-[22%] size-3 animate-pulse fill-amber-300/40 text-transparent [animation-delay:400ms]" />
+                    <Gift className="absolute bottom-1 left-[46%] hidden size-6 -rotate-12 text-amber-400/15 sm:block" strokeWidth={1.4} />
+                    <span className="absolute left-[30%] top-3 size-1.5 rotate-45 bg-amber-400/50" />
+                    <span className="absolute bottom-4 left-[62%] size-1.5 rounded-full bg-yellow-200/40" />
+                    <span className="absolute right-[12%] top-[60%] h-2.5 w-1 rotate-[30deg] rounded-sm bg-amber-500/40" />
+                  </div>
+                  <div className="relative flex flex-col gap-3.5 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+                    <div className="flex flex-col gap-1">
+                      <p className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-amber-300 sm:text-[11px]">
+                        <PartyPopper className="size-3.5" strokeWidth={2.2} />
+                        Ofertas por tempo limitado
+                        <span aria-hidden>🎉</span>
+                      </p>
+                      <h2 className="bg-gradient-to-r from-amber-200 via-yellow-400 to-amber-500 bg-clip-text font-display text-[24px] font-black uppercase leading-none tracking-tight text-transparent sm:text-[32px]">
+                        Black Friday
+                      </h2>
+                      <p className="text-[12px] font-medium text-amber-100/60 sm:text-[13px]">
+                        Promoções e valores até 01/12 à meia-noite
+                      </p>
+                    </div>
+                    <BlackFridayCountdown onEnd={endBlackFriday} />
+                  </div>
+                </div>
+              </div>
+            )}
             <div className={cn("flex items-end justify-between gap-3 sm:gap-4", STORE_CARD_RAIL_HEADER_CLASS)}>
               <div className="flex flex-col gap-[3px] sm:gap-1">
                 <p className="flex items-center gap-[5px] text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#7a7a7a] sm:gap-1.5 sm:text-[10.5px]">
@@ -721,7 +764,7 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
             <div ref={featuredScrollRef} className={STORE_CARD_RAIL_CLASS}>
               {featuredItems.map((product) => (
                 <div key={product.id} className="w-[188px] shrink-0 sm:w-[258px]">
-                  <ProductCard {...product} />
+                  <ProductCard {...product} theme={blackFriday ? "blackFriday" : undefined} />
                 </div>
               ))}
             </div>
